@@ -36,10 +36,11 @@ import {
   getMealCostsByMonthId,
   getMessMembers,
   createMealCost,
+  updateMealCost,
   deleteMealCost,
 } from '@/lib/storage';
 import { MealCost, User } from '@/types';
-import { ShoppingCart, Plus, Trash2 } from 'lucide-react';
+import { ShoppingCart, Plus, Trash2, Edit2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/calculations';
 import { Navigate } from 'react-router-dom';
@@ -50,6 +51,7 @@ export default function MealCosts() {
   const [mealCosts, setMealCosts] = useState<MealCost[]>([]);
   const [members, setMembers] = useState<User[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [editingCost, setEditingCost] = useState<MealCost | null>(null);
   const [formData, setFormData] = useState({
     userId: '',
     amount: '',
@@ -86,6 +88,7 @@ export default function MealCosts() {
       date: format(new Date(), 'yyyy-MM-dd'),
       description: '',
     });
+    setEditingCost(null);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -113,18 +116,39 @@ export default function MealCosts() {
       return;
     }
 
-    createMealCost({
-      monthId: activeMonth.id,
-      userId: formData.userId,
-      amount,
-      date: formData.date,
-      description: formData.description,
-    });
+    if (editingCost) {
+      updateMealCost(editingCost.id, {
+        userId: formData.userId,
+        amount,
+        date: formData.date,
+        description: formData.description,
+      });
+      toast({ title: 'Meal cost updated' });
+    } else {
+      createMealCost({
+        monthId: activeMonth.id,
+        userId: formData.userId,
+        amount,
+        date: formData.date,
+        description: formData.description,
+      });
+      toast({ title: 'Meal cost added' });
+    }
 
-    toast({ title: 'Meal cost added' });
     setIsAddDialogOpen(false);
     resetForm();
     loadData();
+  };
+
+  const handleEdit = (cost: MealCost) => {
+    setFormData({
+      userId: cost.userId,
+      amount: cost.amount.toString(),
+      date: cost.date,
+      description: cost.description,
+    });
+    setEditingCost(cost);
+    setIsAddDialogOpen(true);
   };
 
   const handleDelete = (costId: string) => {
@@ -160,9 +184,9 @@ export default function MealCosts() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Add Meal Cost</DialogTitle>
+                <DialogTitle>{editingCost ? 'Edit Meal Cost' : 'Add Meal Cost'}</DialogTitle>
                 <DialogDescription>
-                  Record a bazar or meal expense
+                  {editingCost ? 'Update meal cost details' : 'Record a bazar or meal expense'}
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -220,7 +244,7 @@ export default function MealCosts() {
 
                 <DialogFooter>
                   <Button type="submit" className="gradient-primary">
-                    Add Cost
+                    {editingCost ? 'Update Cost' : 'Add Cost'}
                   </Button>
                 </DialogFooter>
               </form>
@@ -279,14 +303,23 @@ export default function MealCosts() {
                           {formatCurrency(cost.amount)}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button 
-                            size="sm" 
-                            variant="ghost" 
-                            className="text-destructive"
-                            onClick={() => handleDelete(cost.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex justify-end gap-2">
+                            <Button 
+                              size="sm" 
+                              variant="ghost"
+                              onClick={() => handleEdit(cost)}
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="ghost" 
+                              className="text-destructive"
+                              onClick={() => handleDelete(cost.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}

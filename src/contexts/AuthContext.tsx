@@ -16,7 +16,7 @@ interface AuthContextType {
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   registerManager: (data: ManagerRegistrationData) => Promise<{ success: boolean; error?: string }>;
-  registerMember: (data: MemberRegistrationData) => Promise<{ success: boolean; error?: string }>;
+  registerMember: (data: MemberRegistrationData) => Promise<{ success: boolean; error?: string; userId?: string }>;
   logout: () => void;
   refreshUser: () => void;
 }
@@ -54,6 +54,10 @@ function savePassword(email: string, password: string): void {
 function verifyPassword(email: string, password: string): boolean {
   const passwords = getPasswords();
   return passwords[email.toLowerCase()] === password;
+}
+
+export function updatePassword(email: string, newPassword: string): void {
+  savePassword(email, newPassword);
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -97,6 +101,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     if (!existingUser.isApproved && existingUser.role === 'member') {
       return { success: false, error: 'Waiting for manager approval.' };
+    }
+
+    // Check if member has a mess assigned
+    if (existingUser.role === 'member' && !existingUser.messId) {
+      return { success: false, error: 'You need to join a mess first. Please search for a mess to join.' };
     }
 
     setUser(existingUser);
@@ -156,25 +165,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { success: true };
   };
 
-  const registerMember = async (data: MemberRegistrationData): Promise<{ success: boolean; error?: string }> => {
+  const registerMember = async (data: MemberRegistrationData): Promise<{ success: boolean; error?: string; userId?: string }> => {
     const existingUser = getUserByEmail(data.email);
     
     if (existingUser) {
       return { success: false, error: 'Email already registered.' };
     }
 
-    const mess = getMessById(data.messId);
-    if (!mess) {
-      return { success: false, error: 'Invalid mess ID.' };
+    // If messId is provided, validate it
+    if (data.messId) {
+      const mess = getMessById(data.messId);
+      if (!mess) {
+        return { success: false, error: 'Invalid mess ID.' };
+      }
     }
 
-    // Create the member user (not approved by default)
+    // Create the member user (not approved by default, no mess assigned yet)
     const newUser = createUser({
       email: data.email,
       fullName: data.fullName,
       phone: data.phone,
       role: 'member',
-      messId: data.messId,
+      messId: data.messId || '', // Empty if no mess yet
       isApproved: false,
       isActive: true,
     });
@@ -182,7 +194,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Save password
     savePassword(data.email, data.password);
 
-    return { success: true };
+    return { success: true, userId: newUser.id };
   };
 
   const logout = () => {

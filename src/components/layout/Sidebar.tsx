@@ -15,6 +15,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Menu,
+  Building,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
@@ -35,6 +36,7 @@ const navItems: NavItem[] = [
   { label: 'Other Costs', href: '/other-costs', icon: Receipt, managerOnly: true },
   { label: 'Month Details', href: '/month-details', icon: CalendarDays },
   { label: 'Join Requests', href: '/join-requests', icon: UserPlus, managerOnly: true },
+  { label: 'Manage Mess', href: '/manage-mess', icon: Building, managerOnly: true },
 ];
 
 export default function Sidebar() {

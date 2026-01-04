@@ -36,10 +36,11 @@ import {
   getDepositsByMonthId,
   getMessMembers,
   createDeposit,
+  updateDeposit,
   deleteDeposit,
 } from '@/lib/storage';
 import { Deposit, User } from '@/types';
-import { Wallet, Plus, Trash2 } from 'lucide-react';
+import { Wallet, Plus, Trash2, Edit2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/calculations';
 import { Navigate } from 'react-router-dom';
@@ -50,6 +51,7 @@ export default function Deposits() {
   const [deposits, setDeposits] = useState<Deposit[]>([]);
   const [members, setMembers] = useState<User[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [editingDeposit, setEditingDeposit] = useState<Deposit | null>(null);
   const [formData, setFormData] = useState({
     userId: '',
     amount: '',
@@ -87,6 +89,7 @@ export default function Deposits() {
       date: format(new Date(), 'yyyy-MM-dd'),
       note: '',
     });
+    setEditingDeposit(null);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -114,18 +117,39 @@ export default function Deposits() {
       return;
     }
 
-    createDeposit({
-      monthId: activeMonth.id,
-      userId: formData.userId,
-      amount,
-      date: formData.date,
-      note: formData.note || undefined,
-    });
+    if (editingDeposit) {
+      updateDeposit(editingDeposit.id, {
+        userId: formData.userId,
+        amount,
+        date: formData.date,
+        note: formData.note || undefined,
+      });
+      toast({ title: 'Deposit updated' });
+    } else {
+      createDeposit({
+        monthId: activeMonth.id,
+        userId: formData.userId,
+        amount,
+        date: formData.date,
+        note: formData.note || undefined,
+      });
+      toast({ title: 'Deposit added' });
+    }
 
-    toast({ title: 'Deposit added' });
     setIsAddDialogOpen(false);
     resetForm();
     loadData();
+  };
+
+  const handleEdit = (deposit: Deposit) => {
+    setFormData({
+      userId: deposit.userId,
+      amount: deposit.amount.toString(),
+      date: deposit.date,
+      note: deposit.note || '',
+    });
+    setEditingDeposit(deposit);
+    setIsAddDialogOpen(true);
   };
 
   const handleDelete = (depositId: string) => {
@@ -161,9 +185,9 @@ export default function Deposits() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Add Deposit</DialogTitle>
+                <DialogTitle>{editingDeposit ? 'Edit Deposit' : 'Add Deposit'}</DialogTitle>
                 <DialogDescription>
-                  Record a deposit from a member
+                  {editingDeposit ? 'Update deposit details' : 'Record a deposit from a member'}
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -220,7 +244,7 @@ export default function Deposits() {
 
                 <DialogFooter>
                   <Button type="submit" className="gradient-primary">
-                    Add Deposit
+                    {editingDeposit ? 'Update Deposit' : 'Add Deposit'}
                   </Button>
                 </DialogFooter>
               </form>
@@ -281,14 +305,23 @@ export default function Deposits() {
                           {deposit.note || '-'}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button 
-                            size="sm" 
-                            variant="ghost" 
-                            className="text-destructive"
-                            onClick={() => handleDelete(deposit.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex justify-end gap-2">
+                            <Button 
+                              size="sm" 
+                              variant="ghost"
+                              onClick={() => handleEdit(deposit)}
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="ghost" 
+                              className="text-destructive"
+                              onClick={() => handleDelete(deposit.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
