@@ -38,10 +38,11 @@ import {
   getOtherCostsByMonthId,
   getMessMembers,
   createOtherCost,
+  updateOtherCost,
   deleteOtherCost,
 } from '@/lib/storage';
 import { OtherCost, User } from '@/types';
-import { Receipt, Plus, Trash2 } from 'lucide-react';
+import { Receipt, Plus, Trash2, Edit2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/calculations';
 import { Navigate } from 'react-router-dom';
@@ -52,6 +53,7 @@ export default function OtherCosts() {
   const [otherCosts, setOtherCosts] = useState<OtherCost[]>([]);
   const [members, setMembers] = useState<User[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
+  const [editingCost, setEditingCost] = useState<OtherCost | null>(null);
   const [formData, setFormData] = useState({
     userId: '',
     amount: '',
@@ -90,6 +92,7 @@ export default function OtherCosts() {
       description: '',
       isShared: true,
     });
+    setEditingCost(null);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -117,19 +120,42 @@ export default function OtherCosts() {
       return;
     }
 
-    createOtherCost({
-      monthId: activeMonth.id,
-      userId: formData.userId,
-      amount,
-      date: formData.date,
-      description: formData.description,
-      isShared: formData.isShared,
-    });
+    if (editingCost) {
+      updateOtherCost(editingCost.id, {
+        userId: formData.userId,
+        amount,
+        date: formData.date,
+        description: formData.description,
+        isShared: formData.isShared,
+      });
+      toast({ title: 'Cost updated' });
+    } else {
+      createOtherCost({
+        monthId: activeMonth.id,
+        userId: formData.userId,
+        amount,
+        date: formData.date,
+        description: formData.description,
+        isShared: formData.isShared,
+      });
+      toast({ title: 'Cost added' });
+    }
 
-    toast({ title: 'Cost added' });
     setIsAddDialogOpen(false);
     resetForm();
     loadData();
+  };
+
+  const handleEdit = (cost: OtherCost) => {
+    setFormData({
+      userId: cost.userId,
+      amount: cost.amount.toString(),
+      date: cost.date,
+      description: cost.description,
+      isShared: cost.isShared,
+    });
+    setEditingCost(cost);
+    setIsAddDialogOpen(true);
   };
 
   const handleDelete = (costId: string) => {
@@ -154,7 +180,7 @@ export default function OtherCosts() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Other Costs</h1>
-            <p className="text-muted-foreground">Track utilities and other expenses</p>
+            <p className="text-muted-foreground">Track utilities and other expenses (separate from meal costs)</p>
           </div>
           <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
             setIsAddDialogOpen(open);
@@ -168,9 +194,9 @@ export default function OtherCosts() {
             </DialogTrigger>
             <DialogContent>
               <DialogHeader>
-                <DialogTitle>Add Other Cost</DialogTitle>
+                <DialogTitle>{editingCost ? 'Edit Cost' : 'Add Other Cost'}</DialogTitle>
                 <DialogDescription>
-                  Record utilities, rent, or other expenses
+                  {editingCost ? 'Update cost details' : 'Record utilities, rent, or other expenses'}
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -241,7 +267,7 @@ export default function OtherCosts() {
 
                 <DialogFooter>
                   <Button type="submit" className="gradient-primary">
-                    Add Cost
+                    {editingCost ? 'Update Cost' : 'Add Cost'}
                   </Button>
                 </DialogFooter>
               </form>
@@ -321,14 +347,23 @@ export default function OtherCosts() {
                           {formatCurrency(cost.amount)}
                         </TableCell>
                         <TableCell className="text-right">
-                          <Button 
-                            size="sm" 
-                            variant="ghost" 
-                            className="text-destructive"
-                            onClick={() => handleDelete(cost.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="flex justify-end gap-2">
+                            <Button 
+                              size="sm" 
+                              variant="ghost"
+                              onClick={() => handleEdit(cost)}
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              size="sm" 
+                              variant="ghost" 
+                              className="text-destructive"
+                              onClick={() => handleDelete(cost.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}

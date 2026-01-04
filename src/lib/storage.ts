@@ -240,6 +240,17 @@ export function createDeposit(depositData: Omit<Deposit, 'id' | 'createdAt'>): D
   return newDeposit;
 }
 
+export function updateDeposit(id: string, updates: Partial<Deposit>): Deposit | undefined {
+  const deposits = getDeposits();
+  const index = deposits.findIndex(d => d.id === id);
+  if (index !== -1) {
+    deposits[index] = { ...deposits[index], ...updates };
+    saveDeposits(deposits);
+    return deposits[index];
+  }
+  return undefined;
+}
+
 export function deleteDeposit(id: string): boolean {
   const deposits = getDeposits();
   const filtered = deposits.filter(d => d.id !== id);
@@ -275,6 +286,17 @@ export function createMealCost(costData: Omit<MealCost, 'id' | 'createdAt'>): Me
   return newCost;
 }
 
+export function updateMealCost(id: string, updates: Partial<MealCost>): MealCost | undefined {
+  const costs = getMealCosts();
+  const index = costs.findIndex(c => c.id === id);
+  if (index !== -1) {
+    costs[index] = { ...costs[index], ...updates };
+    saveMealCosts(costs);
+    return costs[index];
+  }
+  return undefined;
+}
+
 export function deleteMealCost(id: string): boolean {
   const costs = getMealCosts();
   const filtered = costs.filter(c => c.id !== id);
@@ -308,6 +330,17 @@ export function createOtherCost(costData: Omit<OtherCost, 'id' | 'createdAt'>): 
   costs.push(newCost);
   saveOtherCosts(costs);
   return newCost;
+}
+
+export function updateOtherCost(id: string, updates: Partial<OtherCost>): OtherCost | undefined {
+  const costs = getOtherCosts();
+  const index = costs.findIndex(c => c.id === id);
+  if (index !== -1) {
+    costs[index] = { ...costs[index], ...updates };
+    saveOtherCosts(costs);
+    return costs[index];
+  }
+  return undefined;
 }
 
 export function deleteOtherCost(id: string): boolean {
