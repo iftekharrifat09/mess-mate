@@ -75,6 +75,30 @@ export function deleteUser(id: string): boolean {
   return false;
 }
 
+// Helper to generate unique mess code
+function generateMessCode(): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+export function generateUniqueMessCode(): string {
+  const messes = getMesses();
+  let code = generateMessCode();
+  let attempts = 0;
+  
+  // Ensure uniqueness
+  while (messes.some(m => m.messCode === code) && attempts < 100) {
+    code = generateMessCode();
+    attempts++;
+  }
+  
+  return code;
+}
+
 // Messes
 export function getMesses(): Mess[] {
   return getFromStorage<Mess>(STORAGE_KEYS.MESSES);
@@ -88,11 +112,16 @@ export function getMessById(id: string): Mess | undefined {
   return getMesses().find(m => m.id === id);
 }
 
-export function createMess(messData: Omit<Mess, 'id' | 'createdAt'>): Mess {
+export function getMessByCode(code: string): Mess | undefined {
+  return getMesses().find(m => m.messCode?.toLowerCase() === code.toLowerCase());
+}
+
+export function createMess(messData: Omit<Mess, 'id' | 'createdAt' | 'messCode'>): Mess {
   const messes = getMesses();
   const newMess: Mess = {
     ...messData,
     id: generateId(),
+    messCode: generateUniqueMessCode(),
     createdAt: new Date().toISOString(),
   };
   messes.push(newMess);
@@ -109,6 +138,11 @@ export function updateMess(id: string, updates: Partial<Mess>): Mess | undefined
     return messes[index];
   }
   return undefined;
+}
+
+export function isMessCodeUnique(code: string, excludeMessId?: string): boolean {
+  const messes = getMesses();
+  return !messes.some(m => m.messCode?.toLowerCase() === code.toLowerCase() && m.id !== excludeMessId);
 }
 
 // Months
@@ -366,8 +400,16 @@ export function getJoinRequestsByMessId(messId: string): JoinRequest[] {
   return getJoinRequests().filter(r => r.messId === messId);
 }
 
+export function getJoinRequestsByUserId(userId: string): JoinRequest[] {
+  return getJoinRequests().filter(r => r.userId === userId);
+}
+
 export function getPendingJoinRequests(messId: string): JoinRequest[] {
   return getJoinRequests().filter(r => r.messId === messId && r.status === 'pending');
+}
+
+export function getPendingJoinRequestsForUser(userId: string): JoinRequest[] {
+  return getJoinRequests().filter(r => r.userId === userId && r.status === 'pending');
 }
 
 export function createJoinRequest(requestData: Omit<JoinRequest, 'id' | 'createdAt'>): JoinRequest {
@@ -391,6 +433,28 @@ export function updateJoinRequest(id: string, updates: Partial<JoinRequest>): Jo
     return requests[index];
   }
   return undefined;
+}
+
+export function deleteJoinRequest(id: string): boolean {
+  const requests = getJoinRequests();
+  const filtered = requests.filter(r => r.id !== id);
+  if (filtered.length !== requests.length) {
+    saveJoinRequests(filtered);
+    return true;
+  }
+  return false;
+}
+
+// Delete all pending join requests for a user (except for specified mess)
+export function cleanupPendingJoinRequests(userId: string, exceptMessId?: string): void {
+  const requests = getJoinRequests();
+  const filtered = requests.filter(r => {
+    if (r.userId !== userId) return true;
+    if (r.status !== 'pending') return true;
+    if (exceptMessId && r.messId === exceptMessId) return true;
+    return false;
+  });
+  saveJoinRequests(filtered);
 }
 
 // Current User Session

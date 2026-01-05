@@ -16,6 +16,7 @@ export interface Mess {
   id: string;
   name: string;
   managerId: string;
+  messCode: string; // Unique shareable code
   createdAt: string;
 }
 
