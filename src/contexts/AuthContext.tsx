@@ -99,15 +99,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: false, error: 'Your account has been deactivated.' };
     }
 
-    if (!existingUser.isApproved && existingUser.role === 'member') {
-      return { success: false, error: 'Waiting for manager approval.' };
+    // For managers, just log them in
+    if (existingUser.role === 'manager') {
+      setUser(existingUser);
+      saveCurrentUser(existingUser);
+      return { success: true };
     }
 
-    // Check if member has a mess assigned
-    if (existingUser.role === 'member' && !existingUser.messId) {
-      return { success: false, error: 'You need to join a mess first. Please search for a mess to join.' };
-    }
-
+    // For members, check various states
+    // Note: We allow login even if not approved, the routing will handle redirection
     setUser(existingUser);
     saveCurrentUser(existingUser);
     return { success: true };

@@ -7,6 +7,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import Auth from "./pages/Auth";
 import Index from "./pages/Index";
 import JoinMess from "./pages/JoinMess";
+import WaitingApproval from "./pages/WaitingApproval";
 import ManageMess from "./pages/ManageMess";
 import Dashboard from "./pages/Dashboard";
 import Members from "./pages/Members";
@@ -31,6 +32,7 @@ const App = () => (
             <Route path="/auth" element={<Auth />} />
             <Route path="/login" element={<Navigate to="/auth" replace />} />
             <Route path="/join-mess" element={<JoinMess />} />
+            <Route path="/waiting-approval" element={<WaitingApproval />} />
             <Route path="/dashboard" element={<Dashboard />} />
             <Route path="/members" element={<Members />} />
             <Route path="/meals" element={<Meals />} />

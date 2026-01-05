@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,15 +29,23 @@ import {
   TabsList,
   TabsTrigger,
 } from '@/components/ui/tabs';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useToast } from '@/hooks/use-toast';
 import { 
   getActiveMonth,
+  getMonthsByMessId,
   createMonth,
   getMessMembers,
   getMealsByMonthId,
   getDepositsByMonthId,
   getMealCostsByMonthId,
   getOtherCostsByMonthId,
+  getMessById,
 } from '@/lib/storage';
 import { 
   calculateMonthSummary, 
@@ -44,8 +53,9 @@ import {
   formatCurrency, 
   formatNumber 
 } from '@/lib/calculations';
+import { exportToPDF, exportToExcel } from '@/lib/export';
 import { Month, MonthSummary, MemberSummary, User, Meal, Deposit, MealCost, OtherCost } from '@/types';
-import { CalendarDays, Plus, TrendingUp, TrendingDown } from 'lucide-react';
+import { CalendarDays, Plus, TrendingUp, TrendingDown, Download, FileText, FileSpreadsheet, History } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface DailyRecord {
@@ -58,8 +68,15 @@ interface DailyRecord {
   otherCost: number;
 }
 
+interface PreviousMonthSummary {
+  month: Month;
+  summary: MonthSummary;
+  membersSummary: MemberSummary[];
+}
+
 export default function MonthDetails() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const [activeMonth, setActiveMonth] = useState<Month | null>(null);
   const [monthSummary, setMonthSummary] = useState<MonthSummary | null>(null);
@@ -67,6 +84,9 @@ export default function MonthDetails() {
   const [dailyRecords, setDailyRecords] = useState<DailyRecord[]>([]);
   const [members, setMembers] = useState<User[]>([]);
   const [isNewMonthDialogOpen, setIsNewMonthDialogOpen] = useState(false);
+  const [showPreviousMonths, setShowPreviousMonths] = useState(false);
+  const [previousMonths, setPreviousMonths] = useState<PreviousMonthSummary[]>([]);
+  const [isExporting, setIsExporting] = useState(false);
 
   const isManager = user?.role === 'manager';
 
@@ -132,6 +152,26 @@ export default function MonthDetails() {
       
       setDailyRecords(records);
     }
+    
+    // Load previous months
+    loadPreviousMonths();
+  };
+
+  const loadPreviousMonths = () => {
+    if (!user) return;
+    
+    const allMonths = getMonthsByMessId(user.messId)
+      .filter(m => !m.isActive)
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 6); // Last 6 months
+    
+    const summaries: PreviousMonthSummary[] = allMonths.map(month => ({
+      month,
+      summary: calculateMonthSummary(month.id, user.messId),
+      membersSummary: getAllMembersSummary(month.id, user.messId),
+    }));
+    
+    setPreviousMonths(summaries);
   };
 
   const handleStartNewMonth = () => {
@@ -158,6 +198,66 @@ export default function MonthDetails() {
     loadData();
   };
 
+  const handleExportPDF = () => {
+    if (!activeMonth || !user) return;
+    
+    setIsExporting(true);
+    
+    const mess = getMessById(user.messId);
+    const meals = getMealsByMonthId(activeMonth.id);
+    const deposits = getDepositsByMonthId(activeMonth.id);
+    const mealCosts = getMealCostsByMonthId(activeMonth.id);
+    const otherCosts = getOtherCostsByMonthId(activeMonth.id);
+    
+    exportToPDF({
+      members,
+      membersSummary,
+      meals,
+      deposits,
+      mealCosts,
+      otherCosts,
+      monthName: activeMonth.name,
+      messName: mess?.name || 'Mess',
+    });
+    
+    toast({
+      title: 'PDF Exported',
+      description: 'Your report has been downloaded.',
+    });
+    
+    setIsExporting(false);
+  };
+
+  const handleExportExcel = () => {
+    if (!activeMonth || !user) return;
+    
+    setIsExporting(true);
+    
+    const mess = getMessById(user.messId);
+    const meals = getMealsByMonthId(activeMonth.id);
+    const deposits = getDepositsByMonthId(activeMonth.id);
+    const mealCosts = getMealCostsByMonthId(activeMonth.id);
+    const otherCosts = getOtherCostsByMonthId(activeMonth.id);
+    
+    exportToExcel({
+      members,
+      membersSummary,
+      meals,
+      deposits,
+      mealCosts,
+      otherCosts,
+      monthName: activeMonth.name,
+      messName: mess?.name || 'Mess',
+    });
+    
+    toast({
+      title: 'Excel Exported',
+      description: 'Your report has been downloaded.',
+    });
+    
+    setIsExporting(false);
+  };
+
   // Group daily records by date for summary view
   const dailyTotals = dailyRecords.reduce((acc, record) => {
     if (!acc[record.date]) {
@@ -170,40 +270,161 @@ export default function MonthDetails() {
     return acc;
   }, {} as Record<string, { meals: number; deposit: number; mealCost: number; otherCost: number }>);
 
+  if (showPreviousMonths) {
+    return (
+      <DashboardLayout>
+        <div className="space-y-6 animate-fade-in">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">Previous Months</h1>
+              <p className="text-muted-foreground">View last 6 months summary</p>
+            </div>
+            <Button variant="outline" onClick={() => setShowPreviousMonths(false)}>
+              Back to Current Month
+            </Button>
+          </div>
+
+          {previousMonths.length === 0 ? (
+            <Card>
+              <CardContent className="text-center py-12">
+                <History className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">No previous months found.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-6">
+              {previousMonths.map(({ month, summary, membersSummary: mSummary }) => (
+                <Card key={month.id}>
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <CalendarDays className="h-5 w-5 text-primary" />
+                      {month.name}
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    {/* Summary Grid */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div className="p-3 bg-muted/50 rounded-lg">
+                        <p className="text-xs text-muted-foreground">Total Cost</p>
+                        <p className="text-lg font-bold text-warning">
+                          {formatCurrency(summary.totalMealCost + summary.totalSharedCost + summary.totalIndividualCost)}
+                        </p>
+                      </div>
+                      <div className="p-3 bg-muted/50 rounded-lg">
+                        <p className="text-xs text-muted-foreground">Total Meals</p>
+                        <p className="text-lg font-bold text-foreground">{formatNumber(summary.totalMeals)}</p>
+                      </div>
+                      <div className="p-3 bg-muted/50 rounded-lg">
+                        <p className="text-xs text-muted-foreground">Total Deposits</p>
+                        <p className="text-lg font-bold text-success">{formatCurrency(summary.totalDeposit)}</p>
+                      </div>
+                      <div className="p-3 bg-muted/50 rounded-lg">
+                        <p className="text-xs text-muted-foreground">Meal Rate</p>
+                        <p className="text-lg font-bold text-primary">{formatCurrency(summary.mealRate)}</p>
+                      </div>
+                    </div>
+                    
+                    {/* Member-wise Summary */}
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Member</TableHead>
+                            <TableHead className="text-right">Meals</TableHead>
+                            <TableHead className="text-right">Deposit</TableHead>
+                            <TableHead className="text-right">Balance</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {mSummary.map(member => (
+                            <TableRow key={member.userId}>
+                              <TableCell className="font-medium">{member.userName}</TableCell>
+                              <TableCell className="text-right">{formatNumber(member.totalMeals)}</TableCell>
+                              <TableCell className="text-right">{formatCurrency(member.totalDeposit)}</TableCell>
+                              <TableCell className="text-right">
+                                <span className={member.balance >= 0 ? 'text-success' : 'text-destructive'}>
+                                  {formatCurrency(member.balance)}
+                                </span>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+      </DashboardLayout>
+    );
+  }
+
   return (
     <DashboardLayout>
       <div className="space-y-6 animate-fade-in">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Month Details</h1>
             <p className="text-muted-foreground">
               {activeMonth ? activeMonth.name : 'No active month'}
             </p>
           </div>
-          {isManager && (
-            <AlertDialog open={isNewMonthDialogOpen} onOpenChange={setIsNewMonthDialogOpen}>
-              <AlertDialogTrigger asChild>
-                <Button className="gradient-primary">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Start New Month
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Start New Month?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This will close the current month and start a new one. All current month data will be preserved but the month will become inactive.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction onClick={handleStartNewMonth}>
+          <div className="flex gap-2 flex-wrap">
+            {previousMonths.length > 0 && (
+              <Button variant="outline" onClick={() => setShowPreviousMonths(true)}>
+                <History className="h-4 w-4 mr-2" />
+                Previous Months
+              </Button>
+            )}
+            
+            {isManager && activeMonth && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" disabled={isExporting}>
+                    <Download className="h-4 w-4 mr-2" />
+                    Export
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent>
+                  <DropdownMenuItem onClick={handleExportPDF}>
+                    <FileText className="h-4 w-4 mr-2" />
+                    Export as PDF
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleExportExcel}>
+                    <FileSpreadsheet className="h-4 w-4 mr-2" />
+                    Export as Excel
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+            
+            {isManager && (
+              <AlertDialog open={isNewMonthDialogOpen} onOpenChange={setIsNewMonthDialogOpen}>
+                <AlertDialogTrigger asChild>
+                  <Button className="gradient-primary">
+                    <Plus className="h-4 w-4 mr-2" />
                     Start New Month
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          )}
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Start New Month?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will close the current month and start a new one. All current month data will be preserved but the month will become inactive.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleStartNewMonth}>
+                      Start New Month
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
         </div>
 
         {!activeMonth ? (

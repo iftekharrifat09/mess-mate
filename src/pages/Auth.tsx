@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,17 +7,22 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { PasswordInput } from '@/components/ui/password-input';
 import { useToast } from '@/hooks/use-toast';
-import { Utensils, Mail, User, Phone, Building, LogIn, UserPlus } from 'lucide-react';
+import { Utensils, Mail, User, Phone, Building, LogIn, UserPlus, ArrowLeft, KeyRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { getUserByEmail, getPendingJoinRequestsForUser } from '@/lib/storage';
+import { generateOTP, saveOTP, verifyOTP, getOTPExpiry } from '@/lib/otp';
+import { updatePassword } from '@/contexts/AuthContext';
 
 type AuthMode = 'login' | 'signup';
 type RoleType = 'member' | 'manager';
+type ResetStep = 'email' | 'otp' | 'newPassword';
 
 export default function Auth() {
   const [mode, setMode] = useState<AuthMode>('login');
   const [role, setRole] = useState<RoleType>('member');
   const [isLoading, setIsLoading] = useState(false);
   const [showForgotPassword, setShowForgotPassword] = useState(false);
+  const [resetStep, setResetStep] = useState<ResetStep>('email');
   
   // Form fields
   const [email, setEmail] = useState('');
@@ -25,6 +30,11 @@ export default function Auth() {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [messName, setMessName] = useState('');
+  const [otp, setOtp] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetEmail, setResetEmail] = useState('');
+  const [generatedOTP, setGeneratedOTP] = useState('');
   
   const { login, registerManager, registerMember } = useAuth();
   const navigate = useNavigate();
@@ -38,6 +48,15 @@ export default function Auth() {
     setMessName('');
   };
 
+  const resetForgotPasswordForm = () => {
+    setResetEmail('');
+    setOtp('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setResetStep('email');
+    setGeneratedOTP('');
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -45,17 +64,67 @@ export default function Auth() {
     const result = await login(email, password);
 
     if (result.success) {
-      toast({
-        title: 'Welcome back!',
-        description: 'You have successfully logged in.',
-      });
-      navigate('/dashboard');
+      // Get the user to check their status
+      const user = getUserByEmail(email);
+      
+      if (user?.role === 'member') {
+        // Check if member has a mess and is approved
+        if (!user.messId) {
+          // No mess assigned, redirect to join mess
+          toast({
+            title: 'Welcome!',
+            description: 'Please join a mess to continue.',
+          });
+          navigate('/join-mess', { state: { userId: user.id, email: user.email } });
+        } else if (!user.isApproved) {
+          // Has pending requests, redirect to waiting page
+          toast({
+            title: 'Request Pending',
+            description: 'Your join request is awaiting approval.',
+          });
+          navigate('/waiting-approval');
+        } else {
+          toast({
+            title: 'Welcome back!',
+            description: 'You have successfully logged in.',
+          });
+          navigate('/dashboard');
+        }
+      } else {
+        toast({
+          title: 'Welcome back!',
+          description: 'You have successfully logged in.',
+        });
+        navigate('/dashboard');
+      }
     } else {
-      toast({
-        title: 'Login failed',
-        description: result.error,
-        variant: 'destructive',
-      });
+      // Check for specific error cases
+      if (result.error === 'Waiting for manager approval.') {
+        toast({
+          title: 'Request Pending',
+          description: result.error,
+        });
+        // Try to log them in for the waiting page
+        const user = getUserByEmail(email);
+        if (user) {
+          navigate('/waiting-approval');
+        }
+      } else if (result.error === 'You need to join a mess first. Please search for a mess to join.') {
+        const user = getUserByEmail(email);
+        if (user) {
+          toast({
+            title: 'Join a Mess',
+            description: 'Please find and join a mess to continue.',
+          });
+          navigate('/join-mess', { state: { userId: user.id, email: user.email } });
+        }
+      } else {
+        toast({
+          title: 'Login failed',
+          description: result.error,
+          variant: 'destructive',
+        });
+      }
     }
 
     setIsLoading(false);
@@ -102,7 +171,7 @@ export default function Auth() {
           title: 'Account created!',
           description: 'Now find and join a mess.',
         });
-        navigate('/join-mess', { state: { email } });
+        navigate('/join-mess', { state: { userId: result.userId, email } });
       } else {
         toast({
           title: 'Registration failed',
@@ -115,13 +184,87 @@ export default function Auth() {
     setIsLoading(false);
   };
 
-  const handleForgotPassword = (e: React.FormEvent) => {
+  const handleSendOTP = (e: React.FormEvent) => {
     e.preventDefault();
-    // In a real app, this would send a reset email
+    
+    const user = getUserByEmail(resetEmail);
+    if (!user) {
+      toast({
+        title: 'User not found',
+        description: 'No account exists with this email address.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    // Generate and save OTP
+    const newOTP = generateOTP();
+    saveOTP(resetEmail, newOTP);
+    setGeneratedOTP(newOTP);
+    
+    // In a real app, this would send an email
+    // For localStorage demo, we'll show the OTP in a toast
     toast({
-      title: 'Password Reset',
-      description: 'If an account exists with this email, you will receive a password reset link.',
+      title: 'OTP Generated',
+      description: `Your OTP is: ${newOTP} (Valid for ${getOTPExpiry()} minutes)`,
+      duration: 10000,
     });
+    
+    setResetStep('otp');
+  };
+
+  const handleVerifyOTP = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    const result = verifyOTP(resetEmail, otp);
+    
+    if (!result.valid) {
+      toast({
+        title: 'Invalid OTP',
+        description: result.error,
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    toast({
+      title: 'OTP Verified',
+      description: 'You can now set a new password.',
+    });
+    
+    setResetStep('newPassword');
+  };
+
+  const handleResetPassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (newPassword !== confirmPassword) {
+      toast({
+        title: 'Passwords do not match',
+        description: 'Please make sure both passwords are the same.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    if (newPassword.length < 6) {
+      toast({
+        title: 'Password too short',
+        description: 'Password must be at least 6 characters.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    // Update password
+    updatePassword(resetEmail, newPassword);
+    
+    toast({
+      title: 'Password Reset Successful',
+      description: 'You can now login with your new password.',
+    });
+    
+    resetForgotPasswordForm();
     setShowForgotPassword(false);
   };
 
@@ -139,36 +282,119 @@ export default function Auth() {
 
           <Card className="shadow-card">
             <CardContent className="pt-6">
-              <form onSubmit={handleForgotPassword} className="space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="reset-email">Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              {resetStep === 'email' && (
+                <form onSubmit={handleSendOTP} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="reset-email">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        id="reset-email"
+                        type="email"
+                        placeholder="you@example.com"
+                        value={resetEmail}
+                        onChange={(e) => setResetEmail(e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <Button type="submit" className="w-full gradient-primary">
+                    Send OTP
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full"
+                    onClick={() => {
+                      resetForgotPasswordForm();
+                      setShowForgotPassword(false);
+                    }}
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Back to Login
+                  </Button>
+                </form>
+              )}
+
+              {resetStep === 'otp' && (
+                <form onSubmit={handleVerifyOTP} className="space-y-4">
+                  <div className="text-center mb-4">
+                    <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 mb-3">
+                      <KeyRound className="w-6 h-6 text-primary" />
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Enter the 6-digit OTP sent to your email
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="otp">OTP Code</Label>
                     <Input
-                      id="reset-email"
-                      type="email"
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10"
+                      id="otp"
+                      type="text"
+                      placeholder="Enter 6-digit OTP"
+                      value={otp}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                      className="text-center text-xl tracking-widest"
+                      maxLength={6}
                       required
                     />
                   </div>
-                </div>
 
-                <Button type="submit" className="w-full gradient-primary">
-                  Send Reset Link
-                </Button>
+                  <Button type="submit" className="w-full gradient-primary" disabled={otp.length !== 6}>
+                    Verify OTP
+                  </Button>
 
-                <Button
-                  type="button"
-                  variant="ghost"
-                  className="w-full"
-                  onClick={() => setShowForgotPassword(false)}
-                >
-                  Back to Login
-                </Button>
-              </form>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full"
+                    onClick={() => setResetStep('email')}
+                  >
+                    <ArrowLeft className="h-4 w-4 mr-2" />
+                    Back
+                  </Button>
+                </form>
+              )}
+
+              {resetStep === 'newPassword' && (
+                <form onSubmit={handleResetPassword} className="space-y-4">
+                  <div className="text-center mb-4">
+                    <p className="text-sm text-muted-foreground">
+                      Enter your new password
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="newPassword">New Password</Label>
+                    <PasswordInput
+                      id="newPassword"
+                      placeholder="••••••••"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="confirmPassword">Confirm Password</Label>
+                    <PasswordInput
+                      id="confirmPassword"
+                      placeholder="••••••••"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+
+                  <Button type="submit" className="w-full gradient-primary">
+                    Reset Password
+                  </Button>
+                </form>
+              )}
             </CardContent>
           </Card>
         </div>
