@@ -17,6 +17,11 @@ import MealCosts from "./pages/MealCosts";
 import OtherCosts from "./pages/OtherCosts";
 import MonthDetails from "./pages/MonthDetails";
 import JoinRequests from "./pages/JoinRequests";
+import Notices from "./pages/Notices";
+import BazarDates from "./pages/BazarDates";
+import Notes from "./pages/Notes";
+import Profile from "./pages/Profile";
+import EditCalendar from "./pages/EditCalendar";
 
 const queryClient = new QueryClient();
 
@@ -42,6 +47,11 @@ const App = () => (
             <Route path="/month-details" element={<MonthDetails />} />
             <Route path="/join-requests" element={<JoinRequests />} />
             <Route path="/manage-mess" element={<ManageMess />} />
+            <Route path="/notices" element={<Notices />} />
+            <Route path="/bazar-dates" element={<BazarDates />} />
+            <Route path="/notes" element={<Notes />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/edit-calendar" element={<EditCalendar />} />
           </Routes>
         </BrowserRouter>
       </TooltipProvider>

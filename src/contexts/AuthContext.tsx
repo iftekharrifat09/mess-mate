@@ -135,6 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       messId: mess.id,
       isApproved: true,
       isActive: true,
+      emailVerified: false,
     });
 
     // Update mess with manager ID
@@ -186,9 +187,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       fullName: data.fullName,
       phone: data.phone,
       role: 'member',
-      messId: data.messId || '', // Empty if no mess yet
+      messId: data.messId || '',
       isApproved: false,
       isActive: true,
+      emailVerified: false,
     });
 
     // Save password

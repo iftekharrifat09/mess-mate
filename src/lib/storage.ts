@@ -1,4 +1,4 @@
-import { User, Mess, Month, Meal, Deposit, MealCost, OtherCost, JoinRequest } from '@/types';
+import { User, Mess, Month, Meal, Deposit, MealCost, OtherCost, JoinRequest, Notice, BazarDate, Notification, Note } from '@/types';
 
 const STORAGE_KEYS = {
   USERS: 'mess_manager_users',
@@ -10,6 +10,10 @@ const STORAGE_KEYS = {
   OTHER_COSTS: 'mess_manager_other_costs',
   JOIN_REQUESTS: 'mess_manager_join_requests',
   CURRENT_USER: 'mess_manager_current_user',
+  NOTICES: 'mess_manager_notices',
+  BAZAR_DATES: 'mess_manager_bazar_dates',
+  NOTIFICATIONS: 'mess_manager_notifications',
+  NOTES: 'mess_manager_notes',
 };
 
 function getFromStorage<T>(key: string, defaultValue: T[] = []): T[] {
@@ -474,4 +478,294 @@ export function setCurrentUser(user: User | null): void {
 // Helper to get members of a mess
 export function getMessMembers(messId: string): User[] {
   return getUsers().filter(u => u.messId === messId && u.isApproved && u.isActive);
+}
+
+// ============ NOTICES ============
+export function getNotices(): Notice[] {
+  return getFromStorage<Notice>(STORAGE_KEYS.NOTICES);
+}
+
+export function saveNotices(notices: Notice[]): void {
+  saveToStorage(STORAGE_KEYS.NOTICES, notices);
+}
+
+export function getNoticesByMessId(messId: string): Notice[] {
+  return getNotices().filter(n => n.messId === messId);
+}
+
+export function getLatestNotice(messId: string): Notice | undefined {
+  const notices = getNoticesByMessId(messId);
+  return notices.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())[0];
+}
+
+export function createNotice(noticeData: Omit<Notice, 'id' | 'createdAt'>): Notice {
+  const notices = getNotices();
+  const newNotice: Notice = {
+    ...noticeData,
+    id: generateId(),
+    createdAt: new Date().toISOString(),
+  };
+  notices.push(newNotice);
+  saveNotices(notices);
+  return newNotice;
+}
+
+export function updateNotice(id: string, updates: Partial<Notice>): Notice | undefined {
+  const notices = getNotices();
+  const index = notices.findIndex(n => n.id === id);
+  if (index !== -1) {
+    notices[index] = { ...notices[index], ...updates, updatedAt: new Date().toISOString() };
+    saveNotices(notices);
+    return notices[index];
+  }
+  return undefined;
+}
+
+export function deleteNotice(id: string): boolean {
+  const notices = getNotices();
+  const filtered = notices.filter(n => n.id !== id);
+  if (filtered.length !== notices.length) {
+    saveNotices(filtered);
+    return true;
+  }
+  return false;
+}
+
+// ============ BAZAR DATES ============
+export function getBazarDates(): BazarDate[] {
+  return getFromStorage<BazarDate>(STORAGE_KEYS.BAZAR_DATES);
+}
+
+export function saveBazarDates(dates: BazarDate[]): void {
+  saveToStorage(STORAGE_KEYS.BAZAR_DATES, dates);
+}
+
+export function getBazarDatesByMessId(messId: string): BazarDate[] {
+  return getBazarDates().filter(b => b.messId === messId);
+}
+
+export function createBazarDate(dateData: Omit<BazarDate, 'id' | 'createdAt'>): BazarDate {
+  const dates = getBazarDates();
+  const newDate: BazarDate = {
+    ...dateData,
+    id: generateId(),
+    createdAt: new Date().toISOString(),
+  };
+  dates.push(newDate);
+  saveBazarDates(dates);
+  return newDate;
+}
+
+export function updateBazarDate(id: string, updates: Partial<BazarDate>): BazarDate | undefined {
+  const dates = getBazarDates();
+  const index = dates.findIndex(d => d.id === id);
+  if (index !== -1) {
+    dates[index] = { ...dates[index], ...updates };
+    saveBazarDates(dates);
+    return dates[index];
+  }
+  return undefined;
+}
+
+export function deleteBazarDate(id: string): boolean {
+  const dates = getBazarDates();
+  const filtered = dates.filter(d => d.id !== id);
+  if (filtered.length !== dates.length) {
+    saveBazarDates(filtered);
+    return true;
+  }
+  return false;
+}
+
+// ============ NOTIFICATIONS ============
+export function getNotifications(): Notification[] {
+  return getFromStorage<Notification>(STORAGE_KEYS.NOTIFICATIONS);
+}
+
+export function saveNotifications(notifications: Notification[]): void {
+  saveToStorage(STORAGE_KEYS.NOTIFICATIONS, notifications);
+}
+
+export function getNotificationsByUserId(userId: string): Notification[] {
+  return getNotifications()
+    .filter(n => n.userId === userId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+export function getUnseenNotificationsCount(userId: string): number {
+  return getNotifications().filter(n => n.userId === userId && !n.seen).length;
+}
+
+export function createNotification(notificationData: Omit<Notification, 'id' | 'createdAt' | 'seen'>): Notification {
+  const notifications = getNotifications();
+  const newNotification: Notification = {
+    ...notificationData,
+    id: generateId(),
+    seen: false,
+    createdAt: new Date().toISOString(),
+  };
+  notifications.push(newNotification);
+  saveNotifications(notifications);
+  return newNotification;
+}
+
+export function markNotificationAsSeen(id: string): void {
+  const notifications = getNotifications();
+  const index = notifications.findIndex(n => n.id === id);
+  if (index !== -1) {
+    notifications[index].seen = true;
+    saveNotifications(notifications);
+  }
+}
+
+export function markAllNotificationsAsSeen(userId: string): void {
+  const notifications = getNotifications();
+  notifications.forEach(n => {
+    if (n.userId === userId) {
+      n.seen = true;
+    }
+  });
+  saveNotifications(notifications);
+}
+
+export function deleteNotification(id: string): boolean {
+  const notifications = getNotifications();
+  const filtered = notifications.filter(n => n.id !== id);
+  if (filtered.length !== notifications.length) {
+    saveNotifications(filtered);
+    return true;
+  }
+  return false;
+}
+
+export function deleteAllNotifications(userId: string): void {
+  const notifications = getNotifications();
+  const filtered = notifications.filter(n => n.userId !== userId);
+  saveNotifications(filtered);
+}
+
+// Helper to notify all members of a mess (excluding a specific user)
+export function notifyMessMembers(messId: string, excludeUserId: string, notification: { type: Notification['type']; title: string; message: string }): void {
+  const members = getMessMembers(messId);
+  members.forEach(member => {
+    if (member.id !== excludeUserId) {
+      createNotification({
+        userId: member.id,
+        messId,
+        ...notification,
+      });
+    }
+  });
+}
+
+// Helper to notify manager of a mess
+export function notifyManager(messId: string, notification: { type: Notification['type']; title: string; message: string }): void {
+  const mess = getMessById(messId);
+  if (mess) {
+    createNotification({
+      userId: mess.managerId,
+      messId,
+      ...notification,
+    });
+  }
+}
+
+// ============ NOTES ============
+export function getNotes(): Note[] {
+  return getFromStorage<Note>(STORAGE_KEYS.NOTES);
+}
+
+export function saveNotes(notes: Note[]): void {
+  saveToStorage(STORAGE_KEYS.NOTES, notes);
+}
+
+export function getNotesByMessId(messId: string): Note[] {
+  return getNotes()
+    .filter(n => n.messId === messId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+export function createNote(noteData: Omit<Note, 'id' | 'createdAt'>): Note {
+  const notes = getNotes();
+  const newNote: Note = {
+    ...noteData,
+    id: generateId(),
+    createdAt: new Date().toISOString(),
+  };
+  notes.push(newNote);
+  saveNotes(notes);
+  return newNote;
+}
+
+export function updateNote(id: string, updates: Partial<Note>): Note | undefined {
+  const notes = getNotes();
+  const index = notes.findIndex(n => n.id === id);
+  if (index !== -1) {
+    notes[index] = { ...notes[index], ...updates, updatedAt: new Date().toISOString() };
+    saveNotes(notes);
+    return notes[index];
+  }
+  return undefined;
+}
+
+export function deleteNote(id: string): boolean {
+  const notes = getNotes();
+  const filtered = notes.filter(n => n.id !== id);
+  if (filtered.length !== notes.length) {
+    saveNotes(filtered);
+    return true;
+  }
+  return false;
+}
+
+// ============ DELETE MESS ============
+export function deleteMess(messId: string): void {
+  // Delete all related data
+  const users = getUsers().filter(u => u.messId !== messId);
+  saveUsers(users);
+  
+  const messes = getMesses().filter(m => m.id !== messId);
+  saveMesses(messes);
+  
+  const months = getMonths().filter(m => m.messId !== messId);
+  saveMonths(months);
+  
+  const meals = getMeals().filter(m => {
+    const month = getMonths().find(mo => mo.id === m.monthId);
+    return month?.messId !== messId;
+  });
+  saveMeals(meals);
+  
+  const deposits = getDeposits().filter(d => {
+    const month = getMonths().find(mo => mo.id === d.monthId);
+    return month?.messId !== messId;
+  });
+  saveDeposits(deposits);
+  
+  const mealCosts = getMealCosts().filter(c => {
+    const month = getMonths().find(mo => mo.id === c.monthId);
+    return month?.messId !== messId;
+  });
+  saveMealCosts(mealCosts);
+  
+  const otherCosts = getOtherCosts().filter(c => {
+    const month = getMonths().find(mo => mo.id === c.monthId);
+    return month?.messId !== messId;
+  });
+  saveOtherCosts(otherCosts);
+  
+  const joinRequests = getJoinRequests().filter(r => r.messId !== messId);
+  saveJoinRequests(joinRequests);
+  
+  const notices = getNotices().filter(n => n.messId !== messId);
+  saveNotices(notices);
+  
+  const bazarDates = getBazarDates().filter(b => b.messId !== messId);
+  saveBazarDates(bazarDates);
+  
+  const notifications = getNotifications().filter(n => n.messId !== messId);
+  saveNotifications(notifications);
+  
+  const notes = getNotes().filter(n => n.messId !== messId);
+  saveNotes(notes);
 }

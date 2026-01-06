@@ -9,6 +9,7 @@ export interface User {
   messId: string;
   isApproved: boolean;
   isActive: boolean;
+  emailVerified: boolean;
   createdAt: string;
 }
 
@@ -16,14 +17,14 @@ export interface Mess {
   id: string;
   name: string;
   managerId: string;
-  messCode: string; // Unique shareable code
+  messCode: string;
   createdAt: string;
 }
 
 export interface Month {
   id: string;
   messId: string;
-  name: string; // e.g., "January 2024"
+  name: string;
   year: number;
   month: number;
   isActive: boolean;
@@ -58,6 +59,8 @@ export interface MealCost {
   amount: number;
   date: string;
   description: string;
+  addedAsDeposit?: boolean;
+  depositId?: string;
   createdAt: string;
 }
 
@@ -78,6 +81,43 @@ export interface JoinRequest {
   userId: string;
   status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
+}
+
+export interface Notice {
+  id: string;
+  messId: string;
+  title: string;
+  content: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface BazarDate {
+  id: string;
+  messId: string;
+  userId: string;
+  date: string;
+  createdAt: string;
+}
+
+export interface Notification {
+  id: string;
+  userId: string;
+  messId: string;
+  type: 'meal' | 'deposit' | 'cost' | 'notice' | 'bazar' | 'mess_update' | 'join_request';
+  title: string;
+  message: string;
+  seen: boolean;
+  createdAt: string;
+}
+
+export interface Note {
+  id: string;
+  messId: string;
+  title: string;
+  description: string;
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface MemberSummary {

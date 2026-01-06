@@ -10,15 +10,19 @@ import {
   Receipt,
   CalendarDays,
   UserPlus,
-  Settings,
   LogOut,
   ChevronLeft,
   ChevronRight,
   Menu,
   Building,
+  Megaphone,
+  Calendar,
+  StickyNote,
+  User,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
+import NotificationBell from '@/components/notifications/NotificationBell';
 
 interface NavItem {
   label: string;
@@ -35,6 +39,10 @@ const navItems: NavItem[] = [
   { label: 'Meal Costs', href: '/meal-costs', icon: ShoppingCart, managerOnly: true },
   { label: 'Other Costs', href: '/other-costs', icon: Receipt, managerOnly: true },
   { label: 'Month Details', href: '/month-details', icon: CalendarDays },
+  { label: 'Edit Calendar', href: '/edit-calendar', icon: Calendar },
+  { label: 'Bazar Dates', href: '/bazar-dates', icon: ShoppingCart, managerOnly: true },
+  { label: 'Notices', href: '/notices', icon: Megaphone },
+  { label: 'All Notes', href: '/notes', icon: StickyNote },
   { label: 'Join Requests', href: '/join-requests', icon: UserPlus, managerOnly: true },
   { label: 'Manage Mess', href: '/manage-mess', icon: Building, managerOnly: true },
 ];
@@ -52,20 +60,26 @@ export default function Sidebar() {
 
   const handleLogout = () => {
     logout();
-    navigate('/login');
+    navigate('/auth');
   };
 
   return (
     <>
       {/* Mobile menu button */}
-      <Button
-        variant="ghost"
-        size="icon"
-        className="fixed top-4 left-4 z-50 lg:hidden"
-        onClick={() => setIsMobileOpen(!isMobileOpen)}
-      >
-        <Menu className="h-5 w-5" />
-      </Button>
+      <div className="fixed top-4 left-4 z-50 lg:hidden flex items-center gap-2">
+        <Button
+          variant="ghost"
+          size="icon"
+          onClick={() => setIsMobileOpen(!isMobileOpen)}
+        >
+          <Menu className="h-5 w-5" />
+        </Button>
+      </div>
+
+      {/* Top right notification bell for mobile */}
+      <div className="fixed top-4 right-4 z-50 lg:hidden">
+        <NotificationBell />
+      </div>
 
       {/* Mobile overlay */}
       {isMobileOpen && (
@@ -96,18 +110,25 @@ export default function Sidebar() {
               </div>
             </div>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="hidden lg:flex text-sidebar-foreground hover:bg-sidebar-accent"
-            onClick={() => setIsCollapsed(!isCollapsed)}
-          >
-            {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          </Button>
+          <div className="flex items-center gap-2">
+            {!isCollapsed && (
+              <div className="hidden lg:block">
+                <NotificationBell />
+              </div>
+            )}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="hidden lg:flex text-sidebar-foreground hover:bg-sidebar-accent"
+              onClick={() => setIsCollapsed(!isCollapsed)}
+            >
+              {isCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+            </Button>
+          </div>
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+        <nav className="flex-1 p-4 space-y-1 overflow-y-auto">
           {filteredNavItems.map(item => {
             const Icon = item.icon;
             const isActive = location.pathname === item.href;
@@ -125,7 +146,7 @@ export default function Sidebar() {
                 )}
               >
                 <Icon className={cn('h-5 w-5 flex-shrink-0', isCollapsed && 'mx-auto')} />
-                {!isCollapsed && <span className="font-medium">{item.label}</span>}
+                {!isCollapsed && <span className="font-medium text-sm">{item.label}</span>}
               </Link>
             );
           })}
@@ -134,10 +155,22 @@ export default function Sidebar() {
         {/* Footer */}
         <div className="p-4 border-t border-sidebar-border space-y-2">
           {!isCollapsed && (
-            <div className="px-3 py-2 rounded-lg bg-sidebar-accent">
-              <p className="font-medium text-sidebar-foreground truncate">{user?.fullName}</p>
-              <p className="text-xs text-sidebar-muted truncate">{user?.email}</p>
-            </div>
+            <Link
+              to="/profile"
+              onClick={() => setIsMobileOpen(false)}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
+                location.pathname === '/profile'
+                  ? 'bg-sidebar-primary text-sidebar-primary-foreground'
+                  : 'text-sidebar-foreground hover:bg-sidebar-accent'
+              )}
+            >
+              <User className="h-5 w-5" />
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm truncate">{user?.fullName}</p>
+                <p className="text-xs text-sidebar-muted truncate">{user?.email}</p>
+              </div>
+            </Link>
           )}
           <Button
             variant="ghost"
