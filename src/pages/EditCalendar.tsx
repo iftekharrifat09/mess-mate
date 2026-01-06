@@ -1,0 +1,437 @@
+import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
+import { useAuth } from '@/contexts/AuthContext';
+import DashboardLayout from '@/components/layout/DashboardLayout';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { useToast } from '@/hooks/use-toast';
+import { 
+  getActiveMonth,
+  getMealsByMonthId,
+  getDepositsByMonthId,
+  getMealCostsByMonthId,
+  getOtherCostsByMonthId,
+  getMessMembers,
+  updateMeal,
+  updateDeposit,
+  updateMealCost,
+  updateOtherCost,
+} from '@/lib/storage';
+import { Meal, Deposit, MealCost, OtherCost, User } from '@/types';
+import { formatCurrency } from '@/lib/calculations';
+import { Calendar, Edit2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isBefore, isToday, isSameMonth, addMonths, subMonths } from 'date-fns';
+
+interface DayData {
+  meals: Meal[];
+  deposits: Deposit[];
+  mealCosts: MealCost[];
+  otherCosts: OtherCost[];
+}
+
+export default function EditCalendar() {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [dayData, setDayData] = useState<DayData | null>(null);
+  const [members, setMembers] = useState<User[]>([]);
+  const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [allData, setAllData] = useState<{
+    meals: Meal[];
+    deposits: Deposit[];
+    mealCosts: MealCost[];
+    otherCosts: OtherCost[];
+  }>({ meals: [], deposits: [], mealCosts: [], otherCosts: [] });
+
+  const isManager = user?.role === 'manager';
+
+  useEffect(() => {
+    loadData();
+  }, [user]);
+
+  const loadData = () => {
+    if (!user) return;
+    
+    const activeMonth = getActiveMonth(user.messId);
+    if (activeMonth) {
+      setAllData({
+        meals: getMealsByMonthId(activeMonth.id),
+        deposits: getDepositsByMonthId(activeMonth.id),
+        mealCosts: getMealCostsByMonthId(activeMonth.id),
+        otherCosts: getOtherCostsByMonthId(activeMonth.id),
+      });
+    }
+    setMembers(getMessMembers(user.messId));
+  };
+
+  const handleDateClick = (date: Date) => {
+    if (isToday(date) || !isBefore(date, new Date())) return;
+    
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const data: DayData = {
+      meals: allData.meals.filter(m => m.date === dateStr),
+      deposits: allData.deposits.filter(d => d.date === dateStr),
+      mealCosts: allData.mealCosts.filter(c => c.date === dateStr),
+      otherCosts: allData.otherCosts.filter(c => c.date === dateStr),
+    };
+    
+    setDayData(data);
+    setSelectedDate(date);
+    setIsDialogOpen(true);
+  };
+
+  const getMemberName = (userId: string) => {
+    return members.find(m => m.id === userId)?.fullName || 'Unknown';
+  };
+
+  const days = eachDayOfInterval({
+    start: startOfMonth(currentMonth),
+    end: endOfMonth(currentMonth),
+  });
+
+  const firstDayOfWeek = startOfMonth(currentMonth).getDay();
+
+  const getDayIndicator = (date: Date) => {
+    const dateStr = format(date, 'yyyy-MM-dd');
+    const hasActivity = 
+      allData.meals.some(m => m.date === dateStr) ||
+      allData.deposits.some(d => d.date === dateStr) ||
+      allData.mealCosts.some(c => c.date === dateStr) ||
+      allData.otherCosts.some(c => c.date === dateStr);
+    return hasActivity;
+  };
+
+  const handleUpdateMeal = (meal: Meal, field: 'breakfast' | 'lunch' | 'dinner', value: number) => {
+    updateMeal(meal.id, { [field]: value });
+    loadData();
+    toast({ title: 'Meal updated' });
+  };
+
+  const handleUpdateDeposit = (deposit: Deposit, amount: number) => {
+    updateDeposit(deposit.id, { amount });
+    loadData();
+    toast({ title: 'Deposit updated' });
+  };
+
+  const handleUpdateMealCost = (cost: MealCost, amount: number) => {
+    updateMealCost(cost.id, { amount });
+    loadData();
+    toast({ title: 'Meal cost updated' });
+  };
+
+  const handleUpdateOtherCost = (cost: OtherCost, amount: number) => {
+    updateOtherCost(cost.id, { amount });
+    loadData();
+    toast({ title: 'Other cost updated' });
+  };
+
+  return (
+    <DashboardLayout>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="space-y-6"
+      >
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">Edit Calendar</h1>
+            <p className="text-muted-foreground">
+              {isManager ? 'Click on past dates to edit records' : 'Click on past dates to view records'}
+            </p>
+          </div>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-primary" />
+                {format(currentMonth, 'MMMM yyyy')}
+              </CardTitle>
+              <div className="flex gap-2">
+                <Button variant="outline" size="icon" onClick={() => setCurrentMonth(subMonths(currentMonth, 1))}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button variant="outline" size="icon" onClick={() => setCurrentMonth(addMonths(currentMonth, 1))}>
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {/* Calendar Header */}
+            <div className="grid grid-cols-7 gap-1 mb-2">
+              {['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].map(day => (
+                <div key={day} className="text-center text-sm font-medium text-muted-foreground p-2">
+                  {day}
+                </div>
+              ))}
+            </div>
+
+            {/* Calendar Grid */}
+            <div className="grid grid-cols-7 gap-1">
+              {/* Empty cells for days before start of month */}
+              {Array.from({ length: firstDayOfWeek }).map((_, i) => (
+                <div key={`empty-${i}`} className="aspect-square" />
+              ))}
+
+              {/* Days of the month */}
+              {days.map((day) => {
+                const isPastDate = isBefore(day, new Date()) && !isToday(day);
+                const hasActivity = getDayIndicator(day);
+                const isClickable = isPastDate;
+
+                return (
+                  <motion.button
+                    key={day.toISOString()}
+                    whileHover={isClickable ? { scale: 1.05 } : {}}
+                    whileTap={isClickable ? { scale: 0.95 } : {}}
+                    onClick={() => isClickable && handleDateClick(day)}
+                    disabled={!isClickable}
+                    className={`aspect-square rounded-lg flex flex-col items-center justify-center relative transition-colors ${
+                      isToday(day)
+                        ? 'bg-primary text-primary-foreground'
+                        : isPastDate
+                        ? 'bg-muted/50 hover:bg-muted cursor-pointer'
+                        : 'bg-muted/20 text-muted-foreground cursor-not-allowed'
+                    }`}
+                  >
+                    <span className="text-sm font-medium">{format(day, 'd')}</span>
+                    {hasActivity && (
+                      <span className={`absolute bottom-1 w-1.5 h-1.5 rounded-full ${
+                        isToday(day) ? 'bg-primary-foreground' : 'bg-primary'
+                      }`} />
+                    )}
+                  </motion.button>
+                );
+              })}
+            </div>
+
+            <div className="mt-4 flex items-center gap-4 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full bg-primary" />
+                <span>Today</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                <span>Has Activity</span>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Day Details Dialog */}
+        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Calendar className="h-5 w-5 text-primary" />
+                {selectedDate && format(selectedDate, 'EEEE, MMMM d, yyyy')}
+              </DialogTitle>
+            </DialogHeader>
+
+            {dayData && (
+              <div className="space-y-6">
+                {/* Meals */}
+                {dayData.meals.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold mb-2">Meals</h3>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Member</TableHead>
+                          <TableHead className="text-center">Breakfast</TableHead>
+                          <TableHead className="text-center">Lunch</TableHead>
+                          <TableHead className="text-center">Dinner</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {dayData.meals.map(meal => (
+                          <TableRow key={meal.id}>
+                            <TableCell>{getMemberName(meal.userId)}</TableCell>
+                            <TableCell className="text-center">
+                              {isManager ? (
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.5"
+                                  value={meal.breakfast}
+                                  onChange={(e) => handleUpdateMeal(meal, 'breakfast', parseFloat(e.target.value) || 0)}
+                                  className="w-16 text-center mx-auto"
+                                />
+                              ) : meal.breakfast}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {isManager ? (
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.5"
+                                  value={meal.lunch}
+                                  onChange={(e) => handleUpdateMeal(meal, 'lunch', parseFloat(e.target.value) || 0)}
+                                  className="w-16 text-center mx-auto"
+                                />
+                              ) : meal.lunch}
+                            </TableCell>
+                            <TableCell className="text-center">
+                              {isManager ? (
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  step="0.5"
+                                  value={meal.dinner}
+                                  onChange={(e) => handleUpdateMeal(meal, 'dinner', parseFloat(e.target.value) || 0)}
+                                  className="w-16 text-center mx-auto"
+                                />
+                              ) : meal.dinner}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+
+                {/* Deposits */}
+                {dayData.deposits.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold mb-2">Deposits</h3>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Member</TableHead>
+                          <TableHead>Amount</TableHead>
+                          <TableHead>Note</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {dayData.deposits.map(deposit => (
+                          <TableRow key={deposit.id}>
+                            <TableCell>{getMemberName(deposit.userId)}</TableCell>
+                            <TableCell>
+                              {isManager ? (
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  value={deposit.amount}
+                                  onChange={(e) => handleUpdateDeposit(deposit, parseFloat(e.target.value) || 0)}
+                                  className="w-24"
+                                />
+                              ) : formatCurrency(deposit.amount)}
+                            </TableCell>
+                            <TableCell>{deposit.note || '-'}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+
+                {/* Meal Costs */}
+                {dayData.mealCosts.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold mb-2">Meal Costs</h3>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Purchased By</TableHead>
+                          <TableHead>Description</TableHead>
+                          <TableHead>Amount</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {dayData.mealCosts.map(cost => (
+                          <TableRow key={cost.id}>
+                            <TableCell>{getMemberName(cost.userId)}</TableCell>
+                            <TableCell>{cost.description}</TableCell>
+                            <TableCell>
+                              {isManager ? (
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  value={cost.amount}
+                                  onChange={(e) => handleUpdateMealCost(cost, parseFloat(e.target.value) || 0)}
+                                  className="w-24"
+                                />
+                              ) : formatCurrency(cost.amount)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+
+                {/* Other Costs */}
+                {dayData.otherCosts.length > 0 && (
+                  <div>
+                    <h3 className="font-semibold mb-2">Other Costs</h3>
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Paid By</TableHead>
+                          <TableHead>Description</TableHead>
+                          <TableHead>Amount</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {dayData.otherCosts.map(cost => (
+                          <TableRow key={cost.id}>
+                            <TableCell>{getMemberName(cost.userId)}</TableCell>
+                            <TableCell>{cost.description}</TableCell>
+                            <TableCell>
+                              {isManager ? (
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  value={cost.amount}
+                                  onChange={(e) => handleUpdateOtherCost(cost, parseFloat(e.target.value) || 0)}
+                                  className="w-24"
+                                />
+                              ) : formatCurrency(cost.amount)}
+                            </TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+
+                {dayData.meals.length === 0 && dayData.deposits.length === 0 && 
+                 dayData.mealCosts.length === 0 && dayData.otherCosts.length === 0 && (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No records for this date
+                  </div>
+                )}
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsDialogOpen(false)}>
+                Close
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      </motion.div>
+    </DashboardLayout>
+  );
+}

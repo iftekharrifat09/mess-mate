@@ -1,16 +1,20 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useRef } from 'react';
+import { motion } from 'framer-motion';
+import gsap from 'gsap';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import MonthSummaryCard from '@/components/dashboard/MonthSummaryCard';
 import PersonalInfoCard from '@/components/dashboard/PersonalInfoCard';
 import MemberSummaryCard from '@/components/dashboard/MemberSummaryCard';
-import { MonthSummary, MemberSummary } from '@/types';
+import BazarDateCard from '@/components/dashboard/BazarDateCard';
+import NoticePopup from '@/components/notices/NoticePopup';
+import { MonthSummary, MemberSummary, BazarDate, User } from '@/types';
 import { 
   calculateMonthSummary, 
   calculateMemberSummary, 
   getAllMembersSummary 
 } from '@/lib/calculations';
-import { getActiveMonth, getMessById } from '@/lib/storage';
+import { getActiveMonth, getMessById, getBazarDatesByMessId, getMessMembers } from '@/lib/storage';
 import { Users } from 'lucide-react';
 
 export default function Dashboard() {
@@ -19,12 +23,26 @@ export default function Dashboard() {
   const [personalSummary, setPersonalSummary] = useState<MemberSummary | null>(null);
   const [membersSummary, setMembersSummary] = useState<MemberSummary[]>([]);
   const [messName, setMessName] = useState('');
+  const [bazarDates, setBazarDates] = useState<BazarDate[]>([]);
+  const [members, setMembers] = useState<User[]>([]);
+  const headerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (user) {
       loadDashboardData();
     }
   }, [user]);
+
+  useEffect(() => {
+    // GSAP entrance animation for header
+    if (headerRef.current) {
+      gsap.fromTo(
+        headerRef.current.children,
+        { opacity: 0, y: -20 },
+        { opacity: 1, y: 0, stagger: 0.1, duration: 0.5, ease: 'power2.out' }
+      );
+    }
+  }, [messName]);
 
   const loadDashboardData = () => {
     if (!user) return;
@@ -33,6 +51,9 @@ export default function Dashboard() {
     if (mess) {
       setMessName(mess.name);
     }
+
+    const messMembers = getMessMembers(user.messId);
+    setMembers(messMembers);
 
     const activeMonth = getActiveMonth(user.messId);
     if (activeMonth) {
@@ -45,13 +66,22 @@ export default function Dashboard() {
       const allMembers = getAllMembersSummary(activeMonth.id, user.messId);
       setMembersSummary(allMembers);
     }
+
+    setBazarDates(getBazarDatesByMessId(user.messId));
   };
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 animate-fade-in">
+      {/* Notice Popup for Members */}
+      {user?.role === 'member' && <NoticePopup />}
+      
+      <motion.div 
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        className="space-y-6"
+      >
         {/* Header */}
-        <div>
+        <div ref={headerRef}>
           <h1 className="text-3xl font-bold text-foreground">{messName}</h1>
           <p className="text-muted-foreground">
             Welcome back, {user?.fullName}! Here's your mess overview.
@@ -61,14 +91,40 @@ export default function Dashboard() {
         {/* Main Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Left Column - Month Summary */}
-          {monthSummary && <MonthSummaryCard summary={monthSummary} />}
+          <motion.div
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.1 }}
+          >
+            {monthSummary && <MonthSummaryCard summary={monthSummary} />}
+          </motion.div>
 
           {/* Right Column - Personal Info */}
-          {personalSummary && <PersonalInfoCard summary={personalSummary} />}
+          <motion.div
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: 0.2 }}
+          >
+            {personalSummary && <PersonalInfoCard summary={personalSummary} />}
+          </motion.div>
         </div>
 
+        {/* Bazar Dates */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
+          <BazarDateCard bazarDates={bazarDates} members={members} />
+        </motion.div>
+
         {/* All Members Section */}
-        <div className="space-y-4">
+        <motion.div 
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="space-y-4"
+        >
           <div className="flex items-center gap-2">
             <Users className="h-5 w-5 text-primary" />
             <h2 className="text-xl font-semibold text-foreground">All Members</h2>
@@ -87,7 +143,7 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {membersSummary.map(member => (
+              {membersSummary.map((member, index) => (
                 <MemberSummaryCard
                   key={member.userId}
                   summary={member}
@@ -96,8 +152,8 @@ export default function Dashboard() {
               ))}
             </div>
           )}
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
     </DashboardLayout>
   );
 }

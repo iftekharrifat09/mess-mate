@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -14,22 +16,34 @@ import {
   DialogTrigger,
   DialogFooter,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { getMessById, updateMess, generateUniqueMessCode, isMessCodeUnique } from '@/lib/storage';
+import { getMessById, updateMess, generateUniqueMessCode, isMessCodeUnique, deleteMess } from '@/lib/storage';
 import { Mess } from '@/types';
-import { Building, Copy, Check, Edit2, Settings, RefreshCw, X } from 'lucide-react';
+import { Building, Copy, Check, Edit2, Settings, RefreshCw, Trash2, AlertTriangle } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 
 export default function ManageMess() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [mess, setMess] = useState<Mess | null>(null);
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
   const [isEditCodeDialogOpen, setIsEditCodeDialogOpen] = useState(false);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [newMessName, setNewMessName] = useState('');
   const [newMessCode, setNewMessCode] = useState('');
   const [copied, setCopied] = useState(false);
   const [codeError, setCodeError] = useState('');
+  const [deleteConfirmation, setDeleteConfirmation] = useState('');
 
   const isManager = user?.role === 'manager';
 
@@ -123,6 +137,15 @@ export default function ManageMess() {
     });
   };
 
+  const handleDeleteMess = () => {
+    if (!mess || deleteConfirmation !== 'Sure') return;
+    
+    deleteMess(mess.id);
+    logout();
+    toast({ title: 'Mess deleted', description: 'All data has been removed.' });
+    navigate('/auth');
+  };
+
   if (!mess) {
     return (
       <DashboardLayout>
@@ -135,7 +158,11 @@ export default function ManageMess() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 animate-fade-in">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="space-y-6"
+      >
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Manage Mess</h1>
@@ -310,7 +337,66 @@ export default function ManageMess() {
             </CardContent>
           </Card>
         </div>
-      </div>
+
+        {/* Danger Zone */}
+        <Card className="border-destructive/50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-destructive">
+              <AlertTriangle className="h-5 w-5" />
+              Danger Zone
+            </CardTitle>
+            <CardDescription>
+              Irreversible actions that affect your entire mess
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+              <AlertDialogTrigger asChild>
+                <Button variant="destructive" className="w-full sm:w-auto">
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Mess
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle className="flex items-center gap-2 text-destructive">
+                    <AlertTriangle className="h-5 w-5" />
+                    Delete Mess Permanently?
+                  </AlertDialogTitle>
+                  <AlertDialogDescription className="space-y-2">
+                    <p>This action cannot be undone. This will permanently delete:</p>
+                    <ul className="list-disc list-inside text-sm space-y-1">
+                      <li>All members and their data</li>
+                      <li>All meal records</li>
+                      <li>All deposits and costs</li>
+                      <li>All notices and notes</li>
+                    </ul>
+                    <p className="font-medium pt-2">Type "Sure" below to confirm:</p>
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <Input
+                  value={deleteConfirmation}
+                  onChange={(e) => setDeleteConfirmation(e.target.value)}
+                  placeholder='Type "Sure" to confirm'
+                  className="mt-2"
+                />
+                <AlertDialogFooter>
+                  <Button variant="outline" onClick={() => { setIsDeleteDialogOpen(false); setDeleteConfirmation(''); }}>
+                    Cancel
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    onClick={handleDeleteMess}
+                    disabled={deleteConfirmation !== 'Sure'}
+                  >
+                    Delete Mess
+                  </Button>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </CardContent>
+        </Card>
+      </motion.div>
     </DashboardLayout>
   );
 }
