@@ -36,14 +36,21 @@ import {
 } from '@/lib/storage';
 import { Meal, Deposit, MealCost, OtherCost, User } from '@/types';
 import { formatCurrency } from '@/lib/calculations';
-import { Calendar, Edit2, ChevronLeft, ChevronRight } from 'lucide-react';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, isBefore, isToday, isSameMonth, addMonths, subMonths } from 'date-fns';
+import { Calendar, Edit2, ChevronLeft, ChevronRight, X, Save } from 'lucide-react';
+import { format, startOfMonth, endOfMonth, eachDayOfInterval, isBefore, isToday, addMonths, subMonths } from 'date-fns';
 
 interface DayData {
   meals: Meal[];
   deposits: Deposit[];
   mealCosts: MealCost[];
   otherCosts: OtherCost[];
+}
+
+interface EditableData {
+  meals: Record<string, { breakfast: number; lunch: number; dinner: number }>;
+  deposits: Record<string, number>;
+  mealCosts: Record<string, number>;
+  otherCosts: Record<string, number>;
 }
 
 export default function EditCalendar() {
@@ -54,6 +61,13 @@ export default function EditCalendar() {
   const [dayData, setDayData] = useState<DayData | null>(null);
   const [members, setMembers] = useState<User[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editableData, setEditableData] = useState<EditableData>({
+    meals: {},
+    deposits: {},
+    mealCosts: {},
+    otherCosts: {},
+  });
   const [allData, setAllData] = useState<{
     meals: Meal[];
     deposits: Deposit[];
@@ -93,8 +107,38 @@ export default function EditCalendar() {
       otherCosts: allData.otherCosts.filter(c => c.date === dateStr),
     };
     
+    // Initialize editable data
+    const editable: EditableData = {
+      meals: {},
+      deposits: {},
+      mealCosts: {},
+      otherCosts: {},
+    };
+    
+    data.meals.forEach(meal => {
+      editable.meals[meal.id] = {
+        breakfast: meal.breakfast,
+        lunch: meal.lunch,
+        dinner: meal.dinner,
+      };
+    });
+    
+    data.deposits.forEach(deposit => {
+      editable.deposits[deposit.id] = deposit.amount;
+    });
+    
+    data.mealCosts.forEach(cost => {
+      editable.mealCosts[cost.id] = cost.amount;
+    });
+    
+    data.otherCosts.forEach(cost => {
+      editable.otherCosts[cost.id] = cost.amount;
+    });
+    
+    setEditableData(editable);
     setDayData(data);
     setSelectedDate(date);
+    setIsEditing(false);
     setIsDialogOpen(true);
   };
 
@@ -119,28 +163,80 @@ export default function EditCalendar() {
     return hasActivity;
   };
 
-  const handleUpdateMeal = (meal: Meal, field: 'breakfast' | 'lunch' | 'dinner', value: number) => {
-    updateMeal(meal.id, { [field]: value });
+  const handleSaveChanges = () => {
+    if (!dayData) return;
+    
+    // Update meals
+    dayData.meals.forEach(meal => {
+      const mealData = editableData.meals[meal.id];
+      if (mealData) {
+        updateMeal(meal.id, mealData);
+      }
+    });
+    
+    // Update deposits
+    dayData.deposits.forEach(deposit => {
+      const amount = editableData.deposits[deposit.id];
+      if (amount !== undefined) {
+        updateDeposit(deposit.id, { amount });
+      }
+    });
+    
+    // Update meal costs
+    dayData.mealCosts.forEach(cost => {
+      const amount = editableData.mealCosts[cost.id];
+      if (amount !== undefined) {
+        updateMealCost(cost.id, { amount });
+      }
+    });
+    
+    // Update other costs
+    dayData.otherCosts.forEach(cost => {
+      const amount = editableData.otherCosts[cost.id];
+      if (amount !== undefined) {
+        updateOtherCost(cost.id, { amount });
+      }
+    });
+    
     loadData();
-    toast({ title: 'Meal updated' });
+    setIsEditing(false);
+    toast({ title: 'Changes saved successfully' });
   };
 
-  const handleUpdateDeposit = (deposit: Deposit, amount: number) => {
-    updateDeposit(deposit.id, { amount });
-    loadData();
-    toast({ title: 'Deposit updated' });
-  };
-
-  const handleUpdateMealCost = (cost: MealCost, amount: number) => {
-    updateMealCost(cost.id, { amount });
-    loadData();
-    toast({ title: 'Meal cost updated' });
-  };
-
-  const handleUpdateOtherCost = (cost: OtherCost, amount: number) => {
-    updateOtherCost(cost.id, { amount });
-    loadData();
-    toast({ title: 'Other cost updated' });
+  const handleDiscardChanges = () => {
+    if (!dayData) return;
+    
+    // Reset editable data to original values
+    const editable: EditableData = {
+      meals: {},
+      deposits: {},
+      mealCosts: {},
+      otherCosts: {},
+    };
+    
+    dayData.meals.forEach(meal => {
+      editable.meals[meal.id] = {
+        breakfast: meal.breakfast,
+        lunch: meal.lunch,
+        dinner: meal.dinner,
+      };
+    });
+    
+    dayData.deposits.forEach(deposit => {
+      editable.deposits[deposit.id] = deposit.amount;
+    });
+    
+    dayData.mealCosts.forEach(cost => {
+      editable.mealCosts[cost.id] = cost.amount;
+    });
+    
+    dayData.otherCosts.forEach(cost => {
+      editable.otherCosts[cost.id] = cost.amount;
+    });
+    
+    setEditableData(editable);
+    setIsEditing(false);
+    toast({ title: 'Changes discarded' });
   };
 
   return (
@@ -239,13 +335,39 @@ export default function EditCalendar() {
         </Card>
 
         {/* Day Details Dialog */}
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => {
+          setIsDialogOpen(open);
+          if (!open) setIsEditing(false);
+        }}>
           <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-primary" />
-                {selectedDate && format(selectedDate, 'EEEE, MMMM d, yyyy')}
-              </DialogTitle>
+              <div className="flex items-center justify-between">
+                <DialogTitle className="flex items-center gap-2">
+                  <Calendar className="h-5 w-5 text-primary" />
+                  {selectedDate && format(selectedDate, 'EEEE, MMMM d, yyyy')}
+                </DialogTitle>
+                {isManager && dayData && (dayData.meals.length > 0 || dayData.deposits.length > 0 || dayData.mealCosts.length > 0 || dayData.otherCosts.length > 0) && (
+                  <div className="flex gap-2">
+                    {!isEditing ? (
+                      <Button variant="outline" size="sm" onClick={() => setIsEditing(true)}>
+                        <Edit2 className="h-4 w-4 mr-1" />
+                        Edit
+                      </Button>
+                    ) : (
+                      <>
+                        <Button variant="outline" size="sm" onClick={handleDiscardChanges}>
+                          <X className="h-4 w-4 mr-1" />
+                          Discard
+                        </Button>
+                        <Button size="sm" className="gradient-primary" onClick={handleSaveChanges}>
+                          <Save className="h-4 w-4 mr-1" />
+                          Save
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
             </DialogHeader>
 
             {dayData && (
@@ -268,40 +390,73 @@ export default function EditCalendar() {
                           <TableRow key={meal.id}>
                             <TableCell>{getMemberName(meal.userId)}</TableCell>
                             <TableCell className="text-center">
-                              {isManager ? (
+                              {isEditing && isManager ? (
                                 <Input
                                   type="number"
                                   min="0"
                                   step="0.5"
-                                  value={meal.breakfast}
-                                  onChange={(e) => handleUpdateMeal(meal, 'breakfast', parseFloat(e.target.value) || 0)}
+                                  value={editableData.meals[meal.id]?.breakfast ?? meal.breakfast}
+                                  onChange={(e) => setEditableData(prev => ({
+                                    ...prev,
+                                    meals: {
+                                      ...prev.meals,
+                                      [meal.id]: {
+                                        ...prev.meals[meal.id],
+                                        breakfast: parseFloat(e.target.value) || 0,
+                                      },
+                                    },
+                                  }))}
                                   className="w-16 text-center mx-auto"
                                 />
-                              ) : meal.breakfast}
+                              ) : (
+                                editableData.meals[meal.id]?.breakfast ?? meal.breakfast
+                              )}
                             </TableCell>
                             <TableCell className="text-center">
-                              {isManager ? (
+                              {isEditing && isManager ? (
                                 <Input
                                   type="number"
                                   min="0"
                                   step="0.5"
-                                  value={meal.lunch}
-                                  onChange={(e) => handleUpdateMeal(meal, 'lunch', parseFloat(e.target.value) || 0)}
+                                  value={editableData.meals[meal.id]?.lunch ?? meal.lunch}
+                                  onChange={(e) => setEditableData(prev => ({
+                                    ...prev,
+                                    meals: {
+                                      ...prev.meals,
+                                      [meal.id]: {
+                                        ...prev.meals[meal.id],
+                                        lunch: parseFloat(e.target.value) || 0,
+                                      },
+                                    },
+                                  }))}
                                   className="w-16 text-center mx-auto"
                                 />
-                              ) : meal.lunch}
+                              ) : (
+                                editableData.meals[meal.id]?.lunch ?? meal.lunch
+                              )}
                             </TableCell>
                             <TableCell className="text-center">
-                              {isManager ? (
+                              {isEditing && isManager ? (
                                 <Input
                                   type="number"
                                   min="0"
                                   step="0.5"
-                                  value={meal.dinner}
-                                  onChange={(e) => handleUpdateMeal(meal, 'dinner', parseFloat(e.target.value) || 0)}
+                                  value={editableData.meals[meal.id]?.dinner ?? meal.dinner}
+                                  onChange={(e) => setEditableData(prev => ({
+                                    ...prev,
+                                    meals: {
+                                      ...prev.meals,
+                                      [meal.id]: {
+                                        ...prev.meals[meal.id],
+                                        dinner: parseFloat(e.target.value) || 0,
+                                      },
+                                    },
+                                  }))}
                                   className="w-16 text-center mx-auto"
                                 />
-                              ) : meal.dinner}
+                              ) : (
+                                editableData.meals[meal.id]?.dinner ?? meal.dinner
+                              )}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -327,15 +482,21 @@ export default function EditCalendar() {
                           <TableRow key={deposit.id}>
                             <TableCell>{getMemberName(deposit.userId)}</TableCell>
                             <TableCell>
-                              {isManager ? (
+                              {isEditing && isManager ? (
                                 <Input
                                   type="number"
                                   min="0"
-                                  value={deposit.amount}
-                                  onChange={(e) => handleUpdateDeposit(deposit, parseFloat(e.target.value) || 0)}
+                                  value={editableData.deposits[deposit.id] ?? deposit.amount}
+                                  onChange={(e) => setEditableData(prev => ({
+                                    ...prev,
+                                    deposits: {
+                                      ...prev.deposits,
+                                      [deposit.id]: parseFloat(e.target.value) || 0,
+                                    },
+                                  }))}
                                   className="w-24"
                                 />
-                              ) : formatCurrency(deposit.amount)}
+                              ) : formatCurrency(editableData.deposits[deposit.id] ?? deposit.amount)}
                             </TableCell>
                             <TableCell>{deposit.note || '-'}</TableCell>
                           </TableRow>
@@ -363,15 +524,21 @@ export default function EditCalendar() {
                             <TableCell>{getMemberName(cost.userId)}</TableCell>
                             <TableCell>{cost.description}</TableCell>
                             <TableCell>
-                              {isManager ? (
+                              {isEditing && isManager ? (
                                 <Input
                                   type="number"
                                   min="0"
-                                  value={cost.amount}
-                                  onChange={(e) => handleUpdateMealCost(cost, parseFloat(e.target.value) || 0)}
+                                  value={editableData.mealCosts[cost.id] ?? cost.amount}
+                                  onChange={(e) => setEditableData(prev => ({
+                                    ...prev,
+                                    mealCosts: {
+                                      ...prev.mealCosts,
+                                      [cost.id]: parseFloat(e.target.value) || 0,
+                                    },
+                                  }))}
                                   className="w-24"
                                 />
-                              ) : formatCurrency(cost.amount)}
+                              ) : formatCurrency(editableData.mealCosts[cost.id] ?? cost.amount)}
                             </TableCell>
                           </TableRow>
                         ))}
@@ -398,15 +565,21 @@ export default function EditCalendar() {
                             <TableCell>{getMemberName(cost.userId)}</TableCell>
                             <TableCell>{cost.description}</TableCell>
                             <TableCell>
-                              {isManager ? (
+                              {isEditing && isManager ? (
                                 <Input
                                   type="number"
                                   min="0"
-                                  value={cost.amount}
-                                  onChange={(e) => handleUpdateOtherCost(cost, parseFloat(e.target.value) || 0)}
+                                  value={editableData.otherCosts[cost.id] ?? cost.amount}
+                                  onChange={(e) => setEditableData(prev => ({
+                                    ...prev,
+                                    otherCosts: {
+                                      ...prev.otherCosts,
+                                      [cost.id]: parseFloat(e.target.value) || 0,
+                                    },
+                                  }))}
                                   className="w-24"
                                 />
-                              ) : formatCurrency(cost.amount)}
+                              ) : formatCurrency(editableData.otherCosts[cost.id] ?? cost.amount)}
                             </TableCell>
                           </TableRow>
                         ))}
