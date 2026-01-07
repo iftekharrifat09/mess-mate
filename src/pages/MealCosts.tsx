@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -38,9 +40,11 @@ import {
   createMealCost,
   updateMealCost,
   deleteMealCost,
+  createDeposit,
+  notifyMessMembers,
 } from '@/lib/storage';
 import { MealCost, User } from '@/types';
-import { ShoppingCart, Plus, Trash2, Edit2 } from 'lucide-react';
+import { ShoppingCart, Plus, Trash2, Edit2, Wallet } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/calculations';
 import { Navigate } from 'react-router-dom';
@@ -52,6 +56,7 @@ export default function MealCosts() {
   const [members, setMembers] = useState<User[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingCost, setEditingCost] = useState<MealCost | null>(null);
+  const [addAsDeposit, setAddAsDeposit] = useState(false);
   const [formData, setFormData] = useState({
     userId: '',
     amount: '',
@@ -89,6 +94,7 @@ export default function MealCosts() {
       description: '',
     });
     setEditingCost(null);
+    setAddAsDeposit(false);
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -116,6 +122,8 @@ export default function MealCosts() {
       return;
     }
 
+    const member = members.find(m => m.id === formData.userId);
+
     if (editingCost) {
       updateMealCost(editingCost.id, {
         userId: formData.userId,
@@ -123,8 +131,16 @@ export default function MealCosts() {
         date: formData.date,
         description: formData.description,
       });
+      
+      notifyMessMembers(user.messId, user.id, {
+        type: 'cost',
+        title: 'Meal Cost Updated',
+        message: `${member?.fullName}'s meal cost of ${formatCurrency(amount)} was updated`,
+      });
+      
       toast({ title: 'Meal cost updated' });
     } else {
+      // Create meal cost
       createMealCost({
         monthId: activeMonth.id,
         userId: formData.userId,
@@ -132,7 +148,34 @@ export default function MealCosts() {
         date: formData.date,
         description: formData.description,
       });
-      toast({ title: 'Meal cost added' });
+      
+      // Also add as deposit if checkbox is checked
+      if (addAsDeposit) {
+        createDeposit({
+          monthId: activeMonth.id,
+          userId: formData.userId,
+          amount,
+          date: formData.date,
+          note: `Auto-deposit from meal cost: ${formData.description}`,
+        });
+        
+        notifyMessMembers(user.messId, user.id, {
+          type: 'deposit',
+          title: 'Deposit Added',
+          message: `${member?.fullName} deposited ${formatCurrency(amount)} (from meal cost)`,
+        });
+      }
+      
+      notifyMessMembers(user.messId, user.id, {
+        type: 'cost',
+        title: 'Meal Cost Added',
+        message: `${member?.fullName} spent ${formatCurrency(amount)} for ${formData.description}`,
+      });
+      
+      toast({ 
+        title: addAsDeposit ? 'Meal cost & deposit added' : 'Meal cost added',
+        description: addAsDeposit ? `Added ${formatCurrency(amount)} as both meal cost and deposit for ${member?.fullName}` : undefined,
+      });
     }
 
     setIsAddDialogOpen(false);
@@ -148,6 +191,7 @@ export default function MealCosts() {
       description: cost.description,
     });
     setEditingCost(cost);
+    setAddAsDeposit(false);
     setIsAddDialogOpen(true);
   };
 
@@ -166,7 +210,11 @@ export default function MealCosts() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 animate-fade-in">
+      <motion.div 
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="space-y-6"
+      >
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Meal Costs</h1>
@@ -191,13 +239,45 @@ export default function MealCosts() {
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
-                  <Label>Purchased By</Label>
+                  <Label>Select Date</Label>
+                  <Input
+                    type="date"
+                    value={formData.date}
+                    onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Meal Cost Amount</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    placeholder="e.g. 1000"
+                    value={formData.amount}
+                    onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
+                    required
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Meal Cost/ Bazar Details (optional)</Label>
+                  <Textarea
+                    placeholder="e.g. rice, oil, fish etc."
+                    value={formData.description}
+                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label>Select Shoppers</Label>
                   <Select 
                     value={formData.userId} 
                     onValueChange={(v) => setFormData(prev => ({ ...prev, userId: v }))}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select member" />
+                      <SelectValue placeholder="Select Shoppers" />
                     </SelectTrigger>
                     <SelectContent>
                       {members.map(member => (
@@ -209,41 +289,39 @@ export default function MealCosts() {
                   </Select>
                 </div>
                 
-                <div className="space-y-2">
-                  <Label>Amount</Label>
-                  <Input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    placeholder="Enter amount"
-                    value={formData.amount}
-                    onChange={(e) => setFormData(prev => ({ ...prev, amount: e.target.value }))}
-                    required
-                  />
-                </div>
+                {!editingCost && (
+                  <motion.div 
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: 'auto' }}
+                    className="flex items-center space-x-2 p-3 bg-muted/50 rounded-lg border"
+                  >
+                    <Checkbox 
+                      id="addAsDeposit" 
+                      checked={addAsDeposit}
+                      onCheckedChange={(checked) => setAddAsDeposit(checked === true)}
+                    />
+                    <label
+                      htmlFor="addAsDeposit"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2 cursor-pointer"
+                    >
+                      <Wallet className="h-4 w-4 text-primary" />
+                      Add also as Deposit For this shopper?
+                    </label>
+                  </motion.div>
+                )}
 
-                <div className="space-y-2">
-                  <Label>Date</Label>
-                  <Input
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
-                    required
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label>Description</Label>
-                  <Textarea
-                    placeholder="What was purchased..."
-                    value={formData.description}
-                    onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                    required
-                  />
-                </div>
+                {addAsDeposit && !editingCost && (
+                  <motion.p
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="text-xs text-muted-foreground bg-primary/5 p-2 rounded"
+                  >
+                    This will add {formData.amount ? formatCurrency(parseFloat(formData.amount)) : '₹0'} as a deposit for {formData.userId ? getMemberName(formData.userId) : 'the selected shopper'} in addition to recording the meal cost.
+                  </motion.p>
+                )}
 
                 <DialogFooter>
-                  <Button type="submit" className="gradient-primary">
+                  <Button type="submit" className="gradient-primary" disabled={!formData.userId}>
                     {editingCost ? 'Update Cost' : 'Add Cost'}
                   </Button>
                 </DialogFooter>
@@ -329,7 +407,7 @@ export default function MealCosts() {
             )}
           </CardContent>
         </Card>
-      </div>
+      </motion.div>
     </DashboardLayout>
   );
 }

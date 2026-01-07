@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { PasswordInput } from '@/components/ui/password-input';
 import { useToast } from '@/hooks/use-toast';
-import { Utensils, Mail, User, Phone, Building, LogIn, UserPlus, ArrowLeft, KeyRound } from 'lucide-react';
+import { Utensils, Mail, User, Phone, Building, LogIn, UserPlus, ArrowLeft, KeyRound, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getUserByEmail, getPendingJoinRequestsForUser } from '@/lib/storage';
 import { generateOTP, saveOTP, verifyOTP, getOTPExpiry } from '@/lib/otp';
@@ -34,7 +34,8 @@ export default function Auth() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resetEmail, setResetEmail] = useState('');
-  const [generatedOTP, setGeneratedOTP] = useState('');
+  const [lastOtpSent, setLastOtpSent] = useState<Date | null>(null);
+  const [isResending, setIsResending] = useState(false);
   
   const { login, registerManager, registerMember } = useAuth();
   const navigate = useNavigate();
@@ -54,7 +55,7 @@ export default function Auth() {
     setNewPassword('');
     setConfirmPassword('');
     setResetStep('email');
-    setGeneratedOTP('');
+    setLastOtpSent(null);
   };
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -200,17 +201,42 @@ export default function Auth() {
     // Generate and save OTP
     const newOTP = generateOTP();
     saveOTP(resetEmail, newOTP);
-    setGeneratedOTP(newOTP);
+    setLastOtpSent(new Date());
     
-    // In a real app, this would send an email
-    // For localStorage demo, we'll show the OTP in a toast
+    // In production, this would send an email
+    // For demo, show a message (but not the OTP for security)
     toast({
-      title: 'OTP Generated',
-      description: `Your OTP is: ${newOTP} (Valid for ${getOTPExpiry()} minutes)`,
+      title: 'OTP Sent',
+      description: `Please check your email for the verification code. Valid for ${getOTPExpiry()} minutes. (Demo: ${newOTP})`,
       duration: 10000,
     });
     
     setResetStep('otp');
+  };
+
+  const handleResendOTP = () => {
+    if (lastOtpSent && new Date().getTime() - lastOtpSent.getTime() < 60000) {
+      toast({
+        title: 'Please wait',
+        description: 'You can request a new OTP after 60 seconds.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    
+    setIsResending(true);
+    
+    const newOTP = generateOTP();
+    saveOTP(resetEmail, newOTP);
+    setLastOtpSent(new Date());
+    
+    toast({
+      title: 'OTP Resent',
+      description: `A new OTP has been sent to your email. (Demo: ${newOTP})`,
+      duration: 10000,
+    });
+    
+    setTimeout(() => setIsResending(false), 1000);
   };
 
   const handleVerifyOTP = (e: React.FormEvent) => {
@@ -346,6 +372,17 @@ export default function Auth() {
 
                   <Button type="submit" className="w-full gradient-primary" disabled={otp.length !== 6}>
                     Verify OTP
+                  </Button>
+
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    className="w-full"
+                    onClick={handleResendOTP}
+                    disabled={isResending}
+                  >
+                    <RefreshCw className={cn("h-4 w-4 mr-2", isResending && "animate-spin")} />
+                    Resend OTP
                   </Button>
 
                   <Button
@@ -498,136 +535,116 @@ export default function Auth() {
                 </Button>
               </form>
             ) : (
-              <form onSubmit={handleSignup} className="space-y-4">
+              <div className="space-y-4">
                 {/* Role Selection */}
-                <div className="space-y-2">
-                  <Label className="text-muted-foreground">I want to register as:</Label>
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      onClick={() => setRole('member')}
-                      className={cn(
-                        'flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all',
-                        role === 'member'
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-border hover:border-primary/50'
-                      )}
-                    >
-                      <UserPlus className="w-6 h-6" />
-                      <div className="text-center">
-                        <p className="font-medium">Member</p>
-                        <p className={cn(
-                          'text-xs',
-                          role === 'member' ? 'text-primary-foreground/80' : 'text-muted-foreground'
-                        )}>
-                          Join existing mess
-                        </p>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setRole('manager')}
-                      className={cn(
-                        'flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all',
-                        role === 'manager'
-                          ? 'border-primary bg-primary text-primary-foreground'
-                          : 'border-border hover:border-primary/50'
-                      )}
-                    >
-                      <Building className="w-6 h-6" />
-                      <div className="text-center">
-                        <p className="font-medium">Manager</p>
-                        <p className={cn(
-                          'text-xs',
-                          role === 'manager' ? 'text-primary-foreground/80' : 'text-muted-foreground'
-                        )}>
-                          Create new mess
-                        </p>
-                      </div>
-                    </button>
-                  </div>
+                <div className="flex bg-muted/50 rounded-lg p-1">
+                  <button
+                    type="button"
+                    onClick={() => setRole('member')}
+                    className={cn(
+                      'flex-1 py-2 rounded-md text-sm font-medium transition-colors',
+                      role === 'member'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    Member
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRole('manager')}
+                    className={cn(
+                      'flex-1 py-2 rounded-md text-sm font-medium transition-colors',
+                      role === 'manager'
+                        ? 'bg-primary text-primary-foreground'
+                        : 'text-muted-foreground hover:text-foreground'
+                    )}
+                  >
+                    Manager
+                  </button>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="fullName">Full Name</Label>
-                  <div className="relative">
-                    <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="fullName"
-                      type="text"
-                      placeholder="John Doe"
-                      value={fullName}
-                      onChange={(e) => setFullName(e.target.value)}
-                      className="pl-10"
-                      required
-                    />
-                  </div>
-                </div>
-
-                {role === 'manager' && (
+                <form onSubmit={handleSignup} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="messName">Mess Name</Label>
+                    <Label htmlFor="fullName">Full Name</Label>
                     <div className="relative">
-                      <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                       <Input
-                        id="messName"
-                        type="text"
-                        placeholder="My Awesome Mess"
-                        value={messName}
-                        onChange={(e) => setMessName(e.target.value)}
+                        id="fullName"
+                        placeholder="John Doe"
+                        value={fullName}
+                        onChange={(e) => setFullName(e.target.value)}
                         className="pl-10"
                         required
                       />
                     </div>
                   </div>
-                )}
 
-                <div className="space-y-2">
-                  <Label htmlFor="signupEmail">Email</Label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="signupEmail"
-                      type="email"
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="pl-10"
+                  {role === 'manager' && (
+                    <div className="space-y-2">
+                      <Label htmlFor="messName">Mess Name</Label>
+                      <div className="relative">
+                        <Building className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                        <Input
+                          id="messName"
+                          placeholder="My Mess"
+                          value={messName}
+                          onChange={(e) => setMessName(e.target.value)}
+                          className="pl-10"
+                          required
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-phone">Phone Number</Label>
+                    <div className="relative">
+                      <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        id="signup-phone"
+                        type="tel"
+                        placeholder="01XXXXXXXXX"
+                        value={phone}
+                        onChange={(e) => setPhone(e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-email">Email</Label>
+                    <div className="relative">
+                      <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        id="signup-email"
+                        type="email"
+                        placeholder="you@example.com"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="pl-10"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="signup-password">Password</Label>
+                    <PasswordInput
+                      id="signup-password"
+                      placeholder="••••••••"
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
                       required
                     />
                   </div>
-                </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="phone">Phone Number (Optional)</Label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      id="phone"
-                      type="tel"
-                      placeholder="+1234567890"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="pl-10"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="signupPassword">Password</Label>
-                  <PasswordInput
-                    id="signupPassword"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    required
-                  />
-                </div>
-
-                <Button type="submit" className="w-full gradient-primary" disabled={isLoading}>
-                  {isLoading ? 'Creating account...' : role === 'manager' ? 'Create Mess & Account' : 'Create Account'}
-                </Button>
-              </form>
+                  <Button type="submit" className="w-full gradient-primary" disabled={isLoading}>
+                    {isLoading ? 'Creating account...' : 'Create Account'}
+                  </Button>
+                </form>
+              </div>
             )}
           </CardContent>
         </Card>

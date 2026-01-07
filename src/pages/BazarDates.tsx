@@ -32,7 +32,7 @@ import {
   notifyMessMembers,
 } from '@/lib/storage';
 import { BazarDate, User } from '@/types';
-import { ShoppingCart, Plus, Edit2, Trash2, Calendar } from 'lucide-react';
+import { ShoppingCart, Plus, Edit2, Trash2, Calendar, AlertCircle } from 'lucide-react';
 import { format, isToday, isFuture, isPast } from 'date-fns';
 import { Navigate } from 'react-router-dom';
 
@@ -44,6 +44,7 @@ export default function BazarDates() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingBazar, setEditingBazar] = useState<BazarDate | null>(null);
   const [formData, setFormData] = useState({ userId: '', date: format(new Date(), 'yyyy-MM-dd') });
+  const [dateError, setDateError] = useState<string | null>(null);
 
   const isManager = user?.role === 'manager';
 
@@ -64,15 +65,50 @@ export default function BazarDates() {
   const resetForm = () => {
     setFormData({ userId: '', date: format(new Date(), 'yyyy-MM-dd') });
     setEditingBazar(null);
+    setDateError(null);
   };
 
   const getMemberName = (userId: string) => {
     return members.find(m => m.id === userId)?.fullName || 'Unknown';
   };
 
+  // Check if date is already assigned to another member
+  const isDateAssigned = (date: string, excludeBazarId?: string): boolean => {
+    return bazarDates.some(b => b.date === date && b.id !== excludeBazarId);
+  };
+
+  // Get the member assigned to a specific date
+  const getAssignedMemberForDate = (date: string, excludeBazarId?: string): string | null => {
+    const bazar = bazarDates.find(b => b.date === date && b.id !== excludeBazarId);
+    return bazar ? getMemberName(bazar.userId) : null;
+  };
+
+  const handleDateChange = (date: string) => {
+    setFormData(prev => ({ ...prev, date }));
+    
+    // Check if date is already assigned
+    const assignedMember = getAssignedMemberForDate(date, editingBazar?.id);
+    if (assignedMember) {
+      setDateError(`This date is already assigned to ${assignedMember}. Please delete that entry first or choose a different date.`);
+    } else {
+      setDateError(null);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
+
+    // Validate date is not already assigned
+    if (isDateAssigned(formData.date, editingBazar?.id)) {
+      const assignedMember = getAssignedMemberForDate(formData.date, editingBazar?.id);
+      toast({
+        title: 'Date already assigned',
+        description: `This date is already assigned to ${assignedMember}. Please delete that entry first.`,
+        variant: 'destructive',
+      });
+      return;
+    }
 
     const member = members.find(m => m.id === formData.userId);
 
@@ -102,6 +138,7 @@ export default function BazarDates() {
   const handleEdit = (bazar: BazarDate) => {
     setFormData({ userId: bazar.userId, date: bazar.date });
     setEditingBazar(bazar);
+    setDateError(null);
     setIsAddDialogOpen(true);
   };
 
@@ -144,7 +181,7 @@ export default function BazarDates() {
               <DialogHeader>
                 <DialogTitle>{editingBazar ? 'Edit Bazar Date' : 'Add Bazar Date'}</DialogTitle>
                 <DialogDescription>
-                  Assign a member to do bazar on a specific date
+                  Assign a member to do bazar on a specific date. Each date can only be assigned to one member.
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -171,12 +208,26 @@ export default function BazarDates() {
                   <Input
                     type="date"
                     value={formData.date}
-                    onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value }))}
+                    onChange={(e) => handleDateChange(e.target.value)}
                     required
                   />
+                  {dateError && (
+                    <motion.div
+                      initial={{ opacity: 0, y: -10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg"
+                    >
+                      <AlertCircle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+                      <p className="text-sm text-destructive">{dateError}</p>
+                    </motion.div>
+                  )}
                 </div>
                 <DialogFooter>
-                  <Button type="submit" className="gradient-primary" disabled={!formData.userId}>
+                  <Button 
+                    type="submit" 
+                    className="gradient-primary" 
+                    disabled={!formData.userId || !!dateError}
+                  >
                     {editingBazar ? 'Update' : 'Add'} Bazar Date
                   </Button>
                 </DialogFooter>

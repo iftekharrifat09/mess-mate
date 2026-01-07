@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth, updatePassword as authUpdatePassword } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -19,8 +19,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { updateUser, getUserByEmail } from '@/lib/storage';
 import { generateOTP, saveOTP, verifyOTP, getOTPExpiry } from '@/lib/otp';
-import { updatePassword } from '@/contexts/AuthContext';
-import { User, Phone, Mail, Check, X, Edit2, Shield } from 'lucide-react';
+import { User, Phone, Mail, Check, X, Edit2, Shield, Lock, KeyRound } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Profile() {
@@ -30,15 +29,21 @@ export default function Profile() {
   const [isEditingName, setIsEditingName] = useState(false);
   const [isEditingPhone, setIsEditingPhone] = useState(false);
   const [isEditingEmail, setIsEditingEmail] = useState(false);
-  const [emailStep, setEmailStep] = useState<'password' | 'otp' | 'verify'>('password');
+  const [isVerifyingEmail, setIsVerifyingEmail] = useState(false);
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [emailStep, setEmailStep] = useState<'password' | 'otp'>('password');
   
   const [fullName, setFullName] = useState(user?.fullName || '');
   const [phone, setPhone] = useState(user?.phone || '');
   const [newEmail, setNewEmail] = useState('');
   const [currentPassword, setCurrentPassword] = useState('');
   const [otp, setOtp] = useState('');
-  const [otpAttempts, setOtpAttempts] = useState(0);
   const [lastOtpSent, setLastOtpSent] = useState<Date | null>(null);
+  
+  // Password change fields
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
 
   const handleUpdateName = () => {
     if (!user || !fullName.trim()) return;
@@ -70,13 +75,15 @@ export default function Profile() {
       return;
     }
 
-    // Send OTP
+    // Send OTP - don't show in toast for security
     const newOTP = generateOTP();
     saveOTP(newEmail, newOTP);
     
+    // In production, this would send via email
+    // For demo, we'll show a generic message
     toast({
-      title: 'OTP Generated',
-      description: `Your OTP is: ${newOTP} (Valid for ${getOTPExpiry()} minutes)`,
+      title: 'OTP sent',
+      description: `Please check your email for the verification code. (Demo: ${newOTP})`,
       duration: 10000,
     });
     
@@ -89,7 +96,6 @@ export default function Profile() {
     
     const result = verifyOTP(newEmail, otp);
     if (!result.valid) {
-      setOtpAttempts(prev => prev + 1);
       toast({ title: result.error || 'Invalid OTP', variant: 'destructive' });
       return;
     }
@@ -124,8 +130,8 @@ export default function Profile() {
     setLastOtpSent(new Date());
     
     toast({
-      title: 'OTP Resent',
-      description: `Your new OTP is: ${newOTP}`,
+      title: 'OTP sent',
+      description: `Please check your email for the verification code. (Demo: ${newOTP})`,
       duration: 10000,
     });
   };
@@ -137,10 +143,62 @@ export default function Profile() {
     saveOTP(user.email, newOTP);
     
     toast({
-      title: 'Verification OTP Sent',
-      description: `Your OTP is: ${newOTP}`,
+      title: 'Verification OTP sent',
+      description: `Please check your email for the verification code. (Demo: ${newOTP})`,
       duration: 10000,
     });
+    
+    setIsVerifyingEmail(true);
+    setLastOtpSent(new Date());
+  };
+
+  const handleVerifyCurrentEmailOTP = () => {
+    if (!user) return;
+    
+    const result = verifyOTP(user.email, otp);
+    if (!result.valid) {
+      toast({ title: result.error || 'Invalid OTP', variant: 'destructive' });
+      return;
+    }
+    
+    updateUser(user.id, { emailVerified: true });
+    refreshUser();
+    setIsVerifyingEmail(false);
+    setOtp('');
+    
+    toast({ title: 'Email verified successfully' });
+  };
+
+  const handleChangePassword = () => {
+    if (!user) return;
+    
+    // Verify old password
+    const passwords = JSON.parse(localStorage.getItem('mess_manager_passwords') || '{}');
+    if (passwords[user.email.toLowerCase()] !== oldPassword) {
+      toast({ title: 'Current password is incorrect', variant: 'destructive' });
+      return;
+    }
+    
+    // Validate new password
+    if (newPassword.length < 6) {
+      toast({ title: 'New password must be at least 6 characters', variant: 'destructive' });
+      return;
+    }
+    
+    if (newPassword !== confirmNewPassword) {
+      toast({ title: 'New passwords do not match', variant: 'destructive' });
+      return;
+    }
+    
+    // Update password
+    authUpdatePassword(user.email, newPassword);
+    
+    setIsChangingPassword(false);
+    setOldPassword('');
+    setNewPassword('');
+    setConfirmNewPassword('');
+    
+    toast({ title: 'Password changed successfully' });
   };
 
   if (!user) return null;
@@ -246,7 +304,7 @@ export default function Profile() {
                 <Shield className="h-5 w-5 text-primary" />
                 Email & Security
               </CardTitle>
-              <CardDescription>Manage your email and verification</CardDescription>
+              <CardDescription>Manage your email and password</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Email */}
@@ -279,6 +337,17 @@ export default function Profile() {
                   Verify Current Email
                 </Button>
               )}
+
+              {/* Change Password */}
+              <div className="space-y-2 pt-4 border-t">
+                <Label className="flex items-center gap-2">
+                  <Lock className="h-4 w-4" />
+                  Password
+                </Label>
+                <Button variant="outline" className="w-full" onClick={() => setIsChangingPassword(true)}>
+                  Change Password
+                </Button>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -331,6 +400,14 @@ export default function Profile() {
 
             {emailStep === 'otp' && (
               <div className="space-y-4">
+                <div className="text-center mb-4">
+                  <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 mb-3">
+                    <KeyRound className="w-6 h-6 text-primary" />
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Enter the 6-digit OTP sent to {newEmail}
+                  </p>
+                </div>
                 <div className="space-y-2">
                   <Label>OTP Code</Label>
                   <Input
@@ -354,6 +431,111 @@ export default function Profile() {
                 </DialogFooter>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Verify Current Email Dialog */}
+        <Dialog open={isVerifyingEmail} onOpenChange={(open) => {
+          setIsVerifyingEmail(open);
+          if (!open) setOtp('');
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Verify Your Email</DialogTitle>
+              <DialogDescription>
+                Enter the OTP sent to {user.email}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="text-center mb-4">
+                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-primary/10 mb-3">
+                  <KeyRound className="w-6 h-6 text-primary" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>OTP Code</Label>
+                <Input
+                  value={otp}
+                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="Enter 6-digit OTP"
+                  className="text-center text-xl tracking-widest"
+                  maxLength={6}
+                />
+              </div>
+              <Button variant="ghost" className="w-full" onClick={() => {
+                const newOTP = generateOTP();
+                saveOTP(user.email, newOTP);
+                toast({
+                  title: 'OTP sent',
+                  description: `Please check your email for the verification code. (Demo: ${newOTP})`,
+                  duration: 10000,
+                });
+              }}>
+                Resend OTP
+              </Button>
+              <DialogFooter>
+                <Button onClick={handleVerifyCurrentEmailOTP} className="gradient-primary" disabled={otp.length !== 6}>
+                  Verify Email
+                </Button>
+              </DialogFooter>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Change Password Dialog */}
+        <Dialog open={isChangingPassword} onOpenChange={(open) => {
+          setIsChangingPassword(open);
+          if (!open) {
+            setOldPassword('');
+            setNewPassword('');
+            setConfirmNewPassword('');
+          }
+        }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Change Password</DialogTitle>
+              <DialogDescription>
+                Enter your current password and choose a new one
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Current Password</Label>
+                <PasswordInput
+                  value={oldPassword}
+                  onChange={(e) => setOldPassword(e.target.value)}
+                  placeholder="Enter current password"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>New Password</Label>
+                <PasswordInput
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Enter new password (min 6 characters)"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Confirm New Password</Label>
+                <PasswordInput
+                  value={confirmNewPassword}
+                  onChange={(e) => setConfirmNewPassword(e.target.value)}
+                  placeholder="Confirm new password"
+                />
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsChangingPassword(false)}>
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={handleChangePassword} 
+                  className="gradient-primary" 
+                  disabled={!oldPassword || !newPassword || !confirmNewPassword}
+                >
+                  Change Password
+                </Button>
+              </DialogFooter>
+            </div>
           </DialogContent>
         </Dialog>
       </motion.div>
