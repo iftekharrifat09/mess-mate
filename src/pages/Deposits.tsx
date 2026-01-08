@@ -301,8 +301,10 @@ export default function Deposits() {
                         <TableCell className="font-semibold text-success">
                           {formatCurrency(deposit.amount)}
                         </TableCell>
-                        <TableCell className="text-muted-foreground">
-                          {deposit.note || '-'}
+                        <TableCell className="text-muted-foreground max-w-[100px] sm:max-w-[150px] md:max-w-[200px]">
+                          <span className="block truncate" title={deposit.note || '-'}>
+                            {deposit.note || '-'}
+                          </span>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">

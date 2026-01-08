@@ -376,7 +376,11 @@ export default function MealCosts() {
                       <TableRow key={cost.id}>
                         <TableCell>{format(new Date(cost.date), 'MMM dd, yyyy')}</TableCell>
                         <TableCell>{getMemberName(cost.userId)}</TableCell>
-                        <TableCell className="max-w-xs truncate">{cost.description}</TableCell>
+                        <TableCell className="max-w-[100px] sm:max-w-[150px] md:max-w-[200px]">
+                          <span className="block truncate" title={cost.description}>
+                            {cost.description || '-'}
+                          </span>
+                        </TableCell>
                         <TableCell className="font-semibold text-warning">
                           {formatCurrency(cost.amount)}
                         </TableCell>

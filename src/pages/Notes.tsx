@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog,
   DialogContent,
@@ -22,9 +23,10 @@ import {
   createNote, 
   updateNote, 
   deleteNote,
+  notifyMessMembers,
 } from '@/lib/storage';
 import { Note } from '@/types';
-import { StickyNote, Plus, Edit2, Trash2, Calendar } from 'lucide-react';
+import { StickyNote, Plus, Edit2, Trash2, Calendar, Eye } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Notes() {
@@ -33,6 +35,7 @@ export default function Notes() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingNote, setEditingNote] = useState<Note | null>(null);
+  const [viewingNote, setViewingNote] = useState<Note | null>(null);
   const [formData, setFormData] = useState({ title: '', description: '' });
 
   const isManager = user?.role === 'manager';
@@ -57,9 +60,19 @@ export default function Notes() {
 
     if (editingNote) {
       updateNote(editingNote.id, { title: formData.title, description: formData.description });
+      notifyMessMembers(user.messId, user.id, {
+        type: 'notice',
+        title: 'Note Updated',
+        message: `"${formData.title}" has been updated`,
+      });
       toast({ title: 'Note updated' });
     } else {
       createNote({ messId: user.messId, title: formData.title, description: formData.description });
+      notifyMessMembers(user.messId, user.id, {
+        type: 'notice',
+        title: 'New Note Added',
+        message: formData.title,
+      });
       toast({ title: 'Note created' });
     }
 
@@ -74,8 +87,14 @@ export default function Notes() {
     setIsAddDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = (id: string, title: string) => {
+    if (!user) return;
     deleteNote(id);
+    notifyMessMembers(user.messId, user.id, {
+      type: 'notice',
+      title: 'Note Deleted',
+      message: `"${title}" has been removed`,
+    });
     toast({ title: 'Note deleted' });
     loadNotes();
   };
@@ -143,6 +162,32 @@ export default function Notes() {
           )}
         </div>
 
+        {/* View Full Note Dialog */}
+        <Dialog open={!!viewingNote} onOpenChange={(open) => !open && setViewingNote(null)}>
+          <DialogContent className="max-w-lg max-h-[80vh]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <StickyNote className="h-5 w-5 text-primary" />
+                {viewingNote?.title}
+              </DialogTitle>
+              <DialogDescription>
+                <span className="flex items-center gap-1 text-xs">
+                  <Calendar className="h-3 w-3" />
+                  {viewingNote && format(new Date(viewingNote.createdAt), 'MMM d, yyyy')}
+                  {viewingNote?.updatedAt && (
+                    <span> • Edited {format(new Date(viewingNote.updatedAt), 'MMM d')}</span>
+                  )}
+                </span>
+              </DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="h-[50vh]">
+              <p className="text-foreground whitespace-pre-wrap pr-4">
+                {viewingNote?.description}
+              </p>
+            </ScrollArea>
+          </DialogContent>
+        </Dialog>
+
         {notes.length === 0 ? (
           <Card>
             <CardContent className="text-center py-12">
@@ -169,16 +214,21 @@ export default function Notes() {
                           <StickyNote className="h-4 w-4 text-primary" />
                           {note.title}
                         </CardTitle>
-                        {isManager && (
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="sm" onClick={() => handleEdit(note)}>
-                              <Edit2 className="h-3 w-3" />
-                            </Button>
-                            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(note.id)}>
-                              <Trash2 className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        )}
+                        <div className="flex gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => setViewingNote(note)}>
+                            <Eye className="h-3 w-3" />
+                          </Button>
+                          {isManager && (
+                            <>
+                              <Button variant="ghost" size="sm" onClick={() => handleEdit(note)}>
+                                <Edit2 className="h-3 w-3" />
+                              </Button>
+                              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(note.id, note.title)}>
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </CardHeader>
                     <CardContent>

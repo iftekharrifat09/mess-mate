@@ -32,7 +32,7 @@ import {
   notifyMessMembers,
 } from '@/lib/storage';
 import { BazarDate, User } from '@/types';
-import { ShoppingCart, Plus, Edit2, Trash2, Calendar, AlertCircle } from 'lucide-react';
+import { ShoppingCart, Plus, Edit2, Trash2, Calendar, AlertCircle, X } from 'lucide-react';
 import { format, isToday, isFuture, isPast } from 'date-fns';
 import { Navigate } from 'react-router-dom';
 
@@ -43,8 +43,9 @@ export default function BazarDates() {
   const [members, setMembers] = useState<User[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingBazar, setEditingBazar] = useState<BazarDate | null>(null);
-  const [formData, setFormData] = useState({ userId: '', date: format(new Date(), 'yyyy-MM-dd') });
+  const [formData, setFormData] = useState<{ userId: string; dates: string[] }>({ userId: '', dates: [] });
   const [dateError, setDateError] = useState<string | null>(null);
+  const [currentDate, setCurrentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
   const isManager = user?.role === 'manager';
 
@@ -63,9 +64,10 @@ export default function BazarDates() {
   };
 
   const resetForm = () => {
-    setFormData({ userId: '', date: format(new Date(), 'yyyy-MM-dd') });
+    setFormData({ userId: '', dates: [] });
     setEditingBazar(null);
     setDateError(null);
+    setCurrentDate(format(new Date(), 'yyyy-MM-dd'));
   };
 
   const getMemberName = (userId: string) => {
@@ -83,51 +85,65 @@ export default function BazarDates() {
     return bazar ? getMemberName(bazar.userId) : null;
   };
 
-  const handleDateChange = (date: string) => {
-    setFormData(prev => ({ ...prev, date }));
-    
+  const handleAddDate = () => {
     // Check if date is already assigned
-    const assignedMember = getAssignedMemberForDate(date, editingBazar?.id);
+    const assignedMember = getAssignedMemberForDate(currentDate, editingBazar?.id);
     if (assignedMember) {
-      setDateError(`This date is already assigned to ${assignedMember}. Please delete that entry first or choose a different date.`);
-    } else {
-      setDateError(null);
+      setDateError(`This date is already assigned to ${assignedMember}.`);
+      return;
     }
+    
+    // Check if date already selected
+    if (formData.dates.includes(currentDate)) {
+      setDateError('This date is already selected.');
+      return;
+    }
+    
+    setFormData(prev => ({ ...prev, dates: [...prev.dates, currentDate].sort() }));
+    setDateError(null);
+  };
+
+  const handleRemoveDate = (dateToRemove: string) => {
+    setFormData(prev => ({ ...prev, dates: prev.dates.filter(d => d !== dateToRemove) }));
   };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
-    // Validate date is not already assigned
-    if (isDateAssigned(formData.date, editingBazar?.id)) {
-      const assignedMember = getAssignedMemberForDate(formData.date, editingBazar?.id);
-      toast({
-        title: 'Date already assigned',
-        description: `This date is already assigned to ${assignedMember}. Please delete that entry first.`,
-        variant: 'destructive',
-      });
-      return;
-    }
-
     const member = members.find(m => m.id === formData.userId);
 
     if (editingBazar) {
-      updateBazarDate(editingBazar.id, { userId: formData.userId, date: formData.date });
+      // For editing, we only update a single date
+      if (formData.dates.length === 0) {
+        toast({ title: 'Please select a date', variant: 'destructive' });
+        return;
+      }
+      
+      updateBazarDate(editingBazar.id, { userId: formData.userId, date: formData.dates[0] });
       notifyMessMembers(user.messId, user.id, {
         type: 'bazar',
         title: 'Bazar Date Updated',
-        message: `${member?.fullName}'s bazar date changed to ${format(new Date(formData.date), 'MMM d')}`,
+        message: `${member?.fullName}'s bazar date changed to ${format(new Date(formData.dates[0]), 'MMM d')}`,
       });
       toast({ title: 'Bazar date updated' });
     } else {
-      createBazarDate({ messId: user.messId, userId: formData.userId, date: formData.date });
+      // Create multiple bazar dates
+      if (formData.dates.length === 0) {
+        toast({ title: 'Please add at least one date', variant: 'destructive' });
+        return;
+      }
+      
+      formData.dates.forEach(date => {
+        createBazarDate({ messId: user.messId, userId: formData.userId, date });
+      });
+      
       notifyMessMembers(user.messId, user.id, {
         type: 'bazar',
-        title: 'Bazar Date Set',
-        message: `${member?.fullName} is assigned for bazar on ${format(new Date(formData.date), 'MMM d')}`,
+        title: 'Bazar Dates Set',
+        message: `${member?.fullName} is assigned for bazar on ${formData.dates.length} date(s)`,
       });
-      toast({ title: 'Bazar date added' });
+      toast({ title: `${formData.dates.length} bazar date(s) added` });
     }
 
     setIsAddDialogOpen(false);
@@ -136,9 +152,10 @@ export default function BazarDates() {
   };
 
   const handleEdit = (bazar: BazarDate) => {
-    setFormData({ userId: bazar.userId, date: bazar.date });
+    setFormData({ userId: bazar.userId, dates: [bazar.date] });
     setEditingBazar(bazar);
     setDateError(null);
+    setCurrentDate(bazar.date);
     setIsAddDialogOpen(true);
   };
 
@@ -177,11 +194,13 @@ export default function BazarDates() {
                 Add Bazar Date
               </Button>
             </DialogTrigger>
-            <DialogContent>
+            <DialogContent className="max-w-md">
               <DialogHeader>
-                <DialogTitle>{editingBazar ? 'Edit Bazar Date' : 'Add Bazar Date'}</DialogTitle>
+                <DialogTitle>{editingBazar ? 'Edit Bazar Date' : 'Add Bazar Dates'}</DialogTitle>
                 <DialogDescription>
-                  Assign a member to do bazar on a specific date. Each date can only be assigned to one member.
+                  {editingBazar 
+                    ? 'Update bazar date. Each date can only be assigned to one member.'
+                    : 'Select multiple dates for a member. Each date can only be assigned to one member.'}
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
@@ -204,31 +223,71 @@ export default function BazarDates() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Date</Label>
-                  <Input
-                    type="date"
-                    value={formData.date}
-                    onChange={(e) => handleDateChange(e.target.value)}
-                    required
-                  />
+                  <Label>{editingBazar ? 'Date' : 'Add Dates'}</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="date"
+                      value={currentDate}
+                      onChange={(e) => {
+                        setCurrentDate(e.target.value);
+                        setDateError(null);
+                      }}
+                      className="flex-1"
+                    />
+                    {!editingBazar && (
+                      <Button type="button" onClick={handleAddDate} variant="outline" size="icon">
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    )}
+                  </div>
                   {dateError && (
                     <motion.div
                       initial={{ opacity: 0, y: -10 }}
                       animate={{ opacity: 1, y: 0 }}
-                      className="flex items-start gap-2 p-3 bg-destructive/10 border border-destructive/20 rounded-lg"
+                      className="flex items-start gap-2 p-2 bg-destructive/10 border border-destructive/20 rounded-lg"
                     >
                       <AlertCircle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
                       <p className="text-sm text-destructive">{dateError}</p>
                     </motion.div>
                   )}
                 </div>
+                
+                {/* Selected dates list */}
+                {formData.dates.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>Selected Dates ({formData.dates.length})</Label>
+                    <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-2 bg-muted/50 rounded-lg">
+                      {formData.dates.map(date => (
+                        <motion.div
+                          key={date}
+                          initial={{ opacity: 0, scale: 0.8 }}
+                          animate={{ opacity: 1, scale: 1 }}
+                          className="flex items-center gap-1 px-2 py-1 bg-primary/10 text-primary rounded-md text-sm"
+                        >
+                          <Calendar className="h-3 w-3" />
+                          {format(new Date(date), 'MMM d')}
+                          {!editingBazar && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveDate(date)}
+                              className="ml-1 hover:bg-primary/20 rounded p-0.5"
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          )}
+                        </motion.div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
                 <DialogFooter>
                   <Button 
                     type="submit" 
                     className="gradient-primary" 
-                    disabled={!formData.userId || !!dateError}
+                    disabled={!formData.userId || formData.dates.length === 0}
                   >
-                    {editingBazar ? 'Update' : 'Add'} Bazar Date
+                    {editingBazar ? 'Update' : `Add ${formData.dates.length || ''}`} Bazar Date{formData.dates.length !== 1 ? 's' : ''}
                   </Button>
                 </DialogFooter>
               </form>
