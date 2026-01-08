@@ -87,6 +87,7 @@ export default function MonthDetails() {
   const [showPreviousMonths, setShowPreviousMonths] = useState(false);
   const [previousMonths, setPreviousMonths] = useState<PreviousMonthSummary[]>([]);
   const [isExporting, setIsExporting] = useState(false);
+  const [confirmNewMonth, setConfirmNewMonth] = useState('');
 
   const isManager = user?.role === 'manager';
 
@@ -401,7 +402,10 @@ export default function MonthDetails() {
             )}
             
             {isManager && (
-              <AlertDialog open={isNewMonthDialogOpen} onOpenChange={setIsNewMonthDialogOpen}>
+              <AlertDialog open={isNewMonthDialogOpen} onOpenChange={(open) => {
+                setIsNewMonthDialogOpen(open);
+                if (!open) setConfirmNewMonth('');
+              }}>
                 <AlertDialogTrigger asChild>
                   <Button className="gradient-primary">
                     <Plus className="h-4 w-4 mr-2" />
@@ -411,13 +415,25 @@ export default function MonthDetails() {
                 <AlertDialogContent>
                   <AlertDialogHeader>
                     <AlertDialogTitle>Start New Month?</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This will close the current month and start a new one. All current month data will be preserved but the month will become inactive.
+                    <AlertDialogDescription className="space-y-3">
+                      <p>This will close the current month and start a new one. All current month data will be preserved but the month will become inactive.</p>
+                      <p className="font-medium pt-2">Type "Sure" below to confirm:</p>
+                      <input
+                        type="text"
+                        value={confirmNewMonth}
+                        onChange={(e) => setConfirmNewMonth(e.target.value)}
+                        placeholder="Type Sure to confirm"
+                        className="w-full px-3 py-2 border rounded-md bg-background text-foreground"
+                      />
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={handleStartNewMonth}>
+                    <AlertDialogCancel onClick={() => setConfirmNewMonth('')}>Cancel</AlertDialogCancel>
+                    <AlertDialogAction 
+                      onClick={handleStartNewMonth}
+                      disabled={confirmNewMonth !== 'Sure'}
+                      className={confirmNewMonth !== 'Sure' ? 'opacity-50 cursor-not-allowed' : ''}
+                    >
                       Start New Month
                     </AlertDialogAction>
                   </AlertDialogFooter>

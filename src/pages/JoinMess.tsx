@@ -13,7 +13,8 @@ import {
   getUserById,
   getMessByCode,
   getPendingJoinRequestsForUser,
-  updateUser
+  updateUser,
+  notifyManager,
 } from '@/lib/storage';
 import { Mess, User } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
@@ -117,6 +118,13 @@ export default function JoinMess() {
       messId: mess.id,
       userId: currentUser.id,
       status: 'pending',
+    });
+
+    // Notify manager about the join request
+    notifyManager(mess.id, {
+      type: 'join_request',
+      title: 'New Join Request',
+      message: `${currentUser.fullName} has requested to join your mess`,
     });
 
     setRequestedMessIds(prev => [...prev, mess.id]);

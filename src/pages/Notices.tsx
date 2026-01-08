@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog,
   DialogContent,
@@ -25,7 +26,7 @@ import {
   notifyMessMembers,
 } from '@/lib/storage';
 import { Notice } from '@/types';
-import { Megaphone, Plus, Edit2, Trash2, Calendar } from 'lucide-react';
+import { Megaphone, Plus, Edit2, Trash2, Calendar, Eye } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Notices() {
@@ -34,6 +35,7 @@ export default function Notices() {
   const [notices, setNotices] = useState<Notice[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingNotice, setEditingNotice] = useState<Notice | null>(null);
+  const [viewingNotice, setViewingNotice] = useState<Notice | null>(null);
   const [formData, setFormData] = useState({ title: '', content: '' });
 
   const isManager = user?.role === 'manager';
@@ -160,6 +162,30 @@ export default function Notices() {
           )}
         </div>
 
+        {/* View Full Notice Dialog */}
+        <Dialog open={!!viewingNotice} onOpenChange={(open) => !open && setViewingNotice(null)}>
+          <DialogContent className="max-w-lg max-h-[80vh]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Megaphone className="h-5 w-5 text-primary" />
+                {viewingNotice?.title}
+              </DialogTitle>
+              <DialogDescription>
+                <span className="flex items-center gap-1 text-xs">
+                  <Calendar className="h-3 w-3" />
+                  {viewingNotice && format(new Date(viewingNotice.createdAt), 'MMM d, yyyy')}
+                  {viewingNotice?.updatedAt && ` • Updated ${format(new Date(viewingNotice.updatedAt), 'MMM d, yyyy')}`}
+                </span>
+              </DialogDescription>
+            </DialogHeader>
+            <ScrollArea className="h-[50vh]">
+              <p className="text-foreground whitespace-pre-wrap pr-4">
+                {viewingNotice?.content}
+              </p>
+            </ScrollArea>
+          </DialogContent>
+        </Dialog>
+
         {notices.length === 0 ? (
           <Card>
             <CardContent className="text-center py-12">
@@ -169,7 +195,7 @@ export default function Notices() {
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             <AnimatePresence>
               {notices.map((notice, index) => (
                 <motion.div
@@ -179,35 +205,40 @@ export default function Notices() {
                   exit={{ opacity: 0, x: -100 }}
                   transition={{ delay: index * 0.1 }}
                 >
-                  <Card className={index === 0 ? 'border-primary/50 bg-primary/5' : ''}>
-                    <CardHeader className="pb-3">
+                  <Card className={`h-48 flex flex-col ${index === 0 ? 'border-primary/50 bg-primary/5' : ''}`}>
+                    <CardHeader className="pb-2 flex-shrink-0">
                       <div className="flex items-start justify-between">
-                        <div className="flex items-center gap-2">
-                          <Megaphone className={`h-5 w-5 ${index === 0 ? 'text-primary' : 'text-muted-foreground'}`} />
-                          <CardTitle className="text-lg">{notice.title}</CardTitle>
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <Megaphone className={`h-5 w-5 flex-shrink-0 ${index === 0 ? 'text-primary' : 'text-muted-foreground'}`} />
+                          <CardTitle className="text-base truncate">{notice.title}</CardTitle>
                           {index === 0 && (
-                            <span className="px-2 py-0.5 text-xs bg-primary/10 text-primary rounded-full">Latest</span>
+                            <span className="px-2 py-0.5 text-xs bg-primary/10 text-primary rounded-full flex-shrink-0">Latest</span>
                           )}
                         </div>
-                        {isManager && (
-                          <div className="flex gap-1">
-                            <Button variant="ghost" size="sm" onClick={() => handleEdit(notice)}>
-                              <Edit2 className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(notice)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        )}
+                        <div className="flex gap-1 flex-shrink-0">
+                          <Button variant="ghost" size="sm" onClick={() => setViewingNotice(notice)}>
+                            <Eye className="h-4 w-4" />
+                          </Button>
+                          {isManager && (
+                            <>
+                              <Button variant="ghost" size="sm" onClick={() => handleEdit(notice)}>
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(notice)}>
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                        </div>
                       </div>
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <Calendar className="h-3 w-3" />
                         {format(new Date(notice.createdAt), 'MMM d, yyyy')}
-                        {notice.updatedAt && ` • Updated ${format(new Date(notice.updatedAt), 'MMM d, yyyy')}`}
+                        {notice.updatedAt && ` • Updated ${format(new Date(notice.updatedAt), 'MMM d')}`}
                       </p>
                     </CardHeader>
-                    <CardContent>
-                      <p className="text-foreground whitespace-pre-wrap">{notice.content}</p>
+                    <CardContent className="flex-1 overflow-hidden">
+                      <p className="text-foreground text-sm line-clamp-3">{notice.content}</p>
                     </CardContent>
                   </Card>
                 </motion.div>

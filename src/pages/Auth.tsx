@@ -536,32 +536,39 @@ export default function Auth() {
               </form>
             ) : (
               <div className="space-y-4">
-                {/* Role Selection */}
-                <div className="flex bg-muted/50 rounded-lg p-1">
-                  <button
-                    type="button"
-                    onClick={() => setRole('member')}
-                    className={cn(
-                      'flex-1 py-2 rounded-md text-sm font-medium transition-colors',
-                      role === 'member'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:text-foreground'
-                    )}
-                  >
-                    Member
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setRole('manager')}
-                    className={cn(
-                      'flex-1 py-2 rounded-md text-sm font-medium transition-colors',
-                      role === 'manager'
-                        ? 'bg-primary text-primary-foreground'
-                        : 'text-muted-foreground hover:text-foreground'
-                    )}
-                  >
-                    Manager
-                  </button>
+                {/* Role Selection - Matching reference design */}
+                <div className="space-y-2">
+                  <p className="text-sm text-muted-foreground">I want to register as:</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setRole('member')}
+                      className={cn(
+                        'flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all duration-200',
+                        role === 'member'
+                          ? 'border-primary bg-primary/5 text-primary'
+                          : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:bg-muted/50'
+                      )}
+                    >
+                      <UserPlus className="h-6 w-6" />
+                      <span className="font-medium">Member</span>
+                      <span className="text-xs text-muted-foreground">Join existing mess</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setRole('manager')}
+                      className={cn(
+                        'flex flex-col items-center gap-2 p-4 rounded-xl border-2 transition-all duration-200',
+                        role === 'manager'
+                          ? 'border-primary bg-primary/5 text-primary'
+                          : 'border-border bg-background text-muted-foreground hover:border-primary/50 hover:bg-muted/50'
+                      )}
+                    >
+                      <Building className="h-6 w-6" />
+                      <span className="font-medium">Manager</span>
+                      <span className="text-xs text-muted-foreground">Create new mess</span>
+                    </button>
+                  </div>
                 </div>
 
                 <form onSubmit={handleSignup} className="space-y-4">
@@ -641,7 +648,7 @@ export default function Auth() {
                   </div>
 
                   <Button type="submit" className="w-full gradient-primary" disabled={isLoading}>
-                    {isLoading ? 'Creating account...' : 'Create Account'}
+                    {isLoading ? 'Creating account...' : role === 'manager' ? 'Create Mess & Account' : 'Create Account'}
                   </Button>
                 </form>
               </div>
