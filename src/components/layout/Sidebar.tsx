@@ -23,6 +23,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
 import NotificationBell from '@/components/notifications/NotificationBell';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface NavItem {
   label: string;
@@ -76,8 +77,9 @@ export default function Sidebar() {
         </Button>
       </div>
 
-      {/* Top right notification bell for mobile */}
-      <div className="fixed top-4 right-4 z-50 lg:hidden">
+      {/* Top right notification bell and theme toggle for mobile */}
+      <div className="fixed top-4 right-4 z-50 lg:hidden flex items-center gap-2">
+        <ThemeToggle />
         <NotificationBell />
       </div>
 
@@ -110,9 +112,10 @@ export default function Sidebar() {
               </div>
             </div>
           )}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1">
             {!isCollapsed && (
-              <div className="hidden lg:block">
+              <div className="hidden lg:flex items-center gap-1">
+                <ThemeToggle />
                 <NotificationBell />
               </div>
             )}
