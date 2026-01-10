@@ -5,15 +5,26 @@ import {
   setCurrentUser as saveCurrentUser,
   getUserByEmail,
   createUser,
-  updateUser,
   createMess,
   createMonth,
   getMessById,
 } from '@/lib/storage';
+import { 
+  loginAPI, 
+  registerManagerAPI, 
+  registerMemberAPI,
+  getCurrentUserAPI,
+  removeToken,
+  getToken,
+  checkMongoDbStatus,
+} from '@/lib/api';
+import { USE_BACKEND, isMongoDbConnected, setMongoDbConnected } from '@/lib/config';
+import { toast } from '@/hooks/use-toast';
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
+  isBackendConnected: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   registerManager: (data: ManagerRegistrationData) => Promise<{ success: boolean; error?: string }>;
   registerMember: (data: MemberRegistrationData) => Promise<{ success: boolean; error?: string; userId?: string }>;
@@ -65,16 +76,83 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isBackendConnected, setIsBackendConnected] = useState(false);
 
   useEffect(() => {
-    const savedUser = getCurrentUser();
-    if (savedUser) {
-      setUser(savedUser);
-    }
-    setIsLoading(false);
+    const initAuth = async () => {
+      // Check backend connection status
+      if (USE_BACKEND) {
+        const connected = await checkMongoDbStatus();
+        setIsBackendConnected(connected);
+        
+        if (connected && getToken()) {
+          // Try to get user from backend
+          try {
+            const result = await getCurrentUserAPI();
+            if (result.success && result.data) {
+              const apiUser = (result.data as any).user;
+              const localUser: User = {
+                id: apiUser.id,
+                email: apiUser.email,
+                fullName: apiUser.name,
+                phone: apiUser.phone || '',
+                role: apiUser.role,
+                messId: apiUser.messId || '',
+                isApproved: true,
+                isActive: true,
+                emailVerified: apiUser.emailVerified || false,
+                createdAt: new Date().toISOString(),
+              };
+              setUser(localUser);
+              saveCurrentUser(localUser);
+              setIsLoading(false);
+              return;
+            }
+          } catch (error) {
+            console.error('Failed to get user from backend:', error);
+          }
+        }
+      }
+
+      // Fallback to localStorage
+      const savedUser = getCurrentUser();
+      if (savedUser) {
+        setUser(savedUser);
+      }
+      setIsLoading(false);
+    };
+
+    initAuth();
   }, []);
 
-  const refreshUser = () => {
+  const refreshUser = async () => {
+    if (USE_BACKEND && isMongoDbConnected() && getToken()) {
+      try {
+        const result = await getCurrentUserAPI();
+        if (result.success && result.data) {
+          const apiUser = (result.data as any).user;
+          const localUser: User = {
+            id: apiUser.id,
+            email: apiUser.email,
+            fullName: apiUser.name,
+            phone: apiUser.phone || '',
+            role: apiUser.role,
+            messId: apiUser.messId || '',
+            isApproved: true,
+            isActive: true,
+            emailVerified: apiUser.emailVerified || false,
+            createdAt: new Date().toISOString(),
+          };
+          setUser(localUser);
+          saveCurrentUser(localUser);
+          return;
+        }
+      } catch (error) {
+        console.error('Failed to refresh user from backend:', error);
+      }
+    }
+
+    // Fallback to localStorage
     if (user) {
       const updatedUser = getUserByEmail(user.email);
       if (updatedUser) {
@@ -85,6 +163,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    // Try backend first if enabled
+    if (USE_BACKEND) {
+      const result = await loginAPI(email, password);
+      
+      if (result.success && result.user) {
+        const localUser: User = {
+          id: result.user.id,
+          email: result.user.email,
+          fullName: result.user.name,
+          phone: result.user.phone || '',
+          role: result.user.role,
+          messId: result.user.messId || '',
+          isApproved: true,
+          isActive: true,
+          emailVerified: result.user.emailVerified || false,
+          createdAt: new Date().toISOString(),
+        };
+        setUser(localUser);
+        saveCurrentUser(localUser);
+        setIsBackendConnected(true);
+        return { success: true };
+      }
+
+      // If USE_LOCAL_STORAGE error, fall through to localStorage
+      if (result.error !== 'USE_LOCAL_STORAGE') {
+        return { success: false, error: result.error };
+      }
+      
+      // Show fallback alert
+      toast({
+        title: "MongoDB not connected",
+        description: "Using Local Storage for authentication",
+        variant: "default",
+      });
+    }
+
+    // Fallback to localStorage
     const existingUser = getUserByEmail(email);
     
     if (!existingUser) {
@@ -99,21 +214,54 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: false, error: 'Your account has been deactivated.' };
     }
 
-    // For managers, just log them in
-    if (existingUser.role === 'manager') {
-      setUser(existingUser);
-      saveCurrentUser(existingUser);
-      return { success: true };
-    }
-
-    // For members, check various states
-    // Note: We allow login even if not approved, the routing will handle redirection
     setUser(existingUser);
     saveCurrentUser(existingUser);
     return { success: true };
   };
 
   const registerManager = async (data: ManagerRegistrationData): Promise<{ success: boolean; error?: string }> => {
+    // Try backend first if enabled
+    if (USE_BACKEND) {
+      const result = await registerManagerAPI({
+        name: data.fullName,
+        email: data.email,
+        password: data.password,
+        messName: data.messName,
+      });
+      
+      if (result.success && result.user) {
+        const localUser: User = {
+          id: result.user.id,
+          email: result.user.email,
+          fullName: result.user.name,
+          phone: data.phone || '',
+          role: result.user.role,
+          messId: result.user.messId || '',
+          isApproved: true,
+          isActive: true,
+          emailVerified: result.user.emailVerified || false,
+          createdAt: new Date().toISOString(),
+        };
+        setUser(localUser);
+        saveCurrentUser(localUser);
+        setIsBackendConnected(true);
+        return { success: true };
+      }
+
+      // If USE_LOCAL_STORAGE error, fall through to localStorage
+      if (result.error !== 'USE_LOCAL_STORAGE') {
+        return { success: false, error: result.error };
+      }
+      
+      // Show fallback alert
+      toast({
+        title: "MongoDB not connected",
+        description: "Saving data to Local Storage",
+        variant: "default",
+      });
+    }
+
+    // Fallback to localStorage
     const existingUser = getUserByEmail(data.email);
     
     if (existingUser) {
@@ -123,7 +271,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Create the mess first
     const mess = createMess({
       name: data.messName,
-      managerId: '', // Will update after creating user
+      managerId: '',
     });
 
     // Create the manager user
@@ -167,6 +315,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const registerMember = async (data: MemberRegistrationData): Promise<{ success: boolean; error?: string; userId?: string }> => {
+    // Try backend first if enabled
+    if (USE_BACKEND) {
+      const result = await registerMemberAPI({
+        name: data.fullName,
+        email: data.email,
+        password: data.password,
+      });
+      
+      if (result.success && result.user) {
+        setIsBackendConnected(true);
+        return { success: true, userId: result.user.id };
+      }
+
+      // If USE_LOCAL_STORAGE error, fall through to localStorage
+      if (result.error !== 'USE_LOCAL_STORAGE') {
+        return { success: false, error: result.error };
+      }
+      
+      // Show fallback alert
+      toast({
+        title: "MongoDB not connected",
+        description: "Saving data to Local Storage",
+        variant: "default",
+      });
+    }
+
+    // Fallback to localStorage
     const existingUser = getUserByEmail(data.email);
     
     if (existingUser) {
@@ -181,7 +356,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Create the member user (not approved by default, no mess assigned yet)
+    // Create the member user
     const newUser = createUser({
       email: data.email,
       fullName: data.fullName,
@@ -202,10 +377,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = () => {
     setUser(null);
     saveCurrentUser(null);
+    removeToken();
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, registerManager, registerMember, logout, refreshUser }}>
+    <AuthContext.Provider value={{ user, isLoading, isBackendConnected, login, registerManager, registerMember, logout, refreshUser }}>
       {children}
     </AuthContext.Provider>
   );
