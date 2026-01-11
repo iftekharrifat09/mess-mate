@@ -18,7 +18,7 @@ import * as dataService from '@/lib/dataService';
 import { Users } from 'lucide-react';
 
 export default function Dashboard() {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [monthSummary, setMonthSummary] = useState<MonthSummary | null>(null);
   const [personalSummary, setPersonalSummary] = useState<MemberSummary | null>(null);
   const [membersSummary, setMembersSummary] = useState<MemberSummary[]>([]);
@@ -29,10 +29,10 @@ export default function Dashboard() {
   const headerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (user) {
+    if (!authLoading && user) {
       loadDashboardData();
     }
-  }, [user]);
+  }, [user, authLoading]);
 
   useEffect(() => {
     // GSAP entrance animation for header
@@ -114,7 +114,7 @@ export default function Dashboard() {
     }
   };
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
