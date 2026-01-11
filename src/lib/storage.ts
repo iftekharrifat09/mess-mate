@@ -439,6 +439,56 @@ export function updateJoinRequest(id: string, updates: Partial<JoinRequest>): Jo
   return undefined;
 }
 
+// Approve join request and update user - for localStorage mode
+export function approveJoinRequestAndUpdateUser(requestId: string): { success: boolean; request?: JoinRequest } {
+  const requests = getJoinRequests();
+  const requestIndex = requests.findIndex(r => r.id === requestId);
+  
+  if (requestIndex === -1) {
+    return { success: false };
+  }
+  
+  const request = requests[requestIndex];
+  
+  // Update request status
+  requests[requestIndex] = { ...request, status: 'approved' };
+  saveJoinRequests(requests);
+  
+  // Update user to be approved and set messId
+  const users = getUsers();
+  const userIndex = users.findIndex(u => u.id === request.userId);
+  
+  if (userIndex !== -1) {
+    users[userIndex] = {
+      ...users[userIndex],
+      messId: request.messId,
+      isApproved: true,
+      isActive: true,
+    };
+    saveUsers(users);
+  }
+  
+  // Delete other pending requests for this user
+  const filteredRequests = getJoinRequests().filter(r => {
+    if (r.userId !== request.userId) return true;
+    if (r.id === requestId) return true;
+    if (r.status !== 'pending') return true;
+    return false;
+  });
+  saveJoinRequests(filteredRequests);
+  
+  // Create notification for user
+  createNotification({
+    userId: request.userId,
+    messId: request.messId,
+    type: 'join_request',
+    title: 'Request Approved',
+    message: 'Your join request has been approved!',
+  });
+  
+  return { success: true, request: { ...request, status: 'approved' } };
+}
+
 export function deleteJoinRequest(id: string): boolean {
   const requests = getJoinRequests();
   const filtered = requests.filter(r => r.id !== id);

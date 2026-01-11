@@ -85,6 +85,22 @@ export async function deleteUser(id: string): Promise<boolean> {
 // ============================================
 
 export async function getMesses(): Promise<Mess[]> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.searchMessAPI('');
+      if (result.success && result.data) {
+        const data = result.data as any;
+        const messes = data.messes || data || [];
+        // Ensure messCode is set for all
+        return messes.map((m: any) => ({
+          ...m,
+          messCode: m.messCode || m.code,
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching messes from API:', error);
+    }
+  }
   return storage.getMesses();
 }
 
@@ -119,9 +135,24 @@ export async function getMessById(id: string | undefined): Promise<Mess | undefi
 
 export async function getMessByCode(code: string): Promise<Mess | undefined> {
   if (shouldUseBackend()) {
-    const result = await api.getMessByCodeAPI(code);
-    if (result.success && result.data) {
-      return result.data as any;
+    try {
+      const result = await api.getMessByCodeAPI(code);
+      if (result.success && result.data) {
+        const data = result.data as any;
+        const mess = data.mess || data;
+        // Ensure messCode is set
+        if (mess && !mess.messCode && mess.code) {
+          mess.messCode = mess.code;
+        }
+        return mess;
+      }
+      // Fallback to localStorage if API fails
+      if (result.usingLocalStorage) {
+        return storage.getMessByCode(code);
+      }
+    } catch (error) {
+      console.error('Error fetching mess by code from API:', error);
+      return storage.getMessByCode(code);
     }
   }
   return storage.getMessByCode(code);
@@ -254,9 +285,17 @@ export async function updateMonth(id: string, updates: Partial<Month>): Promise<
 
 export async function getMealsByMonthId(monthId: string): Promise<Meal[]> {
   if (shouldUseBackend()) {
-    const result = await api.getMealsAPI(monthId);
-    if (result.success && result.data) {
-      return (result.data as any).meals || result.data || [];
+    try {
+      const result = await api.getMealsAPI(monthId);
+      if (result.success && result.data) {
+        return (result.data as any).meals || result.data || [];
+      }
+      if (result.usingLocalStorage) {
+        return storage.getMealsByMonthId(monthId);
+      }
+    } catch (error) {
+      console.error('Error fetching meals from API:', error);
+      return storage.getMealsByMonthId(monthId);
     }
   }
   return storage.getMealsByMonthId(monthId);
@@ -315,9 +354,17 @@ export async function deleteMeal(id: string): Promise<boolean> {
 
 export async function getDepositsByMonthId(monthId: string): Promise<Deposit[]> {
   if (shouldUseBackend()) {
-    const result = await api.getDepositsAPI(monthId);
-    if (result.success && result.data) {
-      return (result.data as any).deposits || result.data || [];
+    try {
+      const result = await api.getDepositsAPI(monthId);
+      if (result.success && result.data) {
+        return (result.data as any).deposits || result.data || [];
+      }
+      if (result.usingLocalStorage) {
+        return storage.getDepositsByMonthId(monthId);
+      }
+    } catch (error) {
+      console.error('Error fetching deposits from API:', error);
+      return storage.getDepositsByMonthId(monthId);
     }
   }
   return storage.getDepositsByMonthId(monthId);
@@ -376,9 +423,17 @@ export async function deleteDeposit(id: string): Promise<boolean> {
 
 export async function getMealCostsByMonthId(monthId: string): Promise<MealCost[]> {
   if (shouldUseBackend()) {
-    const result = await api.getMealCostsAPI(monthId);
-    if (result.success && result.data) {
-      return (result.data as any).mealCosts || result.data || [];
+    try {
+      const result = await api.getMealCostsAPI(monthId);
+      if (result.success && result.data) {
+        return (result.data as any).mealCosts || result.data || [];
+      }
+      if (result.usingLocalStorage) {
+        return storage.getMealCostsByMonthId(monthId);
+      }
+    } catch (error) {
+      console.error('Error fetching meal costs from API:', error);
+      return storage.getMealCostsByMonthId(monthId);
     }
   }
   return storage.getMealCostsByMonthId(monthId);
@@ -429,9 +484,17 @@ export async function deleteMealCost(id: string): Promise<boolean> {
 
 export async function getOtherCostsByMonthId(monthId: string): Promise<OtherCost[]> {
   if (shouldUseBackend()) {
-    const result = await api.getOtherCostsAPI(monthId);
-    if (result.success && result.data) {
-      return (result.data as any).otherCosts || result.data || [];
+    try {
+      const result = await api.getOtherCostsAPI(monthId);
+      if (result.success && result.data) {
+        return (result.data as any).otherCosts || result.data || [];
+      }
+      if (result.usingLocalStorage) {
+        return storage.getOtherCostsByMonthId(monthId);
+      }
+    } catch (error) {
+      console.error('Error fetching other costs from API:', error);
+      return storage.getOtherCostsByMonthId(monthId);
     }
   }
   return storage.getOtherCostsByMonthId(monthId);
@@ -575,9 +638,9 @@ export async function approveJoinRequest(id: string): Promise<boolean> {
       showFallbackAlert();
     }
   }
-  // For localStorage, update the request status
-  storage.updateJoinRequest(id, { status: 'approved' });
-  return true;
+  // For localStorage, use the comprehensive approve function that updates user too
+  const result = storage.approveJoinRequestAndUpdateUser(id);
+  return result.success;
 }
 
 export async function rejectJoinRequest(id: string): Promise<boolean> {
