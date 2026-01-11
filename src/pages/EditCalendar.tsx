@@ -170,27 +170,43 @@ export default function EditCalendar() {
         }
       }));
       
-      // Update deposits
+      // Update deposits - include original fields to prevent date reset
       await Promise.all(dayData.deposits.map(async deposit => {
         const amount = editableData.deposits[deposit.id];
         if (amount !== undefined) {
-          await dataService.updateDeposit(deposit.id, { amount });
+          await dataService.updateDeposit(deposit.id, { 
+            amount,
+            date: deposit.date,
+            userId: deposit.userId,
+            note: deposit.note || ''
+          });
         }
       }));
       
-      // Update meal costs
+      // Update meal costs - include original fields to prevent date reset
       await Promise.all(dayData.mealCosts.map(async cost => {
         const amount = editableData.mealCosts[cost.id];
         if (amount !== undefined) {
-          await dataService.updateMealCost(cost.id, { amount });
+          await dataService.updateMealCost(cost.id, { 
+            amount,
+            date: cost.date,
+            userId: cost.userId,
+            description: cost.description || ''
+          });
         }
       }));
       
-      // Update other costs
+      // Update other costs - include original fields to prevent date reset
       await Promise.all(dayData.otherCosts.map(async cost => {
         const amount = editableData.otherCosts[cost.id];
         if (amount !== undefined) {
-          await dataService.updateOtherCost(cost.id, { amount });
+          await dataService.updateOtherCost(cost.id, { 
+            amount,
+            date: cost.date,
+            userId: cost.userId,
+            description: cost.description || '',
+            isShared: cost.isShared || false
+          });
         }
       }));
       
@@ -248,7 +264,7 @@ export default function EditCalendar() {
       >
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Edit Calendar</h1>
+        <h1 className="text-3xl font-bold text-foreground">{isManager ? 'Edit Calendar' : 'Calendar View'}</h1>
             <p className="text-muted-foreground">
               {isManager ? 'Click on past dates to edit records' : 'Click on past dates to view records'}
             </p>

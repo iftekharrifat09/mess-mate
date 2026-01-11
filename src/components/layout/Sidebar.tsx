@@ -32,7 +32,8 @@ interface NavItem {
   managerOnly?: boolean;
 }
 
-const navItems: NavItem[] = [
+// Calendar label is dynamic based on role, handled in component
+const getNavItems = (isManager: boolean): NavItem[] => [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Members', href: '/members', icon: Users },
   { label: 'Meals', href: '/meals', icon: Utensils },
@@ -40,7 +41,7 @@ const navItems: NavItem[] = [
   { label: 'Meal Costs', href: '/meal-costs', icon: ShoppingCart, managerOnly: true },
   { label: 'Other Costs', href: '/other-costs', icon: Receipt, managerOnly: true },
   { label: 'Month Details', href: '/month-details', icon: CalendarDays },
-  { label: 'Edit Calendar', href: '/edit-calendar', icon: Calendar },
+  { label: isManager ? 'Edit Calendar' : 'Calendar View', href: '/edit-calendar', icon: Calendar },
   { label: 'Bazar Dates', href: '/bazar-dates', icon: ShoppingCart, managerOnly: true },
   { label: 'Notices', href: '/notices', icon: Megaphone },
   { label: 'All Notes', href: '/notes', icon: StickyNote },
@@ -57,6 +58,7 @@ export default function Sidebar() {
 
   const isManager = user?.role === 'manager';
 
+  const navItems = getNavItems(isManager);
   const filteredNavItems = navItems.filter(item => !item.managerOnly || isManager);
 
   const handleLogout = () => {
