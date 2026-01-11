@@ -1,12 +1,13 @@
 // API Configuration
-// Change USE_BACKEND to true when your backend server is running
-export const USE_BACKEND = true;
+// Uses environment variable for API URL, falls back to localhost for development
+export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
-// Backend API URL - Update this to your deployed backend URL
-export const API_BASE_URL = 'http://localhost:5000/api';
+// Backend enabled flag - set to true to use backend API
+export const USE_BACKEND = true;
 
 // MongoDB connection status
 let mongoDbConnected = false;
+let backendAvailable = false;
 
 export function setMongoDbConnected(status: boolean) {
   mongoDbConnected = status;
@@ -14,6 +15,19 @@ export function setMongoDbConnected(status: boolean) {
 
 export function isMongoDbConnected() {
   return mongoDbConnected;
+}
+
+export function setBackendAvailable(status: boolean) {
+  backendAvailable = status;
+}
+
+export function isBackendAvailable() {
+  return backendAvailable;
+}
+
+// Check if we should use backend (backend available AND MongoDB connected)
+export function shouldUseBackend() {
+  return USE_BACKEND && backendAvailable && mongoDbConnected;
 }
 
 // Demo configuration for testing

@@ -1,33 +1,26 @@
 import { MemberSummary, MonthSummary } from '@/types';
-import {
-  getMealsByMonthId,
-  getDepositsByMonthId,
-  getMealCostsByMonthId,
-  getOtherCostsByMonthId,
-  getMessMembers,
-  getUserById,
-  getActiveMonth,
-} from '@/lib/storage';
+import * as dataService from '@/lib/dataService';
 
-export function calculateMemberSummary(userId: string, monthId: string): MemberSummary {
-  const user = getUserById(userId);
-  const meals = getMealsByMonthId(monthId).filter(m => m.userId === userId);
-  const deposits = getDepositsByMonthId(monthId).filter(d => d.userId === userId);
-  const mealCosts = getMealCostsByMonthId(monthId);
-  const otherCosts = getOtherCostsByMonthId(monthId);
+export async function calculateMemberSummary(userId: string, monthId: string): Promise<MemberSummary> {
+  const user = await dataService.getUserById(userId);
+  const meals = await dataService.getMealsByMonthId(monthId);
+  const userMeals = meals.filter(m => m.userId === userId);
+  const deposits = await dataService.getDepositsByMonthId(monthId);
+  const userDeposits = deposits.filter(d => d.userId === userId);
+  const mealCosts = await dataService.getMealCostsByMonthId(monthId);
+  const otherCosts = await dataService.getOtherCostsByMonthId(monthId);
 
   // Calculate total meals for this user
-  const totalMeals = meals.reduce((sum, m) => sum + m.breakfast + m.lunch + m.dinner, 0);
+  const totalMeals = userMeals.reduce((sum, m) => sum + m.breakfast + m.lunch + m.dinner, 0);
 
   // Calculate total deposit for this user
-  const totalDeposit = deposits.reduce((sum, d) => sum + d.amount, 0);
+  const totalDeposit = userDeposits.reduce((sum, d) => sum + d.amount, 0);
 
   // Calculate total meal cost for the month
   const totalMealCost = mealCosts.reduce((sum, c) => sum + c.amount, 0);
 
   // Calculate total meals in the month (all users)
-  const allMeals = getMealsByMonthId(monthId);
-  const totalMonthMeals = allMeals.reduce((sum, m) => sum + m.breakfast + m.lunch + m.dinner, 0);
+  const totalMonthMeals = meals.reduce((sum, m) => sum + m.breakfast + m.lunch + m.dinner, 0);
 
   // Calculate meal rate
   const mealRate = totalMonthMeals > 0 ? totalMealCost / totalMonthMeals : 0;
@@ -41,7 +34,7 @@ export function calculateMemberSummary(userId: string, monthId: string): MemberS
     .reduce((sum, c) => sum + c.amount, 0);
 
   // Calculate shared cost (divided among all members)
-  const members = getMessMembers(user?.messId || '');
+  const members = await dataService.getMessMembers(user?.messId || '');
   const memberCount = members.length || 1;
   const totalSharedCost = otherCosts
     .filter(c => c.isShared)
@@ -64,13 +57,13 @@ export function calculateMemberSummary(userId: string, monthId: string): MemberS
   };
 }
 
-export function calculateMonthSummary(monthId: string, messId: string): MonthSummary {
-  const month = getActiveMonth(messId);
-  const members = getMessMembers(messId);
-  const meals = getMealsByMonthId(monthId);
-  const deposits = getDepositsByMonthId(monthId);
-  const mealCosts = getMealCostsByMonthId(monthId);
-  const otherCosts = getOtherCostsByMonthId(monthId);
+export async function calculateMonthSummary(monthId: string, messId: string): Promise<MonthSummary> {
+  const month = await dataService.getActiveMonth(messId);
+  const members = await dataService.getMessMembers(messId);
+  const meals = await dataService.getMealsByMonthId(monthId);
+  const deposits = await dataService.getDepositsByMonthId(monthId);
+  const mealCosts = await dataService.getMealCostsByMonthId(monthId);
+  const otherCosts = await dataService.getOtherCostsByMonthId(monthId);
 
   const totalMeals = meals.reduce((sum, m) => sum + m.breakfast + m.lunch + m.dinner, 0);
   const totalDeposit = deposits.reduce((sum, d) => sum + d.amount, 0);
@@ -101,9 +94,12 @@ export function calculateMonthSummary(monthId: string, messId: string): MonthSum
   };
 }
 
-export function getAllMembersSummary(monthId: string, messId: string): MemberSummary[] {
-  const members = getMessMembers(messId);
-  return members.map(member => calculateMemberSummary(member.id, monthId));
+export async function getAllMembersSummary(monthId: string, messId: string): Promise<MemberSummary[]> {
+  const members = await dataService.getMessMembers(messId);
+  const summaries = await Promise.all(
+    members.map(member => calculateMemberSummary(member.id, monthId))
+  );
+  return summaries;
 }
 
 export function formatCurrency(amount: number): string {
