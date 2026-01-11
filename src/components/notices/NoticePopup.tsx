@@ -86,7 +86,7 @@ export default function NoticePopup() {
                   {notice.updatedAt && ` • Updated ${format(new Date(notice.updatedAt), 'MMM d, yyyy')}`}
                 </DialogDescription>
               </DialogHeader>
-              <div className="mt-4 p-4 bg-muted/50 rounded-lg">
+              <div className="mt-4 p-4 bg-muted/50 rounded-lg max-h-[300px] overflow-y-auto">
                 <p className="text-foreground whitespace-pre-wrap">{notice.content}</p>
               </div>
               <div className="mt-4 flex justify-end">
