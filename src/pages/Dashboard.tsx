@@ -50,27 +50,61 @@ export default function Dashboard() {
     setLoading(true);
 
     try {
+      console.log('Loading dashboard data for user:', user.id, 'messId:', user.messId);
+      
       const mess = await dataService.getMessById(user.messId);
+      console.log('Mess data loaded:', mess);
       if (mess) {
         setMessName(mess.name);
       }
 
       const messMembers = await dataService.getMessMembers(user.messId);
+      console.log('Members loaded:', messMembers);
       setMembers(messMembers);
 
       const activeMonth = await dataService.getActiveMonth(user.messId);
+      console.log('Active month loaded:', activeMonth);
+      
       if (activeMonth) {
         const mSummary = await calculateMonthSummary(activeMonth.id, user.messId);
+        console.log('Month summary:', mSummary);
         setMonthSummary(mSummary);
 
         const pSummary = await calculateMemberSummary(user.id, activeMonth.id);
+        console.log('Personal summary:', pSummary);
         setPersonalSummary(pSummary);
 
         const allMembers = await getAllMembersSummary(activeMonth.id, user.messId);
+        console.log('All members summary:', allMembers);
         setMembersSummary(allMembers);
+      } else {
+        console.log('No active month found - creating empty summaries');
+        // Still show empty summaries even if no active month
+        setMonthSummary({
+          monthId: '',
+          monthName: 'No Active Month',
+          messBalance: 0,
+          totalDeposit: 0,
+          totalMeals: 0,
+          totalMealCost: 0,
+          mealRate: 0,
+          totalIndividualCost: 0,
+          totalSharedCost: 0,
+        });
+        setPersonalSummary({
+          userId: user.id,
+          userName: user.fullName || 'Unknown',
+          totalMeals: 0,
+          totalDeposit: 0,
+          mealCost: 0,
+          individualCost: 0,
+          sharedCost: 0,
+          balance: 0,
+        });
       }
 
       const dates = await dataService.getBazarDatesByMessId(user.messId);
+      console.log('Bazar dates loaded:', dates);
       setBazarDates(dates);
     } catch (error) {
       console.error('Error loading dashboard data:', error);

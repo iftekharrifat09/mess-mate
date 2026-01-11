@@ -32,9 +32,19 @@ export async function getUsers(): Promise<User[]> {
 
 export async function getUserById(id: string): Promise<User | undefined> {
   if (shouldUseBackend()) {
-    const result = await api.getUserByIdAPI(id);
-    if (result.success && result.data) {
-      return result.data as any;
+    try {
+      const result = await api.getUserByIdAPI(id);
+      if (result.success && result.data) {
+        const data = result.data as any;
+        const user = data.user || data;
+        // Ensure fullName is set (backend might only return 'name')
+        if (user && !user.fullName && user.name) {
+          user.fullName = user.name;
+        }
+        return user;
+      }
+    } catch (error) {
+      console.error('Error fetching user from API:', error);
     }
   }
   return storage.getUserById(id);
@@ -580,8 +590,14 @@ export async function getMessMembers(messId: string | undefined): Promise<User[]
   if (shouldUseBackend()) {
     try {
       const result = await api.getMessMembersAPI(messId);
+      console.log('API getMessMembers result:', result);
       if (result.success && result.data) {
-        return (result.data as any).members || result.data || [];
+        const members = (result.data as any).members || result.data || [];
+        // Ensure fullName is set for all members
+        return members.map((m: any) => ({
+          ...m,
+          fullName: m.fullName || m.name,
+        }));
       }
       // Fallback to localStorage if API fails
       if (result.usingLocalStorage) {

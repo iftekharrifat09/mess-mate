@@ -282,6 +282,7 @@ app.post("/api/auth/register-manager", async (req, res) => {
       user: {
         id: userResult.insertedId.toString(),
         name,
+        fullName: name,  // Frontend expects fullName
         email: email.toLowerCase(),
         phone: phone || "",
         role: "manager",
@@ -294,6 +295,7 @@ app.post("/api/auth/register-manager", async (req, res) => {
         id: messResult.insertedId.toString(),
         name: messName,
         code: messCode,
+        messCode: messCode,  // Frontend expects messCode
       },
       token,
     });
@@ -341,6 +343,7 @@ app.post("/api/auth/register-member", async (req, res) => {
       user: {
         id: userResult.insertedId.toString(),
         name,
+        fullName: name,  // Frontend expects fullName
         email: email.toLowerCase(),
         phone: phone || "",
         role: "member",
@@ -387,6 +390,7 @@ app.post("/api/auth/login", async (req, res) => {
       user: {
         id: user._id.toString(),
         name: user.name,
+        fullName: user.name,  // Frontend expects fullName
         email: user.email,
         phone: user.phone || "",
         role: user.role,
@@ -412,6 +416,7 @@ app.get("/api/auth/me", authMiddleware, async (req, res) => {
       user: {
         id: user._id.toString(),
         name: user.name,
+        fullName: user.name,  // Frontend expects fullName
         email: user.email,
         phone: user.phone || "",
         role: user.role,
@@ -444,6 +449,7 @@ app.put("/api/auth/profile", authMiddleware, async (req, res) => {
       user: {
         id: user._id.toString(),
         name: user.name,
+        fullName: user.name,  // Frontend expects fullName
         email: user.email,
         phone: user.phone || "",
         role: user.role,
@@ -628,6 +634,7 @@ app.get("/api/users/:id", authMiddleware, async (req, res) => {
       user: {
         id: user._id.toString(),
         name: user.name,
+        fullName: user.name,  // Frontend expects fullName
         email: user.email,
         phone: user.phone || "",
         role: user.role,
@@ -829,8 +836,10 @@ app.get("/api/mess/members", authMiddleware, async (req, res) => {
 
 app.get("/api/months", authMiddleware, async (req, res) => {
   try {
+    // Support both query param messId and user's messId
+    const messId = req.query.messId || req.user.messId;
     const months = await collections.months
-      .find({ messId: req.user.messId })
+      .find({ messId })
       .sort({ createdAt: -1 })
       .toArray();
     res.json({ success: true, months: transformDocs(months) });
@@ -874,8 +883,10 @@ app.post("/api/months", authMiddleware, async (req, res) => {
 
 app.get("/api/months/active", authMiddleware, async (req, res) => {
   try {
+    // Support both query param messId and user's messId
+    const messId = req.query.messId || req.user.messId;
     const month = await collections.months.findOne({
-      messId: req.user.messId,
+      messId,
       isActive: true,
     });
     res.json({ success: true, month: transformDoc(month) });
