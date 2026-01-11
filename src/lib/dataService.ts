@@ -78,11 +78,25 @@ export async function getMesses(): Promise<Mess[]> {
   return storage.getMesses();
 }
 
-export async function getMessById(id: string): Promise<Mess | undefined> {
+export async function getMessById(id: string | undefined): Promise<Mess | undefined> {
+  if (!id) return undefined;
+  
   if (shouldUseBackend()) {
-    const result = await api.getMessAPI(id);
-    if (result.success && result.data) {
-      return result.data as any;
+    try {
+      const result = await api.getMessAPI(id);
+      if (result.success && result.data) {
+        const data = result.data as any;
+        // Handle both direct mess object and nested mess object
+        return data.mess || data;
+      }
+      // If API call fails but backend is enabled, still try localStorage
+      if (result.usingLocalStorage) {
+        return storage.getMessById(id);
+      }
+    } catch (error) {
+      console.error('Error fetching mess from API:', error);
+      // Fallback to localStorage on error
+      return storage.getMessById(id);
     }
   }
   return storage.getMessById(id);
@@ -152,21 +166,42 @@ export async function getMonths(): Promise<Month[]> {
   return storage.getMonths();
 }
 
-export async function getMonthsByMessId(messId: string): Promise<Month[]> {
+export async function getMonthsByMessId(messId: string | undefined): Promise<Month[]> {
+  if (!messId) return [];
+  
   if (shouldUseBackend()) {
-    const result = await api.getMonthsAPI(messId);
-    if (result.success && result.data) {
-      return (result.data as any).months || result.data || [];
+    try {
+      const result = await api.getMonthsAPI(messId);
+      if (result.success && result.data) {
+        return (result.data as any).months || result.data || [];
+      }
+      if (result.usingLocalStorage) {
+        return storage.getMonthsByMessId(messId);
+      }
+    } catch (error) {
+      console.error('Error fetching months from API:', error);
+      return storage.getMonthsByMessId(messId);
     }
   }
   return storage.getMonthsByMessId(messId);
 }
 
-export async function getActiveMonth(messId: string): Promise<Month | undefined> {
+export async function getActiveMonth(messId: string | undefined): Promise<Month | undefined> {
+  if (!messId) return undefined;
+  
   if (shouldUseBackend()) {
-    const result = await api.getActiveMonthAPI(messId);
-    if (result.success && result.data) {
-      return (result.data as any).month || result.data;
+    try {
+      const result = await api.getActiveMonthAPI(messId);
+      if (result.success && result.data) {
+        return (result.data as any).month || result.data;
+      }
+      // Fallback to localStorage if API fails
+      if (result.usingLocalStorage) {
+        return storage.getActiveMonth(messId);
+      }
+    } catch (error) {
+      console.error('Error fetching active month from API:', error);
+      return storage.getActiveMonth(messId);
     }
   }
   return storage.getActiveMonth(messId);
@@ -534,11 +569,22 @@ export function cleanupPendingJoinRequests(userId: string, exceptMessId?: string
 // MESS MEMBERS
 // ============================================
 
-export async function getMessMembers(messId: string): Promise<User[]> {
+export async function getMessMembers(messId: string | undefined): Promise<User[]> {
+  if (!messId) return [];
+  
   if (shouldUseBackend()) {
-    const result = await api.getMessMembersAPI(messId);
-    if (result.success && result.data) {
-      return (result.data as any).members || result.data || [];
+    try {
+      const result = await api.getMessMembersAPI(messId);
+      if (result.success && result.data) {
+        return (result.data as any).members || result.data || [];
+      }
+      // Fallback to localStorage if API fails
+      if (result.usingLocalStorage) {
+        return storage.getMessMembers(messId);
+      }
+    } catch (error) {
+      console.error('Error fetching mess members from API:', error);
+      return storage.getMessMembers(messId);
     }
   }
   return storage.getMessMembers(messId);
@@ -611,11 +657,21 @@ export async function deleteNotice(id: string): Promise<boolean> {
 // BAZAR DATES
 // ============================================
 
-export async function getBazarDatesByMessId(messId: string): Promise<BazarDate[]> {
+export async function getBazarDatesByMessId(messId: string | undefined): Promise<BazarDate[]> {
+  if (!messId) return [];
+  
   if (shouldUseBackend()) {
-    const result = await api.getBazarDatesAPI(messId);
-    if (result.success && result.data) {
-      return (result.data as any).bazarDates || result.data || [];
+    try {
+      const result = await api.getBazarDatesAPI(messId);
+      if (result.success && result.data) {
+        return (result.data as any).bazarDates || result.data || [];
+      }
+      if (result.usingLocalStorage) {
+        return storage.getBazarDatesByMessId(messId);
+      }
+    } catch (error) {
+      console.error('Error fetching bazar dates from API:', error);
+      return storage.getBazarDatesByMessId(messId);
     }
   }
   return storage.getBazarDatesByMessId(messId);
