@@ -22,18 +22,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  getActiveMonth,
-  getMealsByMonthId,
-  getDepositsByMonthId,
-  getMealCostsByMonthId,
-  getOtherCostsByMonthId,
-  getMessMembers,
-  updateMeal,
-  updateDeposit,
-  updateMealCost,
-  updateOtherCost,
-} from '@/lib/storage';
+import * as dataService from '@/lib/dataService';
 import { Meal, Deposit, MealCost, OtherCost, User } from '@/types';
 import { formatCurrency } from '@/lib/calculations';
 import { Calendar, Edit2, ChevronLeft, ChevronRight, X, Save } from 'lucide-react';
@@ -81,19 +70,25 @@ export default function EditCalendar() {
     loadData();
   }, [user]);
 
-  const loadData = () => {
+  const loadData = async () => {
     if (!user) return;
     
-    const activeMonth = getActiveMonth(user.messId);
-    if (activeMonth) {
-      setAllData({
-        meals: getMealsByMonthId(activeMonth.id),
-        deposits: getDepositsByMonthId(activeMonth.id),
-        mealCosts: getMealCostsByMonthId(activeMonth.id),
-        otherCosts: getOtherCostsByMonthId(activeMonth.id),
-      });
+    try {
+      const activeMonth = await dataService.getActiveMonth(user.messId);
+      if (activeMonth) {
+        const [meals, deposits, mealCosts, otherCosts] = await Promise.all([
+          dataService.getMealsByMonthId(activeMonth.id),
+          dataService.getDepositsByMonthId(activeMonth.id),
+          dataService.getMealCostsByMonthId(activeMonth.id),
+          dataService.getOtherCostsByMonthId(activeMonth.id),
+        ]);
+        setAllData({ meals, deposits, mealCosts, otherCosts });
+      }
+      const membersData = await dataService.getMessMembers(user.messId);
+      setMembers(membersData);
+    } catch (error) {
+      console.error('Error loading calendar data:', error);
     }
-    setMembers(getMessMembers(user.messId));
   };
 
   const handleDateClick = (date: Date) => {
@@ -163,44 +158,49 @@ export default function EditCalendar() {
     return hasActivity;
   };
 
-  const handleSaveChanges = () => {
+  const handleSaveChanges = async () => {
     if (!dayData) return;
     
-    // Update meals
-    dayData.meals.forEach(meal => {
-      const mealData = editableData.meals[meal.id];
-      if (mealData) {
-        updateMeal(meal.id, mealData);
-      }
-    });
-    
-    // Update deposits
-    dayData.deposits.forEach(deposit => {
-      const amount = editableData.deposits[deposit.id];
-      if (amount !== undefined) {
-        updateDeposit(deposit.id, { amount });
-      }
-    });
-    
-    // Update meal costs
-    dayData.mealCosts.forEach(cost => {
-      const amount = editableData.mealCosts[cost.id];
-      if (amount !== undefined) {
-        updateMealCost(cost.id, { amount });
-      }
-    });
-    
-    // Update other costs
-    dayData.otherCosts.forEach(cost => {
-      const amount = editableData.otherCosts[cost.id];
-      if (amount !== undefined) {
-        updateOtherCost(cost.id, { amount });
-      }
-    });
-    
-    loadData();
-    setIsEditing(false);
-    toast({ title: 'Changes saved successfully' });
+    try {
+      // Update meals
+      await Promise.all(dayData.meals.map(async meal => {
+        const mealData = editableData.meals[meal.id];
+        if (mealData) {
+          await dataService.updateMeal(meal.id, mealData);
+        }
+      }));
+      
+      // Update deposits
+      await Promise.all(dayData.deposits.map(async deposit => {
+        const amount = editableData.deposits[deposit.id];
+        if (amount !== undefined) {
+          await dataService.updateDeposit(deposit.id, { amount });
+        }
+      }));
+      
+      // Update meal costs
+      await Promise.all(dayData.mealCosts.map(async cost => {
+        const amount = editableData.mealCosts[cost.id];
+        if (amount !== undefined) {
+          await dataService.updateMealCost(cost.id, { amount });
+        }
+      }));
+      
+      // Update other costs
+      await Promise.all(dayData.otherCosts.map(async cost => {
+        const amount = editableData.otherCosts[cost.id];
+        if (amount !== undefined) {
+          await dataService.updateOtherCost(cost.id, { amount });
+        }
+      }));
+      
+      await loadData();
+      setIsEditing(false);
+      toast({ title: 'Changes saved successfully' });
+    } catch (error) {
+      console.error('Error saving changes:', error);
+      toast({ title: 'Error saving changes', variant: 'destructive' });
+    }
   };
 
   const handleDiscardChanges = () => {
