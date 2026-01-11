@@ -65,20 +65,18 @@ export default function Auth() {
     const result = await login(email, password);
 
     if (result.success) {
-      // Get the user to check their status
-      const user = getUserByEmail(email);
-      
-      if (user?.role === 'member') {
+      const loggedInUser = result.user;
+
+      if (loggedInUser?.role === 'member') {
         // Check if member has a mess and is approved
-        if (!user.messId) {
+        if (!loggedInUser.messId) {
           // No mess assigned, redirect to join mess
           toast({
             title: 'Welcome!',
             description: 'Please join a mess to continue.',
           });
-          navigate('/join-mess', { state: { userId: user.id, email: user.email } });
-        } else if (!user.isApproved) {
-          // Has pending requests, redirect to waiting page
+          navigate('/join-mess', { state: { userId: loggedInUser.id, email: loggedInUser.email } });
+        } else if (!loggedInUser.isApproved) {
           toast({
             title: 'Request Pending',
             description: 'Your join request is awaiting approval.',

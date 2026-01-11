@@ -1271,13 +1271,35 @@ app.get("/api/join-requests/user", authMiddleware, async (req, res) => {
 
 app.post("/api/join-requests", authMiddleware, async (req, res) => {
   try {
-    const { messCode } = req.body;
-    const mess = await collections.messes.findOne({
-      code: messCode.toUpperCase(),
-    });
+    const { messCode, messId } = req.body;
+
+    // Prevent users already in an approved mess from requesting again
+    if (req.user?.messId && req.user?.isApproved !== false) {
+      return res.status(400).json({
+        success: false,
+        error: "You are already a member of a mess",
+      });
+    }
+
+    let mess = null;
+
+    if (messId) {
+      try {
+        mess = await collections.messes.findOne({ _id: new ObjectId(messId) });
+      } catch (e) {
+        return res.status(400).json({ success: false, error: "Invalid mess ID" });
+      }
+    } else if (messCode) {
+      mess = await collections.messes.findOne({
+        code: String(messCode).toUpperCase(),
+      });
+    }
 
     if (!mess) {
-      return res.status(400).json({ success: false, error: "Invalid mess code" });
+      return res.status(400).json({
+        success: false,
+        error: "Invalid mess code or ID",
+      });
     }
 
     const existingRequest = await collections.joinRequests.findOne({
@@ -1293,7 +1315,7 @@ app.post("/api/join-requests", authMiddleware, async (req, res) => {
     const request = {
       userId: req.userId,
       messId: mess._id.toString(),
-      messCode: messCode.toUpperCase(),
+      messCode: mess.code,
       status: "pending",
       createdAt: new Date(),
     };
@@ -1306,8 +1328,12 @@ app.post("/api/join-requests", authMiddleware, async (req, res) => {
       type: "join_request",
     });
 
-    res.json({ success: true, request: { id: result.insertedId.toString(), ...request } });
+    const joinRequest = { id: result.insertedId.toString(), ...request };
+
+    // Return as joinRequest for frontend compatibility (also keep legacy 'request')
+    res.json({ success: true, joinRequest, request: joinRequest });
   } catch (error) {
+    console.error("Create Join Request Error:", error);
     res.status(500).json({ success: false, error: "Failed to create join request" });
   }
 });

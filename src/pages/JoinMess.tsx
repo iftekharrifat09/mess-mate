@@ -117,10 +117,10 @@ export default function JoinMess() {
     }
 
     try {
-      // Check if already requested
-      const existingRequests = await dataService.getJoinRequests();
-      const alreadyRequested = existingRequests.some(
-        r => r.userId === currentUser.id && r.messId === mess.id && r.status === 'pending'
+      // Check if already requested (use per-user endpoint; backend-safe)
+      const pendingRequests = await dataService.getPendingJoinRequestsForUser(currentUser.id);
+      const alreadyRequested = pendingRequests.some(
+        r => r.messId === mess.id && r.status === 'pending'
       );
 
       if (alreadyRequested) {
@@ -135,9 +135,11 @@ export default function JoinMess() {
       // Create join request (don't update messId until approved)
       await dataService.createJoinRequest({
         messId: mess.id,
+        // send messCode too (backend accepts both)
+        messCode: mess.messCode,
         userId: currentUser.id,
         status: 'pending',
-      });
+      } as any);
 
       // Notify manager about the join request
       await dataService.notifyManager(mess.id, {

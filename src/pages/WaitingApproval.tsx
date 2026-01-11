@@ -1,54 +1,60 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Utensils, Clock, ArrowLeft, RefreshCw } from 'lucide-react';
-import { getJoinRequests, getMesses, getUserByEmail } from '@/lib/storage';
 import { useAuth } from '@/contexts/AuthContext';
+import * as dataService from '@/lib/dataService';
 import { Mess } from '@/types';
 
 export default function WaitingApproval() {
   const navigate = useNavigate();
   const { user, refreshUser, logout } = useAuth();
+
   const [pendingMesses, setPendingMesses] = useState<Mess[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
 
-  useEffect(() => {
-    if (user) {
-      loadPendingRequests();
-    }
-  }, [user]);
+  const userId = useMemo(() => user?.id, [user?.id]);
 
-  const loadPendingRequests = () => {
-    if (!user) return;
-    
-    const requests = getJoinRequests().filter(
-      r => r.userId === user.id && r.status === 'pending'
-    );
-    
-    const messes = getMesses();
-    const pending = requests.map(r => messes.find(m => m.id === r.messId)).filter(Boolean) as Mess[];
-    setPendingMesses(pending);
+  useEffect(() => {
+    if (userId) {
+      loadPendingRequests(userId);
+    }
+  }, [userId]);
+
+  const loadPendingRequests = async (uid: string) => {
+    try {
+      const requests = await dataService.getPendingJoinRequestsForUser(uid);
+      const messes = await Promise.all(
+        requests.map((r) => dataService.getMessById(r.messId))
+      );
+      setPendingMesses(messes.filter(Boolean) as Mess[]);
+    } catch (e) {
+      console.error('Failed to load pending requests:', e);
+      setPendingMesses([]);
+    }
   };
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
+    if (!user) return;
+
     setIsRefreshing(true);
-    
-    // Check if user has been approved
-    refreshUser();
-    
-    const updatedUser = user ? getUserByEmail(user.email) : null;
-    
-    if (updatedUser?.isApproved && updatedUser?.messId) {
-      navigate('/dashboard');
-      return;
+    try {
+      // Refresh auth user from backend (if enabled)
+      await refreshUser();
+
+      // Re-fetch latest user snapshot to avoid stale state
+      const latestUser = await dataService.getUserById(user.id);
+
+      if (latestUser?.isApproved && latestUser?.messId) {
+        navigate('/dashboard');
+        return;
+      }
+
+      await loadPendingRequests(user.id);
+    } finally {
+      setTimeout(() => setIsRefreshing(false), 400);
     }
-    
-    loadPendingRequests();
-    
-    setTimeout(() => {
-      setIsRefreshing(false);
-    }, 500);
   };
 
   const handleLogout = () => {
@@ -80,21 +86,16 @@ export default function WaitingApproval() {
           <CardContent className="space-y-4">
             {pendingMesses.length > 0 && (
               <div className="space-y-2">
-                <p className="text-sm text-muted-foreground text-center">
-                  Pending requests for:
-                </p>
-                {pendingMesses.map(mess => (
-                  <div 
-                    key={mess.id}
-                    className="p-3 bg-muted/50 rounded-lg border text-center"
-                  >
+                <p className="text-sm text-muted-foreground text-center">Pending requests for:</p>
+                {pendingMesses.map((mess) => (
+                  <div key={mess.id} className="p-3 bg-muted/50 rounded-lg border text-center">
                     <p className="font-medium text-foreground">{mess.name}</p>
                   </div>
                 ))}
               </div>
             )}
 
-            <Button 
+            <Button
               onClick={handleRefresh}
               variant="outline"
               className="w-full"
@@ -105,21 +106,19 @@ export default function WaitingApproval() {
             </Button>
 
             <div className="flex gap-3">
-              <Button 
-                onClick={() => navigate('/join-mess')}
-                variant="outline"
-                className="flex-1"
-              >
+              <Button onClick={() => navigate('/join-mess')} variant="outline" className="flex-1">
                 <ArrowLeft className="h-4 w-4 mr-2" />
                 Join Another
               </Button>
-              <Button 
-                onClick={handleLogout}
-                variant="ghost"
-                className="flex-1"
-              >
+              <Button onClick={handleLogout} variant="ghost" className="flex-1">
                 Logout
               </Button>
+            </div>
+
+            <div className="text-center">
+              <Link to="/dashboard" className="text-sm text-muted-foreground hover:text-foreground">
+                Back to Dashboard
+              </Link>
             </div>
           </CardContent>
         </Card>

@@ -35,11 +35,11 @@ export default function Members() {
 
   const loadMembers = async () => {
     if (!user) return;
-    
+
     setIsLoading(true);
     try {
-      const allUsers = await dataService.getUsers();
-      const messUsers = allUsers.filter(u => u.messId === user.messId);
+      // Fetch members directly from the mess (backend supported)
+      const messUsers = await dataService.getMessMembers(user.messId);
       setMembers(messUsers.filter(u => u.isApproved));
       setPendingMembers(messUsers.filter(u => !u.isApproved));
     } catch (error) {
