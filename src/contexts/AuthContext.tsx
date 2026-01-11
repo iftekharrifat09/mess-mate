@@ -91,11 +91,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const result = await getCurrentUserAPI();
             if (result.success && result.data) {
               const apiUser = (result.data as any).user;
-            const localUser: User = {
+              const localUser: User = {
                 id: apiUser.id,
                 email: apiUser.email,
                 fullName: apiUser.fullName || apiUser.name,
-                phone: apiUser.phone || '',
+                phone: apiUser.phone || apiUser.phoneNumber || '',
                 role: apiUser.role,
                 messId: apiUser.messId || '',
                 isApproved: apiUser.isApproved !== false,
@@ -135,7 +135,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             id: apiUser.id,
             email: apiUser.email,
             fullName: apiUser.fullName || apiUser.name,
-            phone: apiUser.phone || '',
+            phone: apiUser.phone || apiUser.phoneNumber || '',
             role: apiUser.role,
             messId: apiUser.messId || '',
             isApproved: apiUser.isApproved !== false,
@@ -178,16 +178,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const result = await loginAPI(email, password);
       
       if (result.success && result.user) {
+        const apiUser = result.user as any;
         const localUser: User = {
-          id: result.user.id,
-          email: result.user.email,
-          fullName: result.user.fullName || result.user.name,
-          phone: result.user.phone || '',
-          role: result.user.role,
-          messId: result.user.messId || '',
-          isApproved: result.user.isApproved !== false,
-          isActive: result.user.isActive !== false,
-          emailVerified: result.user.emailVerified || false,
+          id: apiUser.id,
+          email: apiUser.email,
+          fullName: apiUser.fullName || apiUser.name,
+          phone: apiUser.phone || apiUser.phoneNumber || '',
+          role: apiUser.role,
+          messId: apiUser.messId || '',
+          isApproved: apiUser.isApproved !== false,
+          isActive: apiUser.isActive !== false,
+          emailVerified: apiUser.emailVerified || false,
           createdAt: new Date().toISOString(),
         };
         setUser(localUser);
@@ -240,16 +241,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       
       if (result.success && result.user) {
+        const apiUser = result.user as any;
         const localUser: User = {
-          id: result.user.id,
-          email: result.user.email,
-          fullName: result.user.fullName || result.user.name,
-          phone: data.phone || '',
-          role: result.user.role,
-          messId: result.user.messId || '',
-          isApproved: result.user.isApproved !== false,
-          isActive: result.user.isActive !== false,
-          emailVerified: result.user.emailVerified || false,
+          id: apiUser.id,
+          email: apiUser.email,
+          fullName: apiUser.fullName || apiUser.name,
+          phone: apiUser.phone || apiUser.phoneNumber || data.phone || '',
+          role: apiUser.role,
+          messId: apiUser.messId || '',
+          isApproved: apiUser.isApproved !== false,
+          isActive: apiUser.isActive !== false,
+          emailVerified: apiUser.emailVerified || false,
           createdAt: new Date().toISOString(),
         };
         setUser(localUser);
