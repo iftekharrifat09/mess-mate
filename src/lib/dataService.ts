@@ -84,10 +84,15 @@ export async function getMessById(id: string | undefined): Promise<Mess | undefi
   if (shouldUseBackend()) {
     try {
       const result = await api.getMessAPI(id);
+      console.log('API getMessById result:', result);
       if (result.success && result.data) {
         const data = result.data as any;
-        // Handle both direct mess object and nested mess object
-        return data.mess || data;
+        const mess = data.mess || data;
+        // Ensure messCode is set (backend returns 'code', we need 'messCode')
+        if (mess && !mess.messCode && mess.code) {
+          mess.messCode = mess.code;
+        }
+        return mess;
       }
       // If API call fails but backend is enabled, still try localStorage
       if (result.usingLocalStorage) {
