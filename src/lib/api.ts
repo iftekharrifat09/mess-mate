@@ -532,6 +532,13 @@ export async function createBazarDateAPI(data: { userId: string; userName: strin
   });
 }
 
+export async function updateBazarDateAPI(id: string, data: Partial<{ userId: string; userName: string; dates: string[] }>) {
+  return apiRequest(`/bazar-dates/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
 export async function deleteBazarDateAPI(id: string) {
   return apiRequest(`/bazar-dates/${id}`, { method: 'DELETE' });
 }
