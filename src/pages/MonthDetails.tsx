@@ -430,12 +430,14 @@ export default function MonthDetails() {
             </p>
           </div>
           <div className="flex gap-2 flex-wrap">
-            {previousMonths.length > 0 && (
-              <Button variant="outline" onClick={() => setShowPreviousMonths(true)}>
-                <History className="h-4 w-4 mr-2" />
-                Previous Months
-              </Button>
-            )}
+            <Button 
+              variant="outline" 
+              onClick={() => setShowPreviousMonths(true)}
+              disabled={previousMonths.length === 0}
+            >
+              <History className="h-4 w-4 mr-2" />
+              View Previous Months
+            </Button>
             
             {isManager && activeMonth && (
               <DropdownMenu>
