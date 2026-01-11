@@ -9,12 +9,15 @@ interface BazarDateCardProps {
   members: User[];
 }
 
-export default function BazarDateCard({ bazarDates, members }: BazarDateCardProps) {
+export default function BazarDateCard({ bazarDates = [], members = [] }: BazarDateCardProps) {
   const getMemberName = (userId: string) => {
     return members.find(m => m.id === userId)?.fullName || 'Unknown';
   };
 
-  const sortedDates = [...bazarDates].sort((a, b) => 
+  // Ensure bazarDates is always an array
+  const safeBazarDates = Array.isArray(bazarDates) ? bazarDates : [];
+  
+  const sortedDates = [...safeBazarDates].sort((a, b) =>
     new Date(a.date).getTime() - new Date(b.date).getTime()
   );
 
@@ -30,7 +33,7 @@ export default function BazarDateCard({ bazarDates, members }: BazarDateCardProp
         </CardTitle>
       </CardHeader>
       <CardContent>
-        {bazarDates.length === 0 ? (
+        {safeBazarDates.length === 0 ? (
           <div className="text-center py-6 text-muted-foreground">
             <Calendar className="h-10 w-10 mx-auto mb-2 opacity-50" />
             <p className="text-sm">No bazar dates scheduled</p>
