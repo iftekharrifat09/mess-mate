@@ -198,7 +198,21 @@ export async function isMessCodeUnique(code: string, excludeMessId?: string): Pr
   if (shouldUseBackend()) {
     const result = await api.checkMessCodeAPI(code, excludeMessId);
     if (result.success && result.data) {
-      return (result.data as any).isUnique;
+      const data = result.data as any;
+      // Backend returns { exists: boolean } (not { isUnique })
+      const exists = !!data.exists;
+
+      // If we're editing an existing mess and the code didn't actually change,
+      // treat it as unique even though it exists.
+      if (excludeMessId) {
+        const currentMess = await getMessById(excludeMessId);
+        const currentCode = currentMess?.messCode || (currentMess as any)?.code;
+        if (currentCode && currentCode.toUpperCase() === code.toUpperCase()) {
+          return true;
+        }
+      }
+
+      return !exists;
     }
   }
   return storage.isMessCodeUnique(code, excludeMessId);
@@ -431,7 +445,8 @@ export async function getMealCostsByMonthId(monthId: string): Promise<MealCost[]
       const result = await api.getMealCostsAPI(monthId);
       if (result.success && result.data) {
         const data = result.data as any;
-        const mealCosts = data.mealCosts || (Array.isArray(data) ? data : []);
+        // Backend returns { success: true, costs: [...] }
+        const mealCosts = data.costs || data.mealCosts || (Array.isArray(data) ? data : []);
         return Array.isArray(mealCosts) ? mealCosts : [];
       }
       if (result.usingLocalStorage) {
@@ -449,7 +464,9 @@ export async function createMealCost(costData: Omit<MealCost, 'id' | 'createdAt'
   if (shouldUseBackend()) {
     const result = await api.createMealCostAPI(costData);
     if (result.success && result.data) {
-      return (result.data as any).mealCost || result.data;
+      const data = result.data as any;
+      // Backend returns { success: true, cost: {...} }
+      return data.cost || data.mealCost || data;
     }
     if (result.usingLocalStorage) {
       showFallbackAlert();
@@ -462,7 +479,8 @@ export async function updateMealCost(id: string, updates: Partial<MealCost>): Pr
   if (shouldUseBackend()) {
     const result = await api.updateMealCostAPI(id, updates);
     if (result.success && result.data) {
-      return result.data as any;
+      const data = result.data as any;
+      return data.cost || data.mealCost || data;
     }
     if (result.usingLocalStorage) {
       showFallbackAlert();
@@ -494,7 +512,8 @@ export async function getOtherCostsByMonthId(monthId: string): Promise<OtherCost
       const result = await api.getOtherCostsAPI(monthId);
       if (result.success && result.data) {
         const data = result.data as any;
-        const otherCosts = data.otherCosts || (Array.isArray(data) ? data : []);
+        // Backend returns { success: true, costs: [...] }
+        const otherCosts = data.costs || data.otherCosts || (Array.isArray(data) ? data : []);
         return Array.isArray(otherCosts) ? otherCosts : [];
       }
       if (result.usingLocalStorage) {
@@ -512,7 +531,9 @@ export async function createOtherCost(costData: Omit<OtherCost, 'id' | 'createdA
   if (shouldUseBackend()) {
     const result = await api.createOtherCostAPI(costData);
     if (result.success && result.data) {
-      return (result.data as any).otherCost || result.data;
+      const data = result.data as any;
+      // Backend returns { success: true, cost: {...} }
+      return data.cost || data.otherCost || data;
     }
     if (result.usingLocalStorage) {
       showFallbackAlert();
@@ -525,7 +546,8 @@ export async function updateOtherCost(id: string, updates: Partial<OtherCost>): 
   if (shouldUseBackend()) {
     const result = await api.updateOtherCostAPI(id, updates);
     if (result.success && result.data) {
-      return result.data as any;
+      const data = result.data as any;
+      return data.cost || data.otherCost || data;
     }
     if (result.usingLocalStorage) {
       showFallbackAlert();
@@ -770,13 +792,14 @@ export async function deleteNotice(id: string): Promise<boolean> {
 
 export async function getBazarDatesByMessId(messId: string | undefined): Promise<BazarDate[]> {
   if (!messId) return [];
-  
+
   if (shouldUseBackend()) {
     try {
       const result = await api.getBazarDatesAPI(messId);
       if (result.success && result.data) {
         const data = result.data as any;
-        const bazarDates = data.bazarDates || (Array.isArray(data) ? data : []);
+        // Backend returns { success: true, dates: [...] }
+        const bazarDates = data.dates || data.bazarDates || (Array.isArray(data) ? data : []);
         return Array.isArray(bazarDates) ? bazarDates : [];
       }
       if (result.usingLocalStorage) {
@@ -792,9 +815,18 @@ export async function getBazarDatesByMessId(messId: string | undefined): Promise
 
 export async function createBazarDate(dateData: Omit<BazarDate, 'id' | 'createdAt'>): Promise<BazarDate> {
   if (shouldUseBackend()) {
-    const result = await api.createBazarDateAPI(dateData as any);
+    // Backend accepts bulk create: { userId, userName, dates: string[] }
+    const payload = {
+      userId: (dateData as any).userId,
+      userName: (dateData as any).userName || '',
+      dates: [(dateData as any).date],
+    };
+
+    const result = await api.createBazarDateAPI(payload);
     if (result.success && result.data) {
-      return (result.data as any).bazarDate || result.data;
+      const data = result.data as any;
+      const created = data.dates || data.bazarDates || [];
+      return Array.isArray(created) && created[0] ? created[0] : (created as any);
     }
     if (result.usingLocalStorage) {
       showFallbackAlert();
@@ -805,11 +837,29 @@ export async function createBazarDate(dateData: Omit<BazarDate, 'id' | 'createdA
 
 export async function updateBazarDate(id: string, updates: Partial<BazarDate>): Promise<BazarDate | undefined> {
   if (shouldUseBackend()) {
-    const result = await api.updateBazarDateAPI(id, updates);
-    if (result.success && result.data) {
-      return result.data as any;
+    // Backend doesn't provide a PUT for bazar dates; emulate by delete + create.
+    if (!updates.userId || !updates.date) {
+      return undefined;
     }
-    if (result.usingLocalStorage) {
+
+    const del = await api.deleteBazarDateAPI(id);
+    if (!del.success && del.usingLocalStorage) {
+      showFallbackAlert();
+    }
+
+    const create = await api.createBazarDateAPI({
+      userId: updates.userId,
+      userName: (updates as any).userName || '',
+      dates: [updates.date],
+    });
+
+    if (create.success && create.data) {
+      const data = create.data as any;
+      const created = data.dates || [];
+      return Array.isArray(created) && created[0] ? created[0] : undefined;
+    }
+
+    if (create.usingLocalStorage) {
       showFallbackAlert();
     }
   }
