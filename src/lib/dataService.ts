@@ -481,6 +481,16 @@ export async function deleteOtherCost(id: string): Promise<boolean> {
 // ============================================
 
 export async function getJoinRequests(): Promise<JoinRequest[]> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.getJoinRequestsAPI();
+      if (result.success && result.data) {
+        return (result.data as any).joinRequests || result.data || [];
+      }
+    } catch (error) {
+      console.error('Error fetching join requests from API:', error);
+    }
+  }
   return storage.getJoinRequests();
 }
 
