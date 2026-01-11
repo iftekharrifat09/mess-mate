@@ -39,7 +39,7 @@ import { formatCurrency } from '@/lib/calculations';
 import { Navigate } from 'react-router-dom';
 
 export default function Deposits() {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const [deposits, setDeposits] = useState<Deposit[]>([]);
   const [members, setMembers] = useState<User[]>([]);
@@ -55,28 +55,28 @@ export default function Deposits() {
 
   const isManager = user?.role === 'manager';
 
-  // Only managers can access this page
-  if (!isManager) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
   useEffect(() => {
-    loadData();
-  }, [user]);
+    if (!authLoading && user) {
+      loadData();
+    }
+  }, [user, authLoading]);
 
   const loadData = async () => {
     if (!user) return;
     setLoading(true);
     
     try {
-      const activeMonth = await dataService.getActiveMonth(user.messId);
+      const [activeMonth, membersData] = await Promise.all([
+        dataService.getActiveMonth(user.messId),
+        dataService.getMessMembers(user.messId),
+      ]);
+      
       if (activeMonth) {
         const depositsData = await dataService.getDepositsByMonthId(activeMonth.id);
         setDeposits(depositsData.sort((a, b) => 
           new Date(b.date).getTime() - new Date(a.date).getTime()
         ));
       }
-      const membersData = await dataService.getMessMembers(user.messId);
       setMembers(membersData);
     } catch (error) {
       console.error('Error loading deposits:', error);
@@ -176,7 +176,7 @@ export default function Deposits() {
 
   const totalDeposits = deposits.reduce((sum, d) => sum + d.amount, 0);
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
@@ -192,18 +192,21 @@ export default function Deposits() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Deposits</h1>
-            <p className="text-muted-foreground">Manage member deposits</p>
+            <p className="text-muted-foreground">
+              {isManager ? 'Manage member deposits' : 'View deposit records (read-only)'}
+            </p>
           </div>
-          <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
-            setIsAddDialogOpen(open);
-            if (!open) resetForm();
-          }}>
-            <DialogTrigger asChild>
-              <Button className="gradient-primary">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Deposit
-              </Button>
-            </DialogTrigger>
+          {isManager && (
+            <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+              setIsAddDialogOpen(open);
+              if (!open) resetForm();
+            }}>
+              <DialogTrigger asChild>
+                <Button className="gradient-primary">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Deposit
+                </Button>
+              </DialogTrigger>
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>{editingDeposit ? 'Edit Deposit' : 'Add Deposit'}</DialogTitle>
@@ -270,7 +273,8 @@ export default function Deposits() {
                 </DialogFooter>
               </form>
             </DialogContent>
-          </Dialog>
+            </Dialog>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -311,7 +315,7 @@ export default function Deposits() {
                       <TableHead>Member</TableHead>
                       <TableHead>Amount</TableHead>
                       <TableHead>Note</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      {isManager && <TableHead className="text-right">Actions</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -327,25 +331,27 @@ export default function Deposits() {
                             {deposit.note || '-'}
                           </span>
                         </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button 
-                              size="sm" 
-                              variant="ghost"
-                              onClick={() => handleEdit(deposit)}
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="ghost" 
-                              className="text-destructive"
-                              onClick={() => handleDelete(deposit.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
+                        {isManager && (
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button 
+                                size="sm" 
+                                variant="ghost"
+                                onClick={() => handleEdit(deposit)}
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                className="text-destructive"
+                                onClick={() => handleDelete(deposit.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>
