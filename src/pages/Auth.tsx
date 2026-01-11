@@ -10,7 +10,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Utensils, Mail, User, Phone, Building, LogIn, UserPlus, ArrowLeft, KeyRound, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getUserByEmail, getPendingJoinRequestsForUser } from '@/lib/storage';
-import { generateOTP, saveOTP, verifyOTP, getOTPExpiry } from '@/lib/otp';
+import { verifyOTP, getOTPExpiry } from '@/lib/otp';
+import { sendOtpAPI } from '@/lib/api';
 import { updatePassword } from '@/contexts/AuthContext';
 
 type AuthMode = 'login' | 'signup';
@@ -188,8 +189,9 @@ export default function Auth() {
     setIsLoading(false);
   };
 
-  const handleSendOTP = (e: React.FormEvent) => {
+  const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
+    setIsLoading(true);
     
     const user = getUserByEmail(resetEmail);
     if (!user) {
@@ -198,26 +200,32 @@ export default function Auth() {
         description: 'No account exists with this email address.',
         variant: 'destructive',
       });
+      setIsLoading(false);
       return;
     }
     
-    // Generate and save OTP
-    const newOTP = generateOTP();
-    saveOTP(resetEmail, newOTP);
-    setLastOtpSent(new Date());
+    // Send OTP via backend
+    const result = await sendOtpAPI('password-reset', resetEmail);
     
-    // In production, this would send an email
-    // For demo, show a message (but not the OTP for security)
-    toast({
-      title: 'OTP Sent',
-      description: `Please check your email for the verification code. Valid for ${getOTPExpiry()} minutes. (Demo: ${newOTP})`,
-      duration: 10000,
-    });
+    if (result.success) {
+      setLastOtpSent(new Date());
+      toast({
+        title: 'OTP Sent',
+        description: `Please check your email for the verification code. Valid for ${getOTPExpiry()} minutes.`,
+      });
+      setResetStep('otp');
+    } else {
+      toast({
+        title: 'Mail sending Unsuccessful',
+        description: result.error || 'Failed to send OTP. Please try again.',
+        variant: 'destructive',
+      });
+    }
     
-    setResetStep('otp');
+    setIsLoading(false);
   };
 
-  const handleResendOTP = () => {
+  const handleResendOTP = async () => {
     if (lastOtpSent && new Date().getTime() - lastOtpSent.getTime() < 60000) {
       toast({
         title: 'Please wait',
@@ -229,17 +237,23 @@ export default function Auth() {
     
     setIsResending(true);
     
-    const newOTP = generateOTP();
-    saveOTP(resetEmail, newOTP);
-    setLastOtpSent(new Date());
+    const result = await sendOtpAPI('password-reset', resetEmail);
     
-    toast({
-      title: 'OTP Resent',
-      description: `A new OTP has been sent to your email. (Demo: ${newOTP})`,
-      duration: 10000,
-    });
+    if (result.success) {
+      setLastOtpSent(new Date());
+      toast({
+        title: 'OTP Resent',
+        description: 'A new OTP has been sent to your email.',
+      });
+    } else {
+      toast({
+        title: 'Mail sending Unsuccessful',
+        description: result.error || 'Failed to send OTP. Please try again.',
+        variant: 'destructive',
+      });
+    }
     
-    setTimeout(() => setIsResending(false), 1000);
+    setIsResending(false);
   };
 
   const handleVerifyOTP = (e: React.FormEvent) => {

@@ -18,8 +18,8 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { updateUser, getUserByEmail } from '@/lib/storage';
-import { updateProfileAPI } from '@/lib/api';
-import { generateOTP, saveOTP, verifyOTP, getOTPExpiry } from '@/lib/otp';
+import { updateProfileAPI, sendOtpAPI } from '@/lib/api';
+import { verifyOTP, getOTPExpiry } from '@/lib/otp';
 import { User, Phone, Mail, Check, X, Edit2, Shield, Lock, KeyRound } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -112,7 +112,7 @@ export default function Profile() {
     });
   };
 
-  const handlePasswordVerify = () => {
+  const handlePasswordVerify = async () => {
     if (!user) return;
     // Verify current password (simple check using localStorage)
     const passwords = JSON.parse(localStorage.getItem('mess_manager_passwords') || '{}');
@@ -126,20 +126,23 @@ export default function Profile() {
       return;
     }
 
-    // Send OTP - don't show in toast for security
-    const newOTP = generateOTP();
-    saveOTP(newEmail, newOTP);
+    // Send OTP via backend
+    const result = await sendOtpAPI('email-change', newEmail);
     
-    // In production, this would send via email
-    // For demo, we'll show a generic message
-    toast({
-      title: 'OTP sent',
-      description: `Please check your email for the verification code. (Demo: ${newOTP})`,
-      duration: 10000,
-    });
-    
-    setEmailStep('otp');
-    setLastOtpSent(new Date());
+    if (result.success) {
+      toast({
+        title: 'OTP sent',
+        description: 'Please check your email for the verification code.',
+      });
+      setEmailStep('otp');
+      setLastOtpSent(new Date());
+    } else {
+      toast({
+        title: 'Mail sending Unsuccessful',
+        description: result.error || 'Failed to send OTP. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleVerifyOTP = () => {
@@ -170,37 +173,48 @@ export default function Profile() {
     toast({ title: 'Email updated and verified' });
   };
 
-  const handleResendOTP = () => {
+  const handleResendOTP = async () => {
     if (lastOtpSent && new Date().getTime() - lastOtpSent.getTime() < 60000) {
       toast({ title: 'Please wait before requesting a new OTP', variant: 'destructive' });
       return;
     }
     
-    const newOTP = generateOTP();
-    saveOTP(newEmail, newOTP);
-    setLastOtpSent(new Date());
+    const result = await sendOtpAPI('email-change', newEmail);
     
-    toast({
-      title: 'OTP sent',
-      description: `Please check your email for the verification code. (Demo: ${newOTP})`,
-      duration: 10000,
-    });
+    if (result.success) {
+      setLastOtpSent(new Date());
+      toast({
+        title: 'OTP sent',
+        description: 'Please check your email for the verification code.',
+      });
+    } else {
+      toast({
+        title: 'Mail sending Unsuccessful',
+        description: result.error || 'Failed to send OTP. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const handleVerifyCurrentEmail = () => {
+  const handleVerifyCurrentEmail = async () => {
     if (!user) return;
     
-    const newOTP = generateOTP();
-    saveOTP(user.email, newOTP);
+    const result = await sendOtpAPI('email-verification', user.email);
     
-    toast({
-      title: 'Verification OTP sent',
-      description: `Please check your email for the verification code. (Demo: ${newOTP})`,
-      duration: 10000,
-    });
-    
-    setIsVerifyingEmail(true);
-    setLastOtpSent(new Date());
+    if (result.success) {
+      toast({
+        title: 'Verification OTP sent',
+        description: 'Please check your email for the verification code.',
+      });
+      setIsVerifyingEmail(true);
+      setLastOtpSent(new Date());
+    } else {
+      toast({
+        title: 'Mail sending Unsuccessful',
+        description: result.error || 'Failed to send OTP. Please try again.',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleVerifyCurrentEmailOTP = () => {
@@ -513,14 +527,25 @@ export default function Profile() {
                   maxLength={6}
                 />
               </div>
-              <Button variant="ghost" className="w-full" onClick={() => {
-                const newOTP = generateOTP();
-                saveOTP(user.email, newOTP);
-                toast({
-                  title: 'OTP sent',
-                  description: `Please check your email for the verification code. (Demo: ${newOTP})`,
-                  duration: 10000,
-                });
+              <Button variant="ghost" className="w-full" onClick={async () => {
+                if (lastOtpSent && new Date().getTime() - lastOtpSent.getTime() < 60000) {
+                  toast({ title: 'Please wait before requesting a new OTP', variant: 'destructive' });
+                  return;
+                }
+                const result = await sendOtpAPI('email-verification', user.email);
+                if (result.success) {
+                  setLastOtpSent(new Date());
+                  toast({
+                    title: 'OTP sent',
+                    description: 'Please check your email for the verification code.',
+                  });
+                } else {
+                  toast({
+                    title: 'Mail sending Unsuccessful',
+                    description: result.error || 'Failed to send OTP. Please try again.',
+                    variant: 'destructive',
+                  });
+                }
               }}>
                 Resend OTP
               </Button>
