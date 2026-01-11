@@ -41,7 +41,7 @@ import { formatCurrency } from '@/lib/calculations';
 import { Navigate } from 'react-router-dom';
 
 export default function MealCosts() {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const { toast } = useToast();
   const [mealCosts, setMealCosts] = useState<MealCost[]>([]);
   const [members, setMembers] = useState<User[]>([]);
@@ -59,10 +59,21 @@ export default function MealCosts() {
   const isManager = user?.role === 'manager';
 
   useEffect(() => {
-    if (isManager) {
+    if (!authLoading && isManager) {
       loadData();
     }
-  }, [user, isManager]);
+  }, [user, isManager, authLoading]);
+
+  // Wait for auth to finish loading
+  if (authLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   if (!isManager) {
     return <Navigate to="/dashboard" replace />;

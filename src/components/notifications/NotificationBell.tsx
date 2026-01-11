@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -9,14 +9,7 @@ import {
 } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/AuthContext';
-import {
-  getNotificationsByUserId,
-  getUnseenNotificationsCount,
-  markNotificationAsSeen,
-  markAllNotificationsAsSeen,
-  deleteNotification,
-  deleteAllNotifications,
-} from '@/lib/storage';
+import * as dataService from '@/lib/dataService';
 import { Notification } from '@/types';
 import { format } from 'date-fns';
 import { Trash2, Check, CheckCheck } from 'lucide-react';
@@ -27,38 +20,60 @@ export default function NotificationBell() {
   const [unseenCount, setUnseenCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
 
+  const loadNotifications = useCallback(async () => {
+    if (!user) return;
+    try {
+      const notifs = await dataService.getNotificationsByUserId(user.id);
+      setNotifications(notifs);
+      const count = await dataService.getUnseenNotificationsCount(user.id);
+      setUnseenCount(count);
+    } catch (error) {
+      console.error('Error loading notifications:', error);
+    }
+  }, [user]);
+
   useEffect(() => {
     if (user) {
       loadNotifications();
     }
-  }, [user, isOpen]);
+  }, [user, isOpen, loadNotifications]);
 
-  const loadNotifications = () => {
+  const handleMarkAsSeen = async (id: string) => {
+    try {
+      await dataService.markNotificationAsSeen(id);
+      loadNotifications();
+    } catch (error) {
+      console.error('Error marking notification as seen:', error);
+    }
+  };
+
+  const handleMarkAllAsSeen = async () => {
     if (!user) return;
-    setNotifications(getNotificationsByUserId(user.id));
-    setUnseenCount(getUnseenNotificationsCount(user.id));
+    try {
+      await dataService.markAllNotificationsAsSeen(user.id);
+      loadNotifications();
+    } catch (error) {
+      console.error('Error marking all notifications as seen:', error);
+    }
   };
 
-  const handleMarkAsSeen = (id: string) => {
-    markNotificationAsSeen(id);
-    loadNotifications();
+  const handleDelete = async (id: string) => {
+    try {
+      await dataService.deleteNotification(id);
+      loadNotifications();
+    } catch (error) {
+      console.error('Error deleting notification:', error);
+    }
   };
 
-  const handleMarkAllAsSeen = () => {
+  const handleDeleteAll = async () => {
     if (!user) return;
-    markAllNotificationsAsSeen(user.id);
-    loadNotifications();
-  };
-
-  const handleDelete = (id: string) => {
-    deleteNotification(id);
-    loadNotifications();
-  };
-
-  const handleDeleteAll = () => {
-    if (!user) return;
-    deleteAllNotifications(user.id);
-    loadNotifications();
+    try {
+      await dataService.deleteAllNotifications(user.id);
+      loadNotifications();
+    } catch (error) {
+      console.error('Error deleting all notifications:', error);
+    }
   };
 
   const getNotificationIcon = (type: Notification['type']) => {

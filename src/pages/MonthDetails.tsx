@@ -65,7 +65,7 @@ interface PreviousMonthSummary {
 }
 
 export default function MonthDetails() {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
   const [activeMonth, setActiveMonth] = useState<Month | null>(null);
@@ -83,8 +83,10 @@ export default function MonthDetails() {
   const isManager = user?.role === 'manager';
 
   useEffect(() => {
-    loadData();
-  }, [user]);
+    if (!authLoading && user) {
+      loadData();
+    }
+  }, [user, authLoading]);
 
   const loadData = async () => {
     if (!user) return;
@@ -308,7 +310,7 @@ export default function MonthDetails() {
     return acc;
   }, {} as Record<string, { meals: number; deposit: number; mealCost: number; otherCost: number }>);
 
-  if (isLoading) {
+  if (authLoading || isLoading) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center min-h-[400px]">
