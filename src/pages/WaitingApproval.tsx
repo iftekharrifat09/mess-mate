@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Utensils, Clock, ArrowLeft, RefreshCw } from 'lucide-react';
-import { getJoinRequests, getMesses, getUserByEmail } from '@/lib/storage';
+import { Utensils, Clock, ArrowLeft, RefreshCw, Loader2 } from 'lucide-react';
+import * as dataService from '@/lib/dataService';
 import { useAuth } from '@/contexts/AuthContext';
 import { Mess } from '@/types';
 
@@ -12,44 +12,68 @@ export default function WaitingApproval() {
   const { user, refreshUser, logout } = useAuth();
   const [pendingMesses, setPendingMesses] = useState<Mess[]>([]);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     if (user) {
+      // If user is already approved and has messId, redirect to dashboard
+      if (user.isApproved && user.messId) {
+        navigate('/dashboard');
+        return;
+      }
       loadPendingRequests();
     }
   }, [user]);
 
-  const loadPendingRequests = () => {
+  const loadPendingRequests = async () => {
     if (!user) return;
+    setIsLoading(true);
     
-    const requests = getJoinRequests().filter(
-      r => r.userId === user.id && r.status === 'pending'
-    );
-    
-    const messes = getMesses();
-    const pending = requests.map(r => messes.find(m => m.id === r.messId)).filter(Boolean) as Mess[];
-    setPendingMesses(pending);
+    try {
+      const requests = await dataService.getJoinRequestsByUserId(user.id);
+      const pendingRequests = requests.filter(r => r.status === 'pending');
+      
+      const messes: Mess[] = [];
+      for (const r of pendingRequests) {
+        const mess = await dataService.getMessById(r.messId);
+        if (mess) {
+          messes.push(mess);
+        }
+      }
+      setPendingMesses(messes);
+    } catch (error) {
+      console.error('Error loading pending requests:', error);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const handleRefresh = () => {
+  const handleRefresh = async () => {
     setIsRefreshing(true);
     
-    // Check if user has been approved
-    refreshUser();
-    
-    const updatedUser = user ? getUserByEmail(user.email) : null;
-    
-    if (updatedUser?.isApproved && updatedUser?.messId) {
-      navigate('/dashboard');
-      return;
-    }
-    
-    loadPendingRequests();
-    
-    setTimeout(() => {
+    try {
+      // Refresh user data from backend
+      await refreshUser();
+      
+      // Small delay to allow state to update
+      setTimeout(() => {
+        // Check if user has been approved after refresh
+        // The refreshUser will update the user state, so we check on next render
+        loadPendingRequests();
+        setIsRefreshing(false);
+      }, 500);
+    } catch (error) {
+      console.error('Error refreshing user:', error);
       setIsRefreshing(false);
-    }, 500);
+    }
   };
+
+  // Check if user is now approved after state updates
+  useEffect(() => {
+    if (user?.isApproved && user?.messId) {
+      navigate('/dashboard');
+    }
+  }, [user?.isApproved, user?.messId]);
 
   const handleLogout = () => {
     logout();
@@ -78,7 +102,11 @@ export default function WaitingApproval() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {pendingMesses.length > 0 && (
+            {isLoading ? (
+              <div className="flex justify-center py-4">
+                <Loader2 className="h-6 w-6 animate-spin text-primary" />
+              </div>
+            ) : pendingMesses.length > 0 ? (
               <div className="space-y-2">
                 <p className="text-sm text-muted-foreground text-center">
                   Pending requests for:
@@ -91,6 +119,11 @@ export default function WaitingApproval() {
                     <p className="font-medium text-foreground">{mess.name}</p>
                   </div>
                 ))}
+              </div>
+            ) : (
+              <div className="text-center py-4">
+                <p className="text-sm text-muted-foreground">No pending requests found.</p>
+                <p className="text-xs text-muted-foreground mt-1">Try joining a mess first.</p>
               </div>
             )}
 
