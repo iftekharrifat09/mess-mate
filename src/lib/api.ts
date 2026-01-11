@@ -1,4 +1,4 @@
-import { API_BASE_URL, USE_BACKEND, setMongoDbConnected, setBackendAvailable, isMongoDbConnected, isBackendAvailable, isHealthCheckValid, setHealthCheckInProgress, isHealthCheckInProgress } from './config';
+import { API_BASE_URL, USE_BACKEND, CONFIG, setMongoDbConnected, setBackendAvailable, isMongoDbConnected, isBackendAvailable, isHealthCheckValid, setHealthCheckInProgress, isHealthCheckInProgress } from './config';
 import { toast } from '@/hooks/use-toast';
 
 // Token management
@@ -43,7 +43,7 @@ export async function checkMongoDbStatus(): Promise<boolean> {
   healthCheckPromise = (async () => {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 second timeout for health check
 
       const response = await fetch(`${API_BASE_URL.replace('/api', '')}/api/health`, {
         method: 'GET',
@@ -67,7 +67,7 @@ export async function checkMongoDbStatus(): Promise<boolean> {
       initialHealthCheckDone = true;
       return false;
     } catch (error) {
-      console.log('Backend health check failed - using localStorage:', error);
+      console.log('Backend health check failed - using localStorage');
       setMongoDbConnected(false);
       setBackendAvailable(false);
       initialHealthCheckDone = true;
@@ -86,8 +86,13 @@ export function isInitialHealthCheckDone(): boolean {
   return initialHealthCheckDone;
 }
 
-// Show localStorage fallback alert
+// Show localStorage fallback alert - debounced to avoid spam
+let lastFallbackAlert = 0;
 function showLocalStorageFallbackAlert() {
+  const now = Date.now();
+  if (now - lastFallbackAlert < 5000) return; // Only show once every 5 seconds
+  lastFallbackAlert = now;
+  
   toast({
     title: "MongoDB not connected",
     description: "Saving data to Local Storage",
@@ -95,7 +100,7 @@ function showLocalStorageFallbackAlert() {
   });
 }
 
-// API request helper
+// API request helper with timeout
 export async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -111,11 +116,18 @@ export async function apiRequest<T>(
     ...options.headers,
   };
 
+  // Create AbortController for timeout
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), CONFIG.api.timeout);
+
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
       ...options,
       headers,
+      signal: controller.signal,
     });
+
+    clearTimeout(timeoutId);
 
     const data = await response.json();
 
@@ -136,8 +148,16 @@ export async function apiRequest<T>(
     setBackendAvailable(true);
 
     return { success: true, data };
-  } catch (error) {
-    console.error('API request failed:', error);
+  } catch (error: any) {
+    clearTimeout(timeoutId);
+    
+    // Handle timeout specifically
+    if (error.name === 'AbortError') {
+      console.log('API request timed out:', endpoint);
+      return { success: false, error: 'Request timed out', usingLocalStorage: true };
+    }
+    
+    console.error('API request failed:', endpoint);
     setMongoDbConnected(false);
     setBackendAvailable(false);
     return { success: false, error: 'Network error - using local storage', usingLocalStorage: true };
