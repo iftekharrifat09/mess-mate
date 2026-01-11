@@ -36,21 +36,40 @@ export default function JoinRequests() {
     
     setIsLoading(true);
     try {
+      console.log('Loading join requests for messId:', user.messId);
+      
       // Get pending join requests for this mess
       const requests = await dataService.getJoinRequests();
+      console.log('All join requests:', requests);
+      
       const pendingForMess = requests.filter(
         r => r.messId === user.messId && r.status === 'pending'
       );
+      console.log('Pending for this mess:', pendingForMess);
       
       // Get user details for each request
       const requestsWithUsers: PendingRequest[] = [];
       for (const r of pendingForMess) {
-        const requestUser = await dataService.getUserById(r.userId);
+        // Use data from the populated request if available
+        const requestUser = (r as any).userName ? {
+          id: r.userId,
+          fullName: (r as any).userName,
+          email: (r as any).userEmail || '',
+          phone: (r as any).userPhone || '',
+        } as User : await dataService.getUserById(r.userId);
+        
         if (requestUser) {
-          requestsWithUsers.push({ ...r, user: requestUser });
+          requestsWithUsers.push({ 
+            ...r, 
+            user: {
+              ...requestUser,
+              fullName: requestUser.fullName || (requestUser as any).name || 'Unknown'
+            } as User
+          });
         }
       }
       
+      console.log('Requests with users:', requestsWithUsers);
       setPendingRequests(requestsWithUsers);
     } catch (error) {
       console.error('Error loading pending requests:', error);
