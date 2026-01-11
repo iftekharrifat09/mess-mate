@@ -152,12 +152,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     }
 
-    // Fallback to localStorage
+    // Fallback to localStorage - reload the user by ID or email
     if (user) {
-      const updatedUser = getUserByEmail(user.email);
+      // Get fresh user data from storage by ID
+      const allUsers = JSON.parse(localStorage.getItem('mess_manager_users') || '[]');
+      const updatedUser = allUsers.find((u: User) => u.id === user.id) as User | undefined;
+      
       if (updatedUser) {
         setUser(updatedUser);
         saveCurrentUser(updatedUser);
+      } else {
+        // Try by email as fallback
+        const byEmail = getUserByEmail(user.email);
+        if (byEmail) {
+          setUser(byEmail);
+          saveCurrentUser(byEmail);
+        }
       }
     }
   };

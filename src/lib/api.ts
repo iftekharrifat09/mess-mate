@@ -1,4 +1,4 @@
-import { API_BASE_URL, USE_BACKEND, setMongoDbConnected, setBackendAvailable, isMongoDbConnected, isBackendAvailable, isHealthCheckValid } from './config';
+import { API_BASE_URL, USE_BACKEND, setMongoDbConnected, setBackendAvailable, isMongoDbConnected, isBackendAvailable, isHealthCheckValid, setHealthCheckInProgress, isHealthCheckInProgress } from './config';
 import { toast } from '@/hooks/use-toast';
 
 // Token management
@@ -18,17 +18,19 @@ export function removeToken(): void {
 
 // Check MongoDB connection status - with caching
 let healthCheckPromise: Promise<boolean> | null = null;
+let initialHealthCheckDone = false;
 
 export async function checkMongoDbStatus(): Promise<boolean> {
   if (!USE_BACKEND) {
     setMongoDbConnected(false);
     setBackendAvailable(false);
+    initialHealthCheckDone = true;
     return false;
   }
 
   // Return cached result if still valid
-  if (isHealthCheckValid() && isMongoDbConnected()) {
-    return true;
+  if (isHealthCheckValid() && initialHealthCheckDone) {
+    return isMongoDbConnected();
   }
 
   // Deduplicate concurrent health check calls
@@ -36,6 +38,8 @@ export async function checkMongoDbStatus(): Promise<boolean> {
     return healthCheckPromise;
   }
 
+  setHealthCheckInProgress(true);
+  
   healthCheckPromise = (async () => {
     try {
       const controller = new AbortController();
@@ -54,22 +58,32 @@ export async function checkMongoDbStatus(): Promise<boolean> {
         const connected = data.mongodb === 'connected';
         setMongoDbConnected(connected);
         setBackendAvailable(true);
+        initialHealthCheckDone = true;
+        console.log('Health check result: MongoDB', connected ? 'connected' : 'disconnected');
         return connected;
       }
       setMongoDbConnected(false);
       setBackendAvailable(false);
+      initialHealthCheckDone = true;
       return false;
     } catch (error) {
-      console.error('Backend health check failed:', error);
+      console.log('Backend health check failed - using localStorage:', error);
       setMongoDbConnected(false);
       setBackendAvailable(false);
+      initialHealthCheckDone = true;
       return false;
     } finally {
       healthCheckPromise = null;
+      setHealthCheckInProgress(false);
     }
   })();
 
   return healthCheckPromise;
+}
+
+// Check if initial health check is done
+export function isInitialHealthCheckDone(): boolean {
+  return initialHealthCheckDone;
 }
 
 // Show localStorage fallback alert

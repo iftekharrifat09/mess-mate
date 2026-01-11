@@ -11,6 +11,7 @@ export const USE_BACKEND = import.meta.env.VITE_USE_BACKEND !== 'false';
 let mongoDbConnected = false;
 let backendAvailable = false;
 let lastHealthCheck = 0;
+let healthCheckInProgress = false;
 const HEALTH_CHECK_INTERVAL = 30000; // 30 seconds cache
 
 export function setMongoDbConnected(status: boolean) {
@@ -35,9 +36,25 @@ export function isHealthCheckValid() {
   return Date.now() - lastHealthCheck < HEALTH_CHECK_INTERVAL;
 }
 
+export function setHealthCheckInProgress(status: boolean) {
+  healthCheckInProgress = status;
+}
+
+export function isHealthCheckInProgress() {
+  return healthCheckInProgress;
+}
+
 // Check if we should use backend (backend available AND MongoDB connected)
+// If health check hasn't happened yet, return false to use localStorage
 export function shouldUseBackend() {
-  return USE_BACKEND && backendAvailable && mongoDbConnected;
+  // If USE_BACKEND is false, always use localStorage
+  if (!USE_BACKEND) return false;
+  
+  // If health check was done and backend+mongo are available, use backend
+  if (backendAvailable && mongoDbConnected) return true;
+  
+  // Otherwise use localStorage
+  return false;
 }
 
 // Demo configuration for testing

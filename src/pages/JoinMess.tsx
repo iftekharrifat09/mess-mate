@@ -63,23 +63,32 @@ export default function JoinMess() {
     e.preventDefault();
     
     setIsSearching(true);
+    setSearchResults([]);
     try {
       const query = searchQuery.trim();
       
       // Search by mess code first
       const byCode = await dataService.getMessByCode(query);
       if (byCode) {
-        setSearchResults([byCode]);
+        // Ensure messCode is set
+        const messWithCode = {
+          ...byCode,
+          messCode: byCode.messCode || (byCode as any).code || query,
+        };
+        setSearchResults([messWithCode]);
         setHasSearched(true);
         return;
       }
       
-      // Search by name
+      // Search by name in all messes
       const messes = await dataService.getMesses();
       const results = messes.filter(mess => 
         mess.name.toLowerCase().includes(query.toLowerCase()) ||
-        mess.messCode?.toLowerCase().includes(query.toLowerCase())
-      );
+        (mess.messCode || (mess as any).code || '').toLowerCase().includes(query.toLowerCase())
+      ).map(mess => ({
+        ...mess,
+        messCode: mess.messCode || (mess as any).code,
+      }));
       
       setSearchResults(results);
       setHasSearched(true);
