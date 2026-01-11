@@ -652,8 +652,12 @@ export async function removeMemberAPI(id: string) {
   return apiRequest(`/members/${id}`, { method: 'DELETE' });
 }
 
+// Backend supports manager transfer via PUT /members/:id with { role: "manager" }
 export async function makeManagerAPI(memberId: string) {
-  return apiRequest(`/members/${memberId}/make-manager`, { method: 'PUT' });
+  return apiRequest(`/members/${memberId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ role: 'manager' }),
+  });
 }
 
 // ============================================
