@@ -25,11 +25,11 @@ interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   isBackendConnected: boolean;
-  login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  login: (email: string, password: string) => Promise<{ success: boolean; error?: string; user?: User }>;
   registerManager: (data: ManagerRegistrationData) => Promise<{ success: boolean; error?: string }>;
   registerMember: (data: MemberRegistrationData) => Promise<{ success: boolean; error?: string; userId?: string }>;
   logout: () => void;
-  refreshUser: () => void;
+  refreshUser: () => Promise<void>;
 }
 
 interface ManagerRegistrationData {
@@ -125,7 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     initAuth();
   }, []);
 
-  const refreshUser = async () => {
+  const refreshUser = async (): Promise<void> => {
     if (USE_BACKEND && isMongoDbConnected() && getToken()) {
       try {
         const result = await getCurrentUserAPI();
@@ -162,7 +162,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const login = async (email: string, password: string): Promise<{ success: boolean; error?: string; user?: User }> => {
     // Try backend first if enabled
     if (USE_BACKEND) {
       const result = await loginAPI(email, password);
@@ -183,7 +183,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(localUser);
         saveCurrentUser(localUser);
         setIsBackendConnected(true);
-        return { success: true };
+        return { success: true, user: localUser };
       }
 
       // If USE_LOCAL_STORAGE error, fall through to localStorage
@@ -216,7 +216,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     setUser(existingUser);
     saveCurrentUser(existingUser);
-    return { success: true };
+    return { success: true, user: existingUser };
   };
 
   const registerManager = async (data: ManagerRegistrationData): Promise<{ success: boolean; error?: string }> => {

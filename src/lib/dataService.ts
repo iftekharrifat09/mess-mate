@@ -533,17 +533,22 @@ export async function getPendingJoinRequestsForUser(userId: string): Promise<Joi
   return storage.getPendingJoinRequestsForUser(userId);
 }
 
-export async function createJoinRequest(requestData: Omit<JoinRequest, 'id' | 'createdAt'>): Promise<JoinRequest> {
+export async function createJoinRequest(requestData: Omit<JoinRequest, 'id' | 'createdAt'> & { messCode?: string }): Promise<JoinRequest> {
   if (shouldUseBackend()) {
-    const result = await api.createJoinRequestAPI({ messId: requestData.messId });
+    const result = await api.createJoinRequestAPI({
+      messId: requestData.messId,
+      // Prefer messCode when available (backend supports both)
+      messCode: (requestData as any).messCode,
+    });
     if (result.success && result.data) {
-      return (result.data as any).joinRequest || result.data;
+      const data = result.data as any;
+      return data.joinRequest || data.request || data;
     }
     if (result.usingLocalStorage) {
       showFallbackAlert();
     }
   }
-  return storage.createJoinRequest(requestData);
+  return storage.createJoinRequest(requestData as any);
 }
 
 export async function updateJoinRequest(id: string, updates: Partial<JoinRequest>): Promise<JoinRequest | undefined> {
