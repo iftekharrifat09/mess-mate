@@ -288,7 +288,9 @@ export async function getMealsByMonthId(monthId: string): Promise<Meal[]> {
     try {
       const result = await api.getMealsAPI(monthId);
       if (result.success && result.data) {
-        return (result.data as any).meals || result.data || [];
+        const data = result.data as any;
+        const meals = data.meals || (Array.isArray(data) ? data : []);
+        return Array.isArray(meals) ? meals : [];
       }
       if (result.usingLocalStorage) {
         return storage.getMealsByMonthId(monthId);
@@ -357,7 +359,9 @@ export async function getDepositsByMonthId(monthId: string): Promise<Deposit[]> 
     try {
       const result = await api.getDepositsAPI(monthId);
       if (result.success && result.data) {
-        return (result.data as any).deposits || result.data || [];
+        const data = result.data as any;
+        const deposits = data.deposits || (Array.isArray(data) ? data : []);
+        return Array.isArray(deposits) ? deposits : [];
       }
       if (result.usingLocalStorage) {
         return storage.getDepositsByMonthId(monthId);
@@ -426,7 +430,9 @@ export async function getMealCostsByMonthId(monthId: string): Promise<MealCost[]
     try {
       const result = await api.getMealCostsAPI(monthId);
       if (result.success && result.data) {
-        return (result.data as any).mealCosts || result.data || [];
+        const data = result.data as any;
+        const mealCosts = data.mealCosts || (Array.isArray(data) ? data : []);
+        return Array.isArray(mealCosts) ? mealCosts : [];
       }
       if (result.usingLocalStorage) {
         return storage.getMealCostsByMonthId(monthId);
@@ -487,7 +493,9 @@ export async function getOtherCostsByMonthId(monthId: string): Promise<OtherCost
     try {
       const result = await api.getOtherCostsAPI(monthId);
       if (result.success && result.data) {
-        return (result.data as any).otherCosts || result.data || [];
+        const data = result.data as any;
+        const otherCosts = data.otherCosts || (Array.isArray(data) ? data : []);
+        return Array.isArray(otherCosts) ? otherCosts : [];
       }
       if (result.usingLocalStorage) {
         return storage.getOtherCostsByMonthId(monthId);
@@ -673,11 +681,12 @@ export async function getMessMembers(messId: string | undefined): Promise<User[]
       const result = await api.getMessMembersAPI(messId);
       console.log('API getMessMembers result:', result);
       if (result.success && result.data) {
-        const members = (result.data as any).members || result.data || [];
-        // Ensure fullName is set for all members
-        return members.map((m: any) => ({
+        const data = result.data as any;
+        const members = data.members || (Array.isArray(data) ? data : []);
+        // Ensure fullName is set
+        return (Array.isArray(members) ? members : []).map((m: any) => ({
           ...m,
-          fullName: m.fullName || m.name,
+          fullName: m.fullName || m.name || 'Unknown',
         }));
       }
       // Fallback to localStorage if API fails
@@ -766,7 +775,9 @@ export async function getBazarDatesByMessId(messId: string | undefined): Promise
     try {
       const result = await api.getBazarDatesAPI(messId);
       if (result.success && result.data) {
-        return (result.data as any).bazarDates || result.data || [];
+        const data = result.data as any;
+        const bazarDates = data.bazarDates || (Array.isArray(data) ? data : []);
+        return Array.isArray(bazarDates) ? bazarDates : [];
       }
       if (result.usingLocalStorage) {
         return storage.getBazarDatesByMessId(messId);
