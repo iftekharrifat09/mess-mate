@@ -94,12 +94,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               const localUser: User = {
                 id: apiUser.id,
                 email: apiUser.email,
-                fullName: apiUser.fullName || apiUser.name,
+                fullName: apiUser.name,
                 phone: apiUser.phone || '',
                 role: apiUser.role,
                 messId: apiUser.messId || '',
-                isApproved: apiUser.isApproved !== false,
-                isActive: apiUser.isActive !== false,
+                isApproved: true,
+                isActive: true,
                 emailVerified: apiUser.emailVerified || false,
                 createdAt: new Date().toISOString(),
               };
@@ -134,12 +134,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const localUser: User = {
             id: apiUser.id,
             email: apiUser.email,
-            fullName: apiUser.fullName || apiUser.name,
+            fullName: apiUser.name,
             phone: apiUser.phone || '',
             role: apiUser.role,
             messId: apiUser.messId || '',
-            isApproved: apiUser.isApproved !== false,
-            isActive: apiUser.isActive !== false,
+            isApproved: true,
+            isActive: true,
             emailVerified: apiUser.emailVerified || false,
             createdAt: new Date().toISOString(),
           };
@@ -171,12 +171,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const localUser: User = {
           id: result.user.id,
           email: result.user.email,
-          fullName: result.user.fullName || result.user.name,
+          fullName: result.user.name,
           phone: result.user.phone || '',
           role: result.user.role,
           messId: result.user.messId || '',
-          isApproved: result.user.isApproved !== false,
-          isActive: result.user.isActive !== false,
+          isApproved: true,
+          isActive: true,
           emailVerified: result.user.emailVerified || false,
           createdAt: new Date().toISOString(),
         };

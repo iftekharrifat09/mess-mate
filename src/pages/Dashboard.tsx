@@ -1,5 +1,4 @@
 import { useEffect, useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import gsap from 'gsap';
 import { useAuth } from '@/contexts/AuthContext';
@@ -20,7 +19,6 @@ import { Users } from 'lucide-react';
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const navigate = useNavigate();
   const [monthSummary, setMonthSummary] = useState<MonthSummary | null>(null);
   const [personalSummary, setPersonalSummary] = useState<MemberSummary | null>(null);
   const [membersSummary, setMembersSummary] = useState<MemberSummary[]>([]);
@@ -30,18 +28,8 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const headerRef = useRef<HTMLDivElement>(null);
 
-  // Redirect unapproved members to join-mess or waiting-approval
   useEffect(() => {
-    if (user && user.role === 'member') {
-      if (!user.messId || !user.isApproved) {
-        // Check if they have pending requests
-        navigate('/join-mess');
-      }
-    }
-  }, [user, navigate]);
-
-  useEffect(() => {
-    if (user && (user.role === 'manager' || (user.messId && user.isApproved))) {
+    if (user) {
       loadDashboardData();
     }
   }, [user]);
