@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { updateUser, getUserByEmail } from '@/lib/storage';
+import { updateProfileAPI } from '@/lib/api';
 import { generateOTP, saveOTP, verifyOTP, getOTPExpiry } from '@/lib/otp';
 import { User, Phone, Mail, Check, X, Edit2, Shield, Lock, KeyRound } from 'lucide-react';
 import { format } from 'date-fns';
@@ -45,20 +46,70 @@ export default function Profile() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
 
-  const handleUpdateName = () => {
+  const handleUpdateName = async () => {
     if (!user || !fullName.trim()) return;
-    updateUser(user.id, { fullName: fullName.trim() });
-    refreshUser();
-    setIsEditingName(false);
-    toast({ title: 'Name updated successfully' });
+
+    // Try backend profile update first (falls back to localStorage if backend unavailable)
+    const result = await updateProfileAPI({
+      name: fullName.trim(),
+      phone: (phone || user.phone || '').trim(),
+    });
+
+    if (result.success) {
+      await refreshUser();
+      setIsEditingName(false);
+      toast({ title: 'Name updated successfully' });
+      return;
+    }
+
+    // Fallback to localStorage
+    if ((result as any).usingLocalStorage) {
+      updateUser(user.id, { fullName: fullName.trim() });
+      await refreshUser();
+      setIsEditingName(false);
+      toast({ title: 'Name updated successfully' });
+      return;
+    }
+
+    toast({
+      title: 'Failed to update name',
+      description: (result as any).error || 'Please try again',
+      variant: 'destructive',
+    });
   };
 
-  const handleUpdatePhone = () => {
+  const handleUpdatePhone = async () => {
     if (!user || !phone.trim()) return;
-    updateUser(user.id, { phone: phone.trim() });
-    refreshUser();
-    setIsEditingPhone(false);
-    toast({ title: 'Phone updated successfully' });
+
+    const nextPhone = phone.trim();
+
+    // Try backend profile update first (falls back to localStorage if backend unavailable)
+    const result = await updateProfileAPI({
+      name: (fullName || user.fullName || '').trim(),
+      phone: nextPhone,
+    });
+
+    if (result.success) {
+      await refreshUser();
+      setIsEditingPhone(false);
+      toast({ title: 'Phone updated successfully' });
+      return;
+    }
+
+    // Fallback to localStorage
+    if ((result as any).usingLocalStorage) {
+      updateUser(user.id, { phone: nextPhone });
+      await refreshUser();
+      setIsEditingPhone(false);
+      toast({ title: 'Phone updated successfully' });
+      return;
+    }
+
+    toast({
+      title: 'Failed to update phone',
+      description: (result as any).error || 'Please try again',
+      variant: 'destructive',
+    });
   };
 
   const handlePasswordVerify = () => {
