@@ -14,7 +14,7 @@ import {
   calculateMemberSummary, 
   getAllMembersSummary 
 } from '@/lib/calculations';
-import { getActiveMonth, getMessById, getBazarDatesByMessId, getMessMembers } from '@/lib/storage';
+import * as dataService from '@/lib/dataService';
 import { Users } from 'lucide-react';
 
 export default function Dashboard() {
@@ -25,6 +25,7 @@ export default function Dashboard() {
   const [messName, setMessName] = useState('');
   const [bazarDates, setBazarDates] = useState<BazarDate[]>([]);
   const [members, setMembers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const headerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -35,7 +36,7 @@ export default function Dashboard() {
 
   useEffect(() => {
     // GSAP entrance animation for header
-    if (headerRef.current) {
+    if (headerRef.current && messName) {
       gsap.fromTo(
         headerRef.current.children,
         { opacity: 0, y: -20 },
@@ -44,31 +45,49 @@ export default function Dashboard() {
     }
   }, [messName]);
 
-  const loadDashboardData = () => {
+  const loadDashboardData = async () => {
     if (!user) return;
+    setLoading(true);
 
-    const mess = getMessById(user.messId);
-    if (mess) {
-      setMessName(mess.name);
+    try {
+      const mess = await dataService.getMessById(user.messId);
+      if (mess) {
+        setMessName(mess.name);
+      }
+
+      const messMembers = await dataService.getMessMembers(user.messId);
+      setMembers(messMembers);
+
+      const activeMonth = await dataService.getActiveMonth(user.messId);
+      if (activeMonth) {
+        const mSummary = await calculateMonthSummary(activeMonth.id, user.messId);
+        setMonthSummary(mSummary);
+
+        const pSummary = await calculateMemberSummary(user.id, activeMonth.id);
+        setPersonalSummary(pSummary);
+
+        const allMembers = await getAllMembersSummary(activeMonth.id, user.messId);
+        setMembersSummary(allMembers);
+      }
+
+      const dates = await dataService.getBazarDatesByMessId(user.messId);
+      setBazarDates(dates);
+    } catch (error) {
+      console.error('Error loading dashboard data:', error);
+    } finally {
+      setLoading(false);
     }
-
-    const messMembers = getMessMembers(user.messId);
-    setMembers(messMembers);
-
-    const activeMonth = getActiveMonth(user.messId);
-    if (activeMonth) {
-      const mSummary = calculateMonthSummary(activeMonth.id, user.messId);
-      setMonthSummary(mSummary);
-
-      const pSummary = calculateMemberSummary(user.id, activeMonth.id);
-      setPersonalSummary(pSummary);
-
-      const allMembers = getAllMembersSummary(activeMonth.id, user.messId);
-      setMembersSummary(allMembers);
-    }
-
-    setBazarDates(getBazarDatesByMessId(user.messId));
   };
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <p className="text-muted-foreground">Loading dashboard...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

@@ -1,4 +1,4 @@
-import { API_BASE_URL, USE_BACKEND, setMongoDbConnected, isMongoDbConnected } from './config';
+import { API_BASE_URL, USE_BACKEND, setMongoDbConnected, setBackendAvailable, isMongoDbConnected, isBackendAvailable } from './config';
 import { toast } from '@/hooks/use-toast';
 
 // Token management
@@ -20,6 +20,7 @@ export function removeToken(): void {
 export async function checkMongoDbStatus(): Promise<boolean> {
   if (!USE_BACKEND) {
     setMongoDbConnected(false);
+    setBackendAvailable(false);
     return false;
   }
 
@@ -33,12 +34,16 @@ export async function checkMongoDbStatus(): Promise<boolean> {
       const data = await response.json();
       const connected = data.mongodb === 'connected';
       setMongoDbConnected(connected);
+      setBackendAvailable(true);
       return connected;
     }
     setMongoDbConnected(false);
+    setBackendAvailable(false);
     return false;
   } catch (error) {
+    console.error('Backend health check failed:', error);
     setMongoDbConnected(false);
+    setBackendAvailable(false);
     return false;
   }
 }
@@ -53,7 +58,7 @@ function showLocalStorageFallbackAlert() {
 }
 
 // API request helper
-async function apiRequest<T>(
+export async function apiRequest<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<{ success: boolean; data?: T; error?: string; usingLocalStorage?: boolean }> {
@@ -90,11 +95,13 @@ async function apiRequest<T>(
     if (data.mongoDbConnected !== undefined) {
       setMongoDbConnected(data.mongoDbConnected);
     }
+    setBackendAvailable(true);
 
     return { success: true, data };
   } catch (error) {
     console.error('API request failed:', error);
     setMongoDbConnected(false);
+    setBackendAvailable(false);
     return { success: false, error: 'Network error - using local storage', usingLocalStorage: true };
   }
 }
@@ -108,10 +115,13 @@ export interface LoginResponse {
   user?: {
     id: string;
     name: string;
+    fullName?: string;
     email: string;
     phone: string;
     role: 'manager' | 'member';
     messId: string | null;
+    isApproved?: boolean;
+    isActive?: boolean;
     emailVerified: boolean;
   };
   token?: string;
@@ -140,6 +150,7 @@ export interface RegisterManagerData {
   name: string;
   email: string;
   password: string;
+  phone?: string;
   messName: string;
 }
 
@@ -165,6 +176,7 @@ export interface RegisterMemberData {
   name: string;
   email: string;
   password: string;
+  phone?: string;
 }
 
 export async function registerMemberAPI(data: RegisterMemberData): Promise<LoginResponse> {
@@ -232,14 +244,25 @@ export async function resetPasswordAPI(email: string, newPassword: string) {
 // MESS API
 // ============================================
 
-export async function getMessAPI() {
+export async function getMessAPI(messId?: string) {
+  if (messId) {
+    return apiRequest(`/mess/${messId}`, { method: 'GET' });
+  }
   return apiRequest('/mess', { method: 'GET' });
 }
 
-export async function updateMessAPI(name: string) {
+export async function getMessByCodeAPI(code: string) {
+  return apiRequest(`/mess/code/${code}`, { method: 'GET' });
+}
+
+export async function searchMessAPI(query: string) {
+  return apiRequest(`/mess/search/${encodeURIComponent(query)}`, { method: 'GET' });
+}
+
+export async function updateMessAPI(data: { name?: string; messCode?: string }) {
   return apiRequest('/mess', {
     method: 'PUT',
-    body: JSON.stringify({ name }),
+    body: JSON.stringify(data),
   });
 }
 
@@ -247,27 +270,74 @@ export async function deleteMessAPI() {
   return apiRequest('/mess', { method: 'DELETE' });
 }
 
-export async function getMessMembersAPI() {
+export async function getMessMembersAPI(messId?: string) {
+  if (messId) {
+    return apiRequest(`/mess/${messId}/members`, { method: 'GET' });
+  }
   return apiRequest('/mess/members', { method: 'GET' });
+}
+
+export async function checkMessCodeAPI(code: string) {
+  return apiRequest(`/mess-code/check/${code}`, { method: 'GET' });
+}
+
+export async function generateMessCodeAPI() {
+  return apiRequest('/mess-code/generate', { method: 'GET' });
+}
+
+// ============================================
+// USER API
+// ============================================
+
+export async function getUserByIdAPI(userId: string) {
+  return apiRequest(`/users/${userId}`, { method: 'GET' });
+}
+
+export async function updateUserAPI(userId: string, data: any) {
+  return apiRequest(`/users/${userId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function deleteUserAPI(userId: string) {
+  return apiRequest(`/users/${userId}`, { method: 'DELETE' });
+}
+
+export async function getUsersByMessIdAPI(messId: string) {
+  return apiRequest(`/mess/${messId}/users`, { method: 'GET' });
 }
 
 // ============================================
 // MONTH API
 // ============================================
 
-export async function getMonthsAPI() {
+export async function getMonthsAPI(messId?: string) {
+  if (messId) {
+    return apiRequest(`/months?messId=${messId}`, { method: 'GET' });
+  }
   return apiRequest('/months', { method: 'GET' });
 }
 
-export async function createMonthAPI(data: { name: string; startDate: string }) {
+export async function createMonthAPI(data: { name: string; startDate: string; messId?: string }) {
   return apiRequest('/months', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
-export async function getActiveMonthAPI() {
+export async function getActiveMonthAPI(messId?: string) {
+  if (messId) {
+    return apiRequest(`/months/active?messId=${messId}`, { method: 'GET' });
+  }
   return apiRequest('/months/active', { method: 'GET' });
+}
+
+export async function updateMonthAPI(monthId: string, data: any) {
+  return apiRequest(`/months/${monthId}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
 }
 
 // ============================================
@@ -278,18 +348,22 @@ export async function getMealsAPI(monthId: string) {
   return apiRequest(`/meals?monthId=${monthId}`, { method: 'GET' });
 }
 
-export async function saveMealAPI(data: { monthId: string; date: string; meals: Record<string, any> }) {
+export async function createMealAPI(data: any) {
   return apiRequest('/meals', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
-export async function updateMealAPI(id: string, meals: Record<string, any>) {
+export async function updateMealAPI(id: string, data: any) {
   return apiRequest(`/meals/${id}`, {
     method: 'PUT',
-    body: JSON.stringify({ meals }),
+    body: JSON.stringify(data),
   });
+}
+
+export async function deleteMealAPI(id: string) {
+  return apiRequest(`/meals/${id}`, { method: 'DELETE' });
 }
 
 // ============================================
@@ -374,14 +448,21 @@ export async function deleteOtherCostAPI(id: string) {
 // JOIN REQUEST API
 // ============================================
 
-export async function getJoinRequestsAPI() {
+export async function getJoinRequestsAPI(messId?: string) {
+  if (messId) {
+    return apiRequest(`/join-requests?messId=${messId}`, { method: 'GET' });
+  }
   return apiRequest('/join-requests', { method: 'GET' });
 }
 
-export async function createJoinRequestAPI(messCode: string) {
+export async function getUserJoinRequestsAPI() {
+  return apiRequest('/join-requests/user', { method: 'GET' });
+}
+
+export async function createJoinRequestAPI(data: { messId?: string; messCode?: string }) {
   return apiRequest('/join-requests', {
     method: 'POST',
-    body: JSON.stringify({ messCode }),
+    body: JSON.stringify(data),
   });
 }
 
@@ -393,19 +474,29 @@ export async function rejectJoinRequestAPI(id: string) {
   return apiRequest(`/join-requests/${id}/reject`, { method: 'PUT' });
 }
 
+export async function deleteJoinRequestAPI(id: string) {
+  return apiRequest(`/join-requests/${id}`, { method: 'DELETE' });
+}
+
 // ============================================
 // NOTICE API
 // ============================================
 
-export async function getNoticesAPI() {
+export async function getNoticesAPI(messId?: string) {
+  if (messId) {
+    return apiRequest(`/notices?messId=${messId}`, { method: 'GET' });
+  }
   return apiRequest('/notices', { method: 'GET' });
 }
 
-export async function getActiveNoticeAPI() {
+export async function getActiveNoticeAPI(messId?: string) {
+  if (messId) {
+    return apiRequest(`/notices/active?messId=${messId}`, { method: 'GET' });
+  }
   return apiRequest('/notices/active', { method: 'GET' });
 }
 
-export async function createNoticeAPI(data: { title: string; content: string }) {
+export async function createNoticeAPI(data: { title: string; content: string; messId?: string }) {
   return apiRequest('/notices', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -427,11 +518,14 @@ export async function deleteNoticeAPI(id: string) {
 // BAZAR DATE API
 // ============================================
 
-export async function getBazarDatesAPI() {
+export async function getBazarDatesAPI(messId?: string) {
+  if (messId) {
+    return apiRequest(`/bazar-dates?messId=${messId}`, { method: 'GET' });
+  }
   return apiRequest('/bazar-dates', { method: 'GET' });
 }
 
-export async function createBazarDatesAPI(data: { oderId: string; odername: string; dates: string[] }) {
+export async function createBazarDateAPI(data: { userId: string; userName: string; dates: string[]; messId?: string }) {
   return apiRequest('/bazar-dates', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -466,15 +560,25 @@ export async function deleteAllNotificationsAPI() {
   return apiRequest('/notifications', { method: 'DELETE' });
 }
 
+export async function createNotificationAPI(data: any) {
+  return apiRequest('/notifications', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
 // ============================================
 // NOTE API
 // ============================================
 
-export async function getNotesAPI() {
+export async function getNotesAPI(messId?: string) {
+  if (messId) {
+    return apiRequest(`/notes?messId=${messId}`, { method: 'GET' });
+  }
   return apiRequest('/notes', { method: 'GET' });
 }
 
-export async function createNoteAPI(data: { title: string; description: string }) {
+export async function createNoteAPI(data: { title: string; description: string; messId?: string }) {
   return apiRequest('/notes', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -498,4 +602,24 @@ export async function deleteNoteAPI(id: string) {
 
 export async function removeMemberAPI(id: string) {
   return apiRequest(`/members/${id}`, { method: 'DELETE' });
+}
+
+export async function makeManagerAPI(memberId: string) {
+  return apiRequest(`/members/${memberId}/make-manager`, { method: 'PUT' });
+}
+
+// ============================================
+// SUMMARY/CALCULATION API
+// ============================================
+
+export async function getMonthSummaryAPI(monthId: string) {
+  return apiRequest(`/summary/month/${monthId}`, { method: 'GET' });
+}
+
+export async function getMemberSummaryAPI(userId: string, monthId: string) {
+  return apiRequest(`/summary/member/${userId}?monthId=${monthId}`, { method: 'GET' });
+}
+
+export async function getAllMembersSummaryAPI(monthId: string) {
+  return apiRequest(`/summary/members?monthId=${monthId}`, { method: 'GET' });
 }

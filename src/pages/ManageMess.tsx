@@ -26,7 +26,7 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { getMessById, updateMess, generateUniqueMessCode, isMessCodeUnique, deleteMess } from '@/lib/storage';
+import * as dataService from '@/lib/dataService';
 import { Mess } from '@/types';
 import { Building, Copy, Check, Edit2, Settings, RefreshCw, Trash2, AlertTriangle } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
@@ -44,19 +44,33 @@ export default function ManageMess() {
   const [copied, setCopied] = useState(false);
   const [codeError, setCodeError] = useState('');
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
+  const [loading, setLoading] = useState(true);
 
   const isManager = user?.role === 'manager';
 
   useEffect(() => {
     if (user) {
-      const messData = getMessById(user.messId);
+      loadMessData();
+    }
+  }, [user]);
+
+  const loadMessData = async () => {
+    if (!user) return;
+    setLoading(true);
+    
+    try {
+      const messData = await dataService.getMessById(user.messId);
       setMess(messData || null);
       if (messData) {
         setNewMessName(messData.name);
         setNewMessCode(messData.messCode || '');
       }
+    } catch (error) {
+      console.error('Error loading mess data:', error);
+    } finally {
+      setLoading(false);
     }
-  }, [user]);
+  };
 
   if (!isManager) {
     return <Navigate to="/dashboard" replace />;
@@ -74,34 +88,42 @@ export default function ManageMess() {
     }
   };
 
-  const handleUpdateMessName = (e: React.FormEvent) => {
+  const handleUpdateMessName = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!mess || !newMessName.trim()) return;
 
-    updateMess(mess.id, { name: newMessName.trim() });
-    
-    setMess({ ...mess, name: newMessName.trim() });
-    setIsEditDialogOpen(false);
-    
-    toast({
-      title: 'Mess Updated',
-      description: 'Your mess name has been updated.',
-    });
+    try {
+      await dataService.updateMess(mess.id, { name: newMessName.trim() });
+      setMess({ ...mess, name: newMessName.trim() });
+      setIsEditDialogOpen(false);
+      
+      toast({
+        title: 'Mess Updated',
+        description: 'Your mess name has been updated.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update mess name.',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const handleGenerateNewCode = () => {
-    const newCode = generateUniqueMessCode();
+  const handleGenerateNewCode = async () => {
+    const newCode = await dataService.generateUniqueMessCode();
     setNewMessCode(newCode);
     setCodeError('');
   };
 
-  const handleCodeChange = (value: string) => {
+  const handleCodeChange = async (value: string) => {
     const upperValue = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8);
     setNewMessCode(upperValue);
     
     if (upperValue.length >= 4) {
-      if (!isMessCodeUnique(upperValue, mess?.id)) {
+      const isUnique = await dataService.isMessCodeUnique(upperValue, mess?.id);
+      if (!isUnique) {
         setCodeError('This code is already in use');
       } else {
         setCodeError('');
@@ -111,7 +133,7 @@ export default function ManageMess() {
     }
   };
 
-  const handleUpdateMessCode = (e: React.FormEvent) => {
+  const handleUpdateMessCode = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!mess || !newMessCode.trim()) return;
@@ -121,36 +143,62 @@ export default function ManageMess() {
       return;
     }
     
-    if (!isMessCodeUnique(newMessCode, mess.id)) {
+    const isUnique = await dataService.isMessCodeUnique(newMessCode, mess.id);
+    if (!isUnique) {
       setCodeError('This code is already in use');
       return;
     }
 
-    updateMess(mess.id, { messCode: newMessCode.trim() });
-    
-    setMess({ ...mess, messCode: newMessCode.trim() });
-    setIsEditCodeDialogOpen(false);
-    
-    toast({
-      title: 'Mess Code Updated',
-      description: 'Your mess code has been updated. Share the new code with your members.',
-    });
+    try {
+      await dataService.updateMess(mess.id, { messCode: newMessCode.trim() });
+      setMess({ ...mess, messCode: newMessCode.trim() });
+      setIsEditCodeDialogOpen(false);
+      
+      toast({
+        title: 'Mess Code Updated',
+        description: 'Your mess code has been updated. Share the new code with your members.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to update mess code.',
+        variant: 'destructive',
+      });
+    }
   };
 
-  const handleDeleteMess = () => {
+  const handleDeleteMess = async () => {
     if (!mess || deleteConfirmation !== 'Sure') return;
     
-    deleteMess(mess.id);
-    logout();
-    toast({ title: 'Mess deleted', description: 'All data has been removed.' });
-    navigate('/auth');
+    try {
+      await dataService.deleteMess(mess.id);
+      logout();
+      toast({ title: 'Mess deleted', description: 'All data has been removed.' });
+      navigate('/auth');
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete mess.',
+        variant: 'destructive',
+      });
+    }
   };
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <p className="text-muted-foreground">Loading...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   if (!mess) {
     return (
       <DashboardLayout>
         <div className="flex items-center justify-center h-64">
-          <p className="text-muted-foreground">Loading...</p>
+          <p className="text-muted-foreground">Mess not found.</p>
         </div>
       </DashboardLayout>
     );

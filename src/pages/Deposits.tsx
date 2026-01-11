@@ -31,14 +31,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  getActiveMonth,
-  getDepositsByMonthId,
-  getMessMembers,
-  createDeposit,
-  updateDeposit,
-  deleteDeposit,
-} from '@/lib/storage';
+import * as dataService from '@/lib/dataService';
 import { Deposit, User } from '@/types';
 import { Wallet, Plus, Trash2, Edit2 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -52,6 +45,7 @@ export default function Deposits() {
   const [members, setMembers] = useState<User[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingDeposit, setEditingDeposit] = useState<Deposit | null>(null);
+  const [loading, setLoading] = useState(true);
   const [formData, setFormData] = useState({
     userId: '',
     amount: '',
@@ -70,16 +64,25 @@ export default function Deposits() {
     loadData();
   }, [user]);
 
-  const loadData = () => {
+  const loadData = async () => {
     if (!user) return;
+    setLoading(true);
     
-    const activeMonth = getActiveMonth(user.messId);
-    if (activeMonth) {
-      setDeposits(getDepositsByMonthId(activeMonth.id).sort((a, b) => 
-        new Date(b.date).getTime() - new Date(a.date).getTime()
-      ));
+    try {
+      const activeMonth = await dataService.getActiveMonth(user.messId);
+      if (activeMonth) {
+        const depositsData = await dataService.getDepositsByMonthId(activeMonth.id);
+        setDeposits(depositsData.sort((a, b) => 
+          new Date(b.date).getTime() - new Date(a.date).getTime()
+        ));
+      }
+      const membersData = await dataService.getMessMembers(user.messId);
+      setMembers(membersData);
+    } catch (error) {
+      console.error('Error loading deposits:', error);
+    } finally {
+      setLoading(false);
     }
-    setMembers(getMessMembers(user.messId));
   };
 
   const resetForm = () => {
@@ -92,12 +95,12 @@ export default function Deposits() {
     setEditingDeposit(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!user) return;
     
-    const activeMonth = getActiveMonth(user.messId);
+    const activeMonth = await dataService.getActiveMonth(user.messId);
     if (!activeMonth) {
       toast({
         title: 'No active month',
@@ -117,28 +120,36 @@ export default function Deposits() {
       return;
     }
 
-    if (editingDeposit) {
-      updateDeposit(editingDeposit.id, {
-        userId: formData.userId,
-        amount,
-        date: formData.date,
-        note: formData.note || undefined,
-      });
-      toast({ title: 'Deposit updated' });
-    } else {
-      createDeposit({
-        monthId: activeMonth.id,
-        userId: formData.userId,
-        amount,
-        date: formData.date,
-        note: formData.note || undefined,
-      });
-      toast({ title: 'Deposit added' });
-    }
+    try {
+      if (editingDeposit) {
+        await dataService.updateDeposit(editingDeposit.id, {
+          userId: formData.userId,
+          amount,
+          date: formData.date,
+          note: formData.note || undefined,
+        });
+        toast({ title: 'Deposit updated' });
+      } else {
+        await dataService.createDeposit({
+          monthId: activeMonth.id,
+          userId: formData.userId,
+          amount,
+          date: formData.date,
+          note: formData.note || undefined,
+        });
+        toast({ title: 'Deposit added' });
+      }
 
-    setIsAddDialogOpen(false);
-    resetForm();
-    loadData();
+      setIsAddDialogOpen(false);
+      resetForm();
+      loadData();
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to save deposit',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleEdit = (deposit: Deposit) => {
@@ -152,8 +163,8 @@ export default function Deposits() {
     setIsAddDialogOpen(true);
   };
 
-  const handleDelete = (depositId: string) => {
-    deleteDeposit(depositId);
+  const handleDelete = async (depositId: string) => {
+    await dataService.deleteDeposit(depositId);
     loadData();
     toast({ title: 'Deposit deleted' });
   };
@@ -164,6 +175,16 @@ export default function Deposits() {
   };
 
   const totalDeposits = deposits.reduce((sum, d) => sum + d.amount, 0);
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <p className="text-muted-foreground">Loading deposits...</p>
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
