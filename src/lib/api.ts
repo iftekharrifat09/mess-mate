@@ -274,20 +274,50 @@ export async function changePasswordAPI(data: { currentPassword: string; newPass
 }
 
 // ============================================
-// OTP API
+// OTP + ACCOUNT RECOVERY API
 // ============================================
+
+type NormalizedOtpType = 'VERIFY_EMAIL' | 'CHANGE_EMAIL' | 'FORGOT_PASSWORD';
+
+function normalizeOtpType(type: string): NormalizedOtpType | string {
+  const raw = String(type || '').trim();
+  const upper = raw.toUpperCase();
+
+  if (upper === 'VERIFY_EMAIL' || upper === 'CHANGE_EMAIL' || upper === 'FORGOT_PASSWORD') {
+    return upper;
+  }
+
+  // Legacy values used by older frontend builds
+  switch (raw) {
+    case 'email-verification':
+      return 'VERIFY_EMAIL';
+    case 'email-change':
+      return 'CHANGE_EMAIL';
+    case 'password-reset':
+      return 'FORGOT_PASSWORD';
+  }
+
+  // Also accept variants like EMAIL-VERIFICATION / EMAIL_VERIFICATION
+  const normalized = upper.replace(/[-\s]/g, '_');
+  if (normalized === 'EMAIL_VERIFICATION') return 'VERIFY_EMAIL';
+  if (normalized === 'EMAIL_CHANGE') return 'CHANGE_EMAIL';
+  if (normalized === 'PASSWORD_RESET') return 'FORGOT_PASSWORD';
+
+  // Fall back to whatever caller provided (backend will validate)
+  return upper;
+}
 
 export async function sendOtpAPI(type: string, email: string) {
   return apiRequest('/send-otp', {
     method: 'POST',
-    body: JSON.stringify({ type, email }),
+    body: JSON.stringify({ type: normalizeOtpType(type), email }),
   });
 }
 
 export async function verifyOtpAPI(type: string, email: string, otp: string) {
   return apiRequest('/verify-otp', {
     method: 'POST',
-    body: JSON.stringify({ type, email, otp }),
+    body: JSON.stringify({ type: normalizeOtpType(type), email, otp }),
   });
 }
 
@@ -295,6 +325,24 @@ export async function resetPasswordAPI(email: string, newPassword: string) {
   return apiRequest('/reset-password', {
     method: 'POST',
     body: JSON.stringify({ email, newPassword }),
+  });
+}
+
+export async function checkEmailExistsAPI(email: string) {
+  return apiRequest('/auth/exists?email=' + encodeURIComponent(email), { method: 'GET' });
+}
+
+export async function requestEmailChangeAPI(data: { newEmail: string; currentPassword: string }) {
+  return apiRequest('/auth/change-email/request', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export async function confirmEmailChangeAPI(data: { newEmail: string; otp: string }) {
+  return apiRequest('/auth/change-email/confirm', {
+    method: 'PUT',
+    body: JSON.stringify(data),
   });
 }
 

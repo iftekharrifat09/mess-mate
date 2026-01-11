@@ -490,6 +490,136 @@ app.put("/api/auth/change-password", authMiddleware, async (req, res) => {
 });
 
 // ============================================
+// ACCOUNT HELPERS
+// ============================================
+
+// Check if an email is registered (used for Forgot Password)
+app.get("/api/auth/exists", async (req, res) => {
+  try {
+    const email = String(req.query.email || "").toLowerCase().trim();
+    if (!email) {
+      return res.status(400).json({ success: false, error: "Email is required" });
+    }
+
+    const user = await collections.users.findOne({ email });
+    return res.json({ success: true, exists: Boolean(user) });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: "Failed to check email" });
+  }
+});
+
+// Secure email change flow (verifies password + OTP)
+app.post("/api/auth/change-email/request", authMiddleware, async (req, res) => {
+  try {
+    const { newEmail, currentPassword } = req.body;
+
+    if (!newEmail || !currentPassword) {
+      return res.status(400).json({ success: false, error: "New email and current password are required" });
+    }
+
+    const nextEmail = String(newEmail).toLowerCase().trim();
+
+    const existing = await collections.users.findOne({ email: nextEmail });
+    if (existing) {
+      return res.status(400).json({ success: false, error: "Email already registered" });
+    }
+
+    const user = await collections.users.findOne({ _id: new ObjectId(req.userId) });
+    const isMatch = await bcrypt.compare(currentPassword, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ success: false, error: "Current password is incorrect" });
+    }
+
+    await collections.otps.deleteMany({ email: nextEmail, type: "CHANGE_EMAIL" });
+
+    const otp = generateOTP();
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await collections.otps.insertOne({
+      email: nextEmail,
+      otp,
+      type: "CHANGE_EMAIL",
+      expiresAt,
+      createdAt: new Date(),
+      userId: req.userId,
+    });
+
+    await transporter.sendMail({
+      from: `"Mess Manager" <${process.env.EMAIL_USER}>`,
+      to: nextEmail,
+      subject: "Verify Your New Email - Mess Manager",
+      html: `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <h1 style="color: #4F46E5;">Email Change Verification</h1>
+        <p>Use this OTP to confirm your new email address:</p>
+        <h2 style="background: #F3F4F6; padding: 20px; text-align: center; font-size: 32px; letter-spacing: 8px;">${otp}</h2>
+        <p>This code expires in 10 minutes.</p>
+      </div>`,
+    });
+
+    return res.json({ success: true, message: "OTP sent successfully" });
+  } catch (error) {
+    console.error("Change Email Request Error:", error);
+    return res.status(500).json({ success: false, error: "Failed to send email change OTP" });
+  }
+});
+
+app.put("/api/auth/change-email/confirm", authMiddleware, async (req, res) => {
+  try {
+    const { newEmail, otp } = req.body;
+
+    if (!newEmail || !otp) {
+      return res.status(400).json({ success: false, error: "New email and OTP are required" });
+    }
+
+    const nextEmail = String(newEmail).toLowerCase().trim();
+
+    const otpRecord = await collections.otps.findOne({
+      email: nextEmail,
+      type: "CHANGE_EMAIL",
+      otp,
+      expiresAt: { $gt: new Date() },
+    });
+
+    if (!otpRecord) {
+      return res.status(400).json({ success: false, error: "Invalid or expired OTP" });
+    }
+
+    const existing = await collections.users.findOne({ email: nextEmail });
+    if (existing) {
+      return res.status(400).json({ success: false, error: "Email already registered" });
+    }
+
+    await collections.users.updateOne(
+      { _id: new ObjectId(req.userId) },
+      { $set: { email: nextEmail, emailVerified: true } }
+    );
+
+    await collections.otps.deleteOne({ _id: otpRecord._id });
+
+    const user = await collections.users.findOne({ _id: new ObjectId(req.userId) });
+
+    return res.json({
+      success: true,
+      user: {
+        id: user._id.toString(),
+        name: user.name,
+        fullName: user.name,
+        email: user.email,
+        phone: user.phone || "",
+        role: user.role,
+        messId: user.messId,
+        isApproved: user.isApproved !== false,
+        isActive: user.isActive !== false,
+        emailVerified: user.emailVerified || false,
+      },
+    });
+  } catch (error) {
+    console.error("Change Email Confirm Error:", error);
+    return res.status(500).json({ success: false, error: "Failed to change email" });
+  }
+});
+
+// ============================================
 // OTP ROUTES
 // ============================================
 
@@ -501,7 +631,17 @@ app.post("/api/send-otp", async (req, res) => {
       return res.status(400).json({ success: false, error: "Type and email are required" });
     }
 
-    await collections.otps.deleteMany({ email: email.toLowerCase(), type });
+    const rawType = String(type).trim();
+    const normalizedType = (() => {
+      const upper = rawType.toUpperCase();
+      if (["VERIFY_EMAIL", "CHANGE_EMAIL", "FORGOT_PASSWORD"].includes(upper)) return upper;
+      if (rawType === "email-verification") return "VERIFY_EMAIL";
+      if (rawType === "email-change") return "CHANGE_EMAIL";
+      if (rawType === "password-reset") return "FORGOT_PASSWORD";
+      return upper;
+    })();
+
+    await collections.otps.deleteMany({ email: email.toLowerCase(), type: normalizedType });
 
     const otp = generateOTP();
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
@@ -509,7 +649,7 @@ app.post("/api/send-otp", async (req, res) => {
     await collections.otps.insertOne({
       email: email.toLowerCase(),
       otp,
-      type,
+      type: normalizedType,
       expiresAt,
       createdAt: new Date(),
     });
@@ -517,7 +657,7 @@ app.post("/api/send-otp", async (req, res) => {
     let subject = "";
     let html = "";
 
-    switch (type) {
+    switch (normalizedType) {
       case "VERIFY_EMAIL":
         subject = "Verify Your Email - Mess Manager";
         html = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -570,9 +710,19 @@ app.post("/api/verify-otp", async (req, res) => {
   try {
     const { type, email, otp } = req.body;
 
+    const rawType = String(type || "").trim();
+    const normalizedType = (() => {
+      const upper = rawType.toUpperCase();
+      if (["VERIFY_EMAIL", "CHANGE_EMAIL", "FORGOT_PASSWORD"].includes(upper)) return upper;
+      if (rawType === "email-verification") return "VERIFY_EMAIL";
+      if (rawType === "email-change") return "CHANGE_EMAIL";
+      if (rawType === "password-reset") return "FORGOT_PASSWORD";
+      return upper;
+    })();
+
     const otpRecord = await collections.otps.findOne({
       email: email.toLowerCase(),
-      type,
+      type: normalizedType,
       otp,
       expiresAt: { $gt: new Date() },
     });
@@ -583,7 +733,7 @@ app.post("/api/verify-otp", async (req, res) => {
 
     await collections.otps.deleteOne({ _id: otpRecord._id });
 
-    if (type === "VERIFY_EMAIL") {
+    if (normalizedType === "VERIFY_EMAIL") {
       await collections.users.updateOne(
         { email: email.toLowerCase() },
         { $set: { emailVerified: true } }

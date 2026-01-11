@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion } from 'framer-motion';
-import { useAuth, updatePassword as authUpdatePassword } from '@/contexts/AuthContext';
+import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,8 +18,14 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { updateUser, getUserByEmail } from '@/lib/storage';
-import { updateProfileAPI, sendOtpAPI } from '@/lib/api';
-import { verifyOTP, getOTPExpiry } from '@/lib/otp';
+import {
+  updateProfileAPI,
+  sendOtpAPI,
+  verifyOtpAPI,
+  changePasswordAPI,
+  requestEmailChangeAPI,
+  confirmEmailChangeAPI,
+} from '@/lib/api';
 import { User, Phone, Mail, Check, X, Edit2, Shield, Lock, KeyRound } from 'lucide-react';
 import { format } from 'date-fns';
 
@@ -114,21 +120,20 @@ export default function Profile() {
 
   const handlePasswordVerify = async () => {
     if (!user) return;
-    // Verify current password (simple check using localStorage)
-    const passwords = JSON.parse(localStorage.getItem('mess_manager_passwords') || '{}');
-    if (passwords[user.email.toLowerCase()] !== currentPassword) {
-      toast({ title: 'Incorrect password', variant: 'destructive' });
-      return;
-    }
 
+    if (!newEmail || !currentPassword) return;
+
+    // Local fast check (only for localStorage mode)
     if (getUserByEmail(newEmail)) {
       toast({ title: 'Email already in use', variant: 'destructive' });
       return;
     }
 
-    // Send OTP via backend
-    const result = await sendOtpAPI('email-change', newEmail);
-    
+    const result = await requestEmailChangeAPI({
+      newEmail,
+      currentPassword,
+    });
+
     if (result.success) {
       toast({
         title: 'OTP sent',
@@ -136,40 +141,38 @@ export default function Profile() {
       });
       setEmailStep('otp');
       setLastOtpSent(new Date());
-    } else {
-      toast({
-        title: 'Mail sending Unsuccessful',
-        description: result.error || 'Failed to send OTP. Please try again.',
-        variant: 'destructive',
-      });
-    }
-  };
-
-  const handleVerifyOTP = () => {
-    if (!user) return;
-    
-    const result = verifyOTP(newEmail, otp);
-    if (!result.valid) {
-      toast({ title: result.error || 'Invalid OTP', variant: 'destructive' });
       return;
     }
 
-    // Update email
-    const passwords = JSON.parse(localStorage.getItem('mess_manager_passwords') || '{}');
-    const currentPasswordValue = passwords[user.email.toLowerCase()];
-    delete passwords[user.email.toLowerCase()];
-    passwords[newEmail.toLowerCase()] = currentPasswordValue;
-    localStorage.setItem('mess_manager_passwords', JSON.stringify(passwords));
+    toast({
+      title: (result as any).error === 'Current password is incorrect' ? 'Incorrect password' : 'Mail sending Unsuccessful',
+      description: (result as any).error || 'Failed to send OTP. Please try again.',
+      variant: 'destructive',
+    });
+  };
 
-    updateUser(user.id, { email: newEmail, emailVerified: true });
-    refreshUser();
-    
+  const handleVerifyOTP = async () => {
+    if (!user) return;
+
+    const result = await confirmEmailChangeAPI({ newEmail, otp });
+
+    if (!result.success) {
+      toast({
+        title: 'Invalid OTP',
+        description: (result as any).error || 'Invalid or expired OTP.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    await refreshUser();
+
     setIsEditingEmail(false);
     setEmailStep('password');
     setNewEmail('');
     setCurrentPassword('');
     setOtp('');
-    
+
     toast({ title: 'Email updated and verified' });
   };
 
@@ -217,52 +220,60 @@ export default function Profile() {
     }
   };
 
-  const handleVerifyCurrentEmailOTP = () => {
+  const handleVerifyCurrentEmailOTP = async () => {
     if (!user) return;
-    
-    const result = verifyOTP(user.email, otp);
-    if (!result.valid) {
-      toast({ title: result.error || 'Invalid OTP', variant: 'destructive' });
+
+    const result = await verifyOtpAPI('email-verification', user.email, otp);
+
+    if (!result.success) {
+      toast({
+        title: 'Invalid OTP',
+        description: (result as any).error || 'Invalid or expired OTP.',
+        variant: 'destructive',
+      });
       return;
     }
-    
-    updateUser(user.id, { emailVerified: true });
-    refreshUser();
+
+    await refreshUser();
     setIsVerifyingEmail(false);
     setOtp('');
-    
+
     toast({ title: 'Email verified successfully' });
   };
 
-  const handleChangePassword = () => {
+  const handleChangePassword = async () => {
     if (!user) return;
-    
-    // Verify old password
-    const passwords = JSON.parse(localStorage.getItem('mess_manager_passwords') || '{}');
-    if (passwords[user.email.toLowerCase()] !== oldPassword) {
-      toast({ title: 'Current password is incorrect', variant: 'destructive' });
-      return;
-    }
-    
+
     // Validate new password
     if (newPassword.length < 6) {
       toast({ title: 'New password must be at least 6 characters', variant: 'destructive' });
       return;
     }
-    
+
     if (newPassword !== confirmNewPassword) {
       toast({ title: 'New passwords do not match', variant: 'destructive' });
       return;
     }
-    
-    // Update password
-    authUpdatePassword(user.email, newPassword);
-    
+
+    const result = await changePasswordAPI({
+      currentPassword: oldPassword,
+      newPassword,
+    });
+
+    if (!result.success) {
+      toast({
+        title: 'Password change failed',
+        description: (result as any).error || 'Please try again.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsChangingPassword(false);
     setOldPassword('');
     setNewPassword('');
     setConfirmNewPassword('');
-    
+
     toast({ title: 'Password changed successfully' });
   };
 
