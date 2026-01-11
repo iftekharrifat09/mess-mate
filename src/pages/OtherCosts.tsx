@@ -59,10 +59,10 @@ export default function OtherCosts() {
   const isManager = user?.role === 'manager';
 
   useEffect(() => {
-    if (!authLoading && isManager) {
+    if (!authLoading && user) {
       loadData();
     }
-  }, [user, isManager, authLoading]);
+  }, [user, authLoading]);
 
   // Wait for auth to finish loading
   if (authLoading) {
@@ -75,23 +75,22 @@ export default function OtherCosts() {
     );
   }
 
-  if (!isManager) {
-    return <Navigate to="/dashboard" replace />;
-  }
-
   const loadData = async () => {
     if (!user) return;
     
     setIsLoading(true);
     try {
-      const activeMonth = await dataService.getActiveMonth(user.messId);
+      const [activeMonth, membersData] = await Promise.all([
+        dataService.getActiveMonth(user.messId),
+        dataService.getMessMembers(user.messId),
+      ]);
+      
       if (activeMonth) {
         const costs = await dataService.getOtherCostsByMonthId(activeMonth.id);
         setOtherCosts(costs.sort((a, b) => 
           new Date(b.date).getTime() - new Date(a.date).getTime()
         ));
       }
-      const membersData = await dataService.getMessMembers(user.messId);
       setMembers(membersData);
     } catch (error) {
       console.error('Error loading other costs:', error);
@@ -228,25 +227,28 @@ export default function OtherCosts() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Other Costs</h1>
-            <p className="text-muted-foreground">Track utilities and other expenses (separate from meal costs)</p>
+            <p className="text-muted-foreground">
+              {isManager ? 'Track utilities and other expenses (separate from meal costs)' : 'View other cost records (read-only)'}
+            </p>
           </div>
-          <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
-            setIsAddDialogOpen(open);
-            if (!open) resetForm();
-          }}>
-            <DialogTrigger asChild>
-              <Button className="gradient-primary">
-                <Plus className="h-4 w-4 mr-2" />
-                Add Cost
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>{editingCost ? 'Edit Cost' : 'Add Other Cost'}</DialogTitle>
-                <DialogDescription>
-                  {editingCost ? 'Update cost details' : 'Record utilities, rent, or other expenses'}
-                </DialogDescription>
-              </DialogHeader>
+          {isManager && (
+            <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+              setIsAddDialogOpen(open);
+              if (!open) resetForm();
+            }}>
+              <DialogTrigger asChild>
+                <Button className="gradient-primary">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Cost
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>{editingCost ? 'Edit Cost' : 'Add Other Cost'}</DialogTitle>
+                  <DialogDescription>
+                    {editingCost ? 'Update cost details' : 'Record utilities, rent, or other expenses'}
+                  </DialogDescription>
+                </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label>Paid By</Label>
@@ -320,7 +322,8 @@ export default function OtherCosts() {
                 </DialogFooter>
               </form>
             </DialogContent>
-          </Dialog>
+            </Dialog>
+          )}
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -375,7 +378,7 @@ export default function OtherCosts() {
                       <TableHead>Description</TableHead>
                       <TableHead>Type</TableHead>
                       <TableHead>Amount</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
+                      {isManager && <TableHead className="text-right">Actions</TableHead>}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -394,25 +397,27 @@ export default function OtherCosts() {
                         <TableCell className="font-semibold">
                           {formatCurrency(cost.amount)}
                         </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-2">
-                            <Button 
-                              size="sm" 
-                              variant="ghost"
-                              onClick={() => handleEdit(cost)}
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </Button>
-                            <Button 
-                              size="sm" 
-                              variant="ghost" 
-                              className="text-destructive"
-                              onClick={() => handleDelete(cost.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
+                        {isManager && (
+                          <TableCell className="text-right">
+                            <div className="flex justify-end gap-2">
+                              <Button 
+                                size="sm" 
+                                variant="ghost"
+                                onClick={() => handleEdit(cost)}
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                className="text-destructive"
+                                onClick={() => handleDelete(cost.id)}
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        )}
                       </TableRow>
                     ))}
                   </TableBody>

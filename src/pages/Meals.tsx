@@ -329,10 +329,12 @@ export default function Meals() {
         <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Meals</h1>
-            <p className="text-muted-foreground">Track daily meal counts</p>
+            <p className="text-muted-foreground">
+              {isManager ? 'Track daily meal counts' : 'View daily meal records (read-only)'}
+            </p>
           </div>
-          <div className="flex gap-2">
-            {isManager && (
+          {isManager && (
+            <div className="flex gap-2">
               <Dialog open={isDefaultsDialogOpen} onOpenChange={setIsDefaultsDialogOpen}>
                 <DialogTrigger asChild>
                   <Button variant="outline">
@@ -392,152 +394,152 @@ export default function Meals() {
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
-            )}
-            <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
-              setIsAddDialogOpen(open);
-              if (!open) {
-                setSelectedDate(format(new Date(), 'yyyy-MM-dd'));
-              }
-            }}>
-              <DialogTrigger asChild>
-                <Button className="gradient-primary">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Meal
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle className="flex items-center gap-2">
-                    <Utensils className="h-5 w-5 text-primary" />
-                    {dateHasMeals(selectedDate) ? 'Edit Meals' : 'Add Meals'}
-                  </DialogTitle>
-                  <DialogDescription>
-                    Record meals for all members
-                  </DialogDescription>
-                </DialogHeader>
-                
-                {/* Default Meal Display */}
-                <motion.div 
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="flex items-center justify-between p-3 bg-muted rounded-lg"
-                >
-                  <div>
-                    <p className="text-sm font-medium">Current Default meal</p>
-                    <p className="text-xs text-muted-foreground">
-                      breakfast: {defaultMeals.breakfast}, lunch: {defaultMeals.lunch}, dinner: {defaultMeals.dinner}
-                    </p>
-                  </div>
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    onClick={() => {
-                      setIsAddDialogOpen(false);
-                      setIsDefaultsDialogOpen(true);
-                    }}
+              <Dialog open={isAddDialogOpen} onOpenChange={(open) => {
+                setIsAddDialogOpen(open);
+                if (!open) {
+                  setSelectedDate(format(new Date(), 'yyyy-MM-dd'));
+                }
+              }}>
+                <DialogTrigger asChild>
+                  <Button className="gradient-primary">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Meal
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2">
+                      <Utensils className="h-5 w-5 text-primary" />
+                      {dateHasMeals(selectedDate) ? 'Edit Meals' : 'Add Meals'}
+                    </DialogTitle>
+                    <DialogDescription>
+                      Record meals for all members
+                    </DialogDescription>
+                  </DialogHeader>
+                  
+                  {/* Default Meal Display */}
+                  <motion.div 
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="flex items-center justify-between p-3 bg-muted rounded-lg"
                   >
-                    <Edit2 className="h-4 w-4" />
-                  </Button>
-                </motion.div>
+                    <div>
+                      <p className="text-sm font-medium">Current Default meal</p>
+                      <p className="text-xs text-muted-foreground">
+                        breakfast: {defaultMeals.breakfast}, lunch: {defaultMeals.lunch}, dinner: {defaultMeals.dinner}
+                      </p>
+                    </div>
+                    <Button 
+                      variant="ghost" 
+                      size="icon"
+                      onClick={() => {
+                        setIsAddDialogOpen(false);
+                        setIsDefaultsDialogOpen(true);
+                      }}
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                  </motion.div>
 
-                {/* Date Selection */}
-                <div className="space-y-2">
-                  <Label className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    Select Date
-                  </Label>
-                  <Input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    max={format(new Date(), 'yyyy-MM-dd')}
-                  />
-                  {dateHasMeals(selectedDate) && (
-                    <p className="text-xs text-warning flex items-center gap-1">
-                      <Edit2 className="h-3 w-3" />
-                      Editing existing meals for this date
-                    </p>
-                  )}
-                </div>
+                  {/* Date Selection */}
+                  <div className="space-y-2">
+                    <Label className="flex items-center gap-2">
+                      <Calendar className="h-4 w-4" />
+                      Select Date
+                    </Label>
+                    <Input
+                      type="date"
+                      value={selectedDate}
+                      onChange={(e) => setSelectedDate(e.target.value)}
+                      max={format(new Date(), 'yyyy-MM-dd')}
+                    />
+                    {dateHasMeals(selectedDate) && (
+                      <p className="text-xs text-warning flex items-center gap-1">
+                        <Edit2 className="h-3 w-3" />
+                        Editing existing meals for this date
+                      </p>
+                    )}
+                  </div>
 
-                {/* Member Meals List */}
-                <div className="space-y-3 mt-4">
-                  <AnimatePresence>
-                    {members.map((member, index) => (
-                      <motion.div
-                        key={member.id}
-                        initial={{ opacity: 0, x: -20 }}
-                        animate={{ opacity: 1, x: 0 }}
-                        transition={{ delay: index * 0.05 }}
-                        className="p-3 bg-muted/50 rounded-lg border"
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                              <span className="text-sm font-medium text-primary">
-                                {member.fullName.charAt(0).toUpperCase()}
-                              </span>
+                  {/* Member Meals List */}
+                  <div className="space-y-3 mt-4">
+                    <AnimatePresence>
+                      {members.map((member, index) => (
+                        <motion.div
+                          key={member.id}
+                          initial={{ opacity: 0, x: -20 }}
+                          animate={{ opacity: 1, x: 0 }}
+                          transition={{ delay: index * 0.05 }}
+                          className="p-3 bg-muted/50 rounded-lg border"
+                        >
+                          <div className="flex items-center justify-between mb-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                <span className="text-sm font-medium text-primary">
+                                  {member.fullName.charAt(0).toUpperCase()}
+                                </span>
+                              </div>
+                              <span className="font-medium text-sm">{member.fullName}</span>
                             </div>
-                            <span className="font-medium text-sm">{member.fullName}</span>
+                            <motion.div 
+                              key={getMemberTotal(member.id)}
+                              initial={{ scale: 1.2 }}
+                              animate={{ scale: 1 }}
+                              className="text-lg font-bold text-primary"
+                            >
+                              Total: {getMemberTotal(member.id)}
+                            </motion.div>
                           </div>
-                          <motion.div 
-                            key={getMemberTotal(member.id)}
-                            initial={{ scale: 1.2 }}
-                            animate={{ scale: 1 }}
-                            className="text-lg font-bold text-primary"
-                          >
-                            Total: {getMemberTotal(member.id)}
-                          </motion.div>
-                        </div>
-                        
-                        <div className="grid grid-cols-3 gap-2">
-                          <div className="text-center">
-                            <Label className="text-xs text-muted-foreground flex items-center justify-center gap-1 mb-1">
-                              <Coffee className="h-3 w-3" /> breakfast
-                            </Label>
-                            <MealInput
-                              value={memberMeals[member.id]?.breakfast || 0}
-                              onChange={(v) => setMemberMealValue(member.id, 'breakfast', v)}
-                              onIncrement={() => updateMemberMeal(member.id, 'breakfast', 0.5)}
-                              onDecrement={() => updateMemberMeal(member.id, 'breakfast', -0.5)}
-                            />
+                          
+                          <div className="grid grid-cols-3 gap-2">
+                            <div className="text-center">
+                              <Label className="text-xs text-muted-foreground flex items-center justify-center gap-1 mb-1">
+                                <Coffee className="h-3 w-3" /> breakfast
+                              </Label>
+                              <MealInput
+                                value={memberMeals[member.id]?.breakfast || 0}
+                                onChange={(v) => setMemberMealValue(member.id, 'breakfast', v)}
+                                onIncrement={() => updateMemberMeal(member.id, 'breakfast', 0.5)}
+                                onDecrement={() => updateMemberMeal(member.id, 'breakfast', -0.5)}
+                              />
+                            </div>
+                            <div className="text-center">
+                              <Label className="text-xs text-muted-foreground flex items-center justify-center gap-1 mb-1">
+                                <Sun className="h-3 w-3" /> lunch
+                              </Label>
+                              <MealInput
+                                value={memberMeals[member.id]?.lunch || 0}
+                                onChange={(v) => setMemberMealValue(member.id, 'lunch', v)}
+                                onIncrement={() => updateMemberMeal(member.id, 'lunch', 0.5)}
+                                onDecrement={() => updateMemberMeal(member.id, 'lunch', -0.5)}
+                              />
+                            </div>
+                            <div className="text-center">
+                              <Label className="text-xs text-muted-foreground flex items-center justify-center gap-1 mb-1">
+                                <Moon className="h-3 w-3" /> dinner
+                              </Label>
+                              <MealInput
+                                value={memberMeals[member.id]?.dinner || 0}
+                                onChange={(v) => setMemberMealValue(member.id, 'dinner', v)}
+                                onIncrement={() => updateMemberMeal(member.id, 'dinner', 0.5)}
+                                onDecrement={() => updateMemberMeal(member.id, 'dinner', -0.5)}
+                              />
+                            </div>
                           </div>
-                          <div className="text-center">
-                            <Label className="text-xs text-muted-foreground flex items-center justify-center gap-1 mb-1">
-                              <Sun className="h-3 w-3" /> lunch
-                            </Label>
-                            <MealInput
-                              value={memberMeals[member.id]?.lunch || 0}
-                              onChange={(v) => setMemberMealValue(member.id, 'lunch', v)}
-                              onIncrement={() => updateMemberMeal(member.id, 'lunch', 0.5)}
-                              onDecrement={() => updateMemberMeal(member.id, 'lunch', -0.5)}
-                            />
-                          </div>
-                          <div className="text-center">
-                            <Label className="text-xs text-muted-foreground flex items-center justify-center gap-1 mb-1">
-                              <Moon className="h-3 w-3" /> dinner
-                            </Label>
-                            <MealInput
-                              value={memberMeals[member.id]?.dinner || 0}
-                              onChange={(v) => setMemberMealValue(member.id, 'dinner', v)}
-                              onIncrement={() => updateMemberMeal(member.id, 'dinner', 0.5)}
-                              onDecrement={() => updateMemberMeal(member.id, 'dinner', -0.5)}
-                            />
-                          </div>
-                        </div>
-                      </motion.div>
-                    ))}
-                  </AnimatePresence>
-                </div>
+                        </motion.div>
+                      ))}
+                    </AnimatePresence>
+                  </div>
 
-                <DialogFooter className="mt-4">
-                  <Button onClick={handleSubmitAll} className="w-full gradient-primary">
-                    {dateHasMeals(selectedDate) ? 'Update All Meals' : 'Save All Meals'}
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
+                  <DialogFooter className="mt-4">
+                    <Button onClick={handleSubmitAll} className="w-full gradient-primary">
+                      {dateHasMeals(selectedDate) ? 'Update All Meals' : 'Save All Meals'}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
+            </div>
+          )}
         </div>
 
         {/* Meals by Date */}
@@ -546,7 +548,7 @@ export default function Meals() {
             <CardContent className="text-center py-12">
               <Utensils className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
               <p className="text-muted-foreground">No meals recorded yet.</p>
-              <p className="text-sm text-muted-foreground mt-1">Click "Add Meal" to start tracking.</p>
+              {isManager && <p className="text-sm text-muted-foreground mt-1">Click "Add Meal" to start tracking.</p>}
             </CardContent>
           </Card>
         ) : (
@@ -575,16 +577,18 @@ export default function Meals() {
                           </CardTitle>
                           <div className="flex items-center gap-2">
                             <span className="text-sm text-muted-foreground">Total: {totalMeals} meals</span>
-                            <Button 
-                              variant="ghost" 
-                              size="sm"
-                              onClick={() => {
-                                setSelectedDate(date);
-                                setIsAddDialogOpen(true);
-                              }}
-                            >
-                              <Edit2 className="h-4 w-4" />
-                            </Button>
+                            {isManager && (
+                              <Button 
+                                variant="ghost" 
+                                size="sm"
+                                onClick={() => {
+                                  setSelectedDate(date);
+                                  setIsAddDialogOpen(true);
+                                }}
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                            )}
                           </div>
                         </div>
                       </CardHeader>
@@ -612,7 +616,7 @@ export default function Meals() {
                                 <span className="text-sm font-bold text-primary">
                                   {meal.breakfast + meal.lunch + meal.dinner}
                                 </span>
-                                {(isManager || meal.userId === user?.id) && (
+                                {isManager && (
                                   <Button 
                                     variant="ghost" 
                                     size="sm"
