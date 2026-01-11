@@ -10,9 +10,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Utensils, Mail, User, Phone, Building, LogIn, UserPlus, ArrowLeft, KeyRound, RefreshCw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getUserByEmail, getPendingJoinRequestsForUser } from '@/lib/storage';
-import { verifyOTP, getOTPExpiry } from '@/lib/otp';
-import { sendOtpAPI } from '@/lib/api';
-import { updatePassword } from '@/contexts/AuthContext';
+import { getOTPExpiry } from '@/lib/otp';
+import { checkEmailExistsAPI, sendOtpAPI, verifyOtpAPI, resetPasswordAPI } from '@/lib/api';
 
 type AuthMode = 'login' | 'signup';
 type RoleType = 'member' | 'manager';
@@ -192,21 +191,38 @@ export default function Auth() {
   const handleSendOTP = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    
-    const user = getUserByEmail(resetEmail);
-    if (!user) {
-      toast({
-        title: 'User not found',
-        description: 'No account exists with this email address.',
-        variant: 'destructive',
-      });
-      setIsLoading(false);
-      return;
+
+    // Prefer backend source of truth (so backend-only users can reset)
+    const existsResult = await checkEmailExistsAPI(resetEmail);
+
+    if (existsResult.success) {
+      const exists = Boolean((existsResult.data as any)?.exists);
+      if (!exists) {
+        toast({
+          title: 'User not found',
+          description: 'No account exists with this email address.',
+          variant: 'destructive',
+        });
+        setIsLoading(false);
+        return;
+      }
+    } else if ((existsResult as any).usingLocalStorage) {
+      // Fallback to localStorage lookup
+      const user = getUserByEmail(resetEmail);
+      if (!user) {
+        toast({
+          title: 'User not found',
+          description: 'No account exists with this email address.',
+          variant: 'destructive',
+        });
+        setIsLoading(false);
+        return;
+      }
     }
-    
+
     // Send OTP via backend
     const result = await sendOtpAPI('password-reset', resetEmail);
-    
+
     if (result.success) {
       setLastOtpSent(new Date());
       toast({
@@ -217,11 +233,11 @@ export default function Auth() {
     } else {
       toast({
         title: 'Mail sending Unsuccessful',
-        description: result.error || 'Failed to send OTP. Please try again.',
+        description: (result as any).error || 'Failed to send OTP. Please try again.',
         variant: 'destructive',
       });
     }
-    
+
     setIsLoading(false);
   };
 
@@ -256,31 +272,31 @@ export default function Auth() {
     setIsResending(false);
   };
 
-  const handleVerifyOTP = (e: React.FormEvent) => {
+  const handleVerifyOTP = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    const result = verifyOTP(resetEmail, otp);
-    
-    if (!result.valid) {
+
+    const result = await verifyOtpAPI('password-reset', resetEmail, otp);
+
+    if (!result.success) {
       toast({
         title: 'Invalid OTP',
-        description: result.error,
+        description: (result as any).error || 'Invalid or expired OTP.',
         variant: 'destructive',
       });
       return;
     }
-    
+
     toast({
       title: 'OTP Verified',
       description: 'You can now set a new password.',
     });
-    
+
     setResetStep('newPassword');
   };
 
-  const handleResetPassword = (e: React.FormEvent) => {
+  const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (newPassword !== confirmPassword) {
       toast({
         title: 'Passwords do not match',
@@ -289,7 +305,7 @@ export default function Auth() {
       });
       return;
     }
-    
+
     if (newPassword.length < 6) {
       toast({
         title: 'Password too short',
@@ -298,17 +314,25 @@ export default function Auth() {
       });
       return;
     }
-    
-    // Update password
-    updatePassword(resetEmail, newPassword);
-    
+
+    const result = await resetPasswordAPI(resetEmail, newPassword);
+
+    if (result.success) {
+      toast({
+        title: 'Password Reset Successful',
+        description: 'You can now login with your new password.',
+      });
+
+      resetForgotPasswordForm();
+      setShowForgotPassword(false);
+      return;
+    }
+
     toast({
-      title: 'Password Reset Successful',
-      description: 'You can now login with your new password.',
+      title: 'Password Reset Failed',
+      description: (result as any).error || 'Please try again.',
+      variant: 'destructive',
     });
-    
-    resetForgotPasswordForm();
-    setShowForgotPassword(false);
   };
 
   if (showForgotPassword) {
