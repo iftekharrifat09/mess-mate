@@ -1,16 +1,23 @@
 /**
  * Data Service - Unified data layer that tries backend API first, falls back to localStorage
  * This module wraps all data operations and provides a consistent interface.
+ * Includes caching for improved performance.
  */
 
 import { shouldUseBackend, isBackendAvailable, isMongoDbConnected } from './config';
 import * as api from './api';
 import * as storage from './storage';
+import { apiCache, cacheKeys, invalidateMonthData } from './apiCache';
 import { User, Mess, Month, Meal, Deposit, MealCost, OtherCost, JoinRequest, Notice, BazarDate, Notification, Note } from '@/types';
 import { toast } from '@/hooks/use-toast';
 
-// Helper to show localStorage fallback alert
+// Helper to show localStorage fallback alert - debounced
+let lastFallbackToast = 0;
 function showFallbackAlert() {
+  const now = Date.now();
+  if (now - lastFallbackToast < 5000) return; // Only show once every 5 seconds
+  lastFallbackToast = now;
+  
   toast({
     title: "MongoDB not connected",
     description: "Saving data to Local Storage",
@@ -107,10 +114,14 @@ export async function getMesses(): Promise<Mess[]> {
 export async function getMessById(id: string | undefined): Promise<Mess | undefined> {
   if (!id) return undefined;
   
+  // Check cache first
+  const cacheKey = cacheKeys.mess(id);
+  const cached = apiCache.get<Mess>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     try {
       const result = await api.getMessAPI(id);
-      console.log('API getMessById result:', result);
       if (result.success && result.data) {
         const data = result.data as any;
         const mess = data.mess || data;
@@ -118,6 +129,8 @@ export async function getMessById(id: string | undefined): Promise<Mess | undefi
         if (mess && !mess.messCode && mess.code) {
           mess.messCode = mess.code;
         }
+        // Cache the result
+        if (mess) apiCache.set(cacheKey, mess, apiCache.getTTL('long'));
         return mess;
       }
       // If API call fails but backend is enabled, still try localStorage
@@ -249,11 +262,19 @@ export async function getMonthsByMessId(messId: string | undefined): Promise<Mon
 export async function getActiveMonth(messId: string | undefined): Promise<Month | undefined> {
   if (!messId) return undefined;
   
+  // Check cache first
+  const cacheKey = cacheKeys.activeMonth(messId);
+  const cached = apiCache.get<Month>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     try {
       const result = await api.getActiveMonthAPI(messId);
       if (result.success && result.data) {
-        return (result.data as any).month || result.data;
+        const month = (result.data as any).month || result.data;
+        // Cache the result
+        if (month) apiCache.set(cacheKey, month, apiCache.getTTL('default'));
+        return month;
       }
       // Fallback to localStorage if API fails
       if (result.usingLocalStorage) {
@@ -298,13 +319,21 @@ export async function updateMonth(id: string, updates: Partial<Month>): Promise<
 // ============================================
 
 export async function getMealsByMonthId(monthId: string): Promise<Meal[]> {
+  // Check cache first
+  const cacheKey = cacheKeys.meals(monthId);
+  const cached = apiCache.get<Meal[]>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     try {
       const result = await api.getMealsAPI(monthId);
       if (result.success && result.data) {
         const data = result.data as any;
         const meals = data.meals || (Array.isArray(data) ? data : []);
-        return Array.isArray(meals) ? meals : [];
+        const result_arr = Array.isArray(meals) ? meals : [];
+        // Cache the result
+        apiCache.set(cacheKey, result_arr, apiCache.getTTL('short'));
+        return result_arr;
       }
       if (result.usingLocalStorage) {
         return storage.getMealsByMonthId(monthId);
@@ -326,6 +355,11 @@ export async function getMealsByUserAndMonth(userId: string, monthId: string): P
 }
 
 export async function createMeal(mealData: Omit<Meal, 'id' | 'createdAt'>): Promise<Meal> {
+  // Invalidate cache on mutation
+  if (mealData.monthId) {
+    apiCache.invalidate(cacheKeys.meals(mealData.monthId));
+  }
+  
   if (shouldUseBackend()) {
     const result = await api.createMealAPI(mealData);
     if (result.success && result.data) {
@@ -339,6 +373,11 @@ export async function createMeal(mealData: Omit<Meal, 'id' | 'createdAt'>): Prom
 }
 
 export async function updateMeal(id: string, updates: Partial<Meal>): Promise<Meal | undefined> {
+  // Invalidate cache on mutation
+  if (updates.monthId) {
+    apiCache.invalidate(cacheKeys.meals(updates.monthId));
+  }
+  
   if (shouldUseBackend()) {
     const result = await api.updateMealAPI(id, updates);
     if (result.success && result.data) {
@@ -351,7 +390,12 @@ export async function updateMeal(id: string, updates: Partial<Meal>): Promise<Me
   return storage.updateMeal(id, updates);
 }
 
-export async function deleteMeal(id: string): Promise<boolean> {
+export async function deleteMeal(id: string, monthId?: string): Promise<boolean> {
+  // Invalidate cache on mutation
+  if (monthId) {
+    apiCache.invalidate(cacheKeys.meals(monthId));
+  }
+  
   if (shouldUseBackend()) {
     const result = await api.deleteMealAPI(id);
     if (result.success) {
@@ -369,13 +413,21 @@ export async function deleteMeal(id: string): Promise<boolean> {
 // ============================================
 
 export async function getDepositsByMonthId(monthId: string): Promise<Deposit[]> {
+  // Check cache first
+  const cacheKey = cacheKeys.deposits(monthId);
+  const cached = apiCache.get<Deposit[]>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     try {
       const result = await api.getDepositsAPI(monthId);
       if (result.success && result.data) {
         const data = result.data as any;
         const deposits = data.deposits || (Array.isArray(data) ? data : []);
-        return Array.isArray(deposits) ? deposits : [];
+        const result_arr = Array.isArray(deposits) ? deposits : [];
+        // Cache the result
+        apiCache.set(cacheKey, result_arr, apiCache.getTTL('short'));
+        return result_arr;
       }
       if (result.usingLocalStorage) {
         return storage.getDepositsByMonthId(monthId);
@@ -698,18 +750,25 @@ export function cleanupPendingJoinRequests(userId: string, exceptMessId?: string
 export async function getMessMembers(messId: string | undefined): Promise<User[]> {
   if (!messId) return [];
   
+  // Check cache first
+  const cacheKey = cacheKeys.messMembers(messId);
+  const cached = apiCache.get<User[]>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     try {
       const result = await api.getMessMembersAPI(messId);
-      console.log('API getMessMembers result:', result);
       if (result.success && result.data) {
         const data = result.data as any;
         const members = data.members || (Array.isArray(data) ? data : []);
         // Ensure fullName is set
-        return (Array.isArray(members) ? members : []).map((m: any) => ({
+        const result_arr = (Array.isArray(members) ? members : []).map((m: any) => ({
           ...m,
           fullName: m.fullName || m.name || 'Unknown',
         }));
+        // Cache the result
+        apiCache.set(cacheKey, result_arr, apiCache.getTTL('default'));
+        return result_arr;
       }
       // Fallback to localStorage if API fails
       if (result.usingLocalStorage) {
@@ -793,6 +852,11 @@ export async function deleteNotice(id: string): Promise<boolean> {
 export async function getBazarDatesByMessId(messId: string | undefined): Promise<BazarDate[]> {
   if (!messId) return [];
 
+  // Check cache first
+  const cacheKey = cacheKeys.bazarDates(messId);
+  const cached = apiCache.get<BazarDate[]>(cacheKey);
+  if (cached) return cached;
+
   if (shouldUseBackend()) {
     try {
       const result = await api.getBazarDatesAPI(messId);
@@ -800,7 +864,10 @@ export async function getBazarDatesByMessId(messId: string | undefined): Promise
         const data = result.data as any;
         // Backend returns { success: true, dates: [...] }
         const bazarDates = data.dates || data.bazarDates || (Array.isArray(data) ? data : []);
-        return Array.isArray(bazarDates) ? bazarDates : [];
+        const result_arr = Array.isArray(bazarDates) ? bazarDates : [];
+        // Cache the result
+        apiCache.set(cacheKey, result_arr, apiCache.getTTL('default'));
+        return result_arr;
       }
       if (result.usingLocalStorage) {
         return storage.getBazarDatesByMessId(messId);
@@ -813,7 +880,12 @@ export async function getBazarDatesByMessId(messId: string | undefined): Promise
   return storage.getBazarDatesByMessId(messId);
 }
 
-export async function createBazarDate(dateData: Omit<BazarDate, 'id' | 'createdAt'>): Promise<BazarDate> {
+export async function createBazarDate(dateData: Omit<BazarDate, 'id' | 'createdAt'>, messId?: string): Promise<BazarDate> {
+  // Invalidate cache on mutation
+  if (messId) {
+    apiCache.invalidate(cacheKeys.bazarDates(messId));
+  }
+  
   if (shouldUseBackend()) {
     // Backend accepts bulk create: { userId, userName, dates: string[] }
     const payload = {
@@ -1010,6 +1082,39 @@ export async function deleteNote(id: string): Promise<boolean> {
     }
   }
   return storage.deleteNote(id);
+}
+
+// ============================================
+// CACHE MANAGEMENT
+// ============================================
+
+/**
+ * Clear all cached data - useful when user logs out or data needs refresh
+ */
+export function clearCache(): void {
+  apiCache.clear();
+}
+
+/**
+ * Invalidate cache for a specific mess - useful after mutations
+ */
+export function invalidateMessCache(messId: string): void {
+  apiCache.invalidate(cacheKeys.mess(messId));
+  apiCache.invalidate(cacheKeys.messMembers(messId));
+  apiCache.invalidate(cacheKeys.activeMonth(messId));
+  apiCache.invalidate(cacheKeys.bazarDates(messId));
+  apiCache.invalidate(cacheKeys.notices(messId));
+  apiCache.invalidate(cacheKeys.notes(messId));
+}
+
+/**
+ * Invalidate cache for a specific month - useful after mutations
+ */
+export function invalidateMonthCache(monthId: string): void {
+  apiCache.invalidate(cacheKeys.meals(monthId));
+  apiCache.invalidate(cacheKeys.deposits(monthId));
+  apiCache.invalidate(cacheKeys.mealCosts(monthId));
+  apiCache.invalidate(cacheKeys.otherCosts(monthId));
 }
 
 // ============================================

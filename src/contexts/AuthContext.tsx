@@ -19,6 +19,7 @@ import {
   checkMongoDbStatus,
 } from '@/lib/api';
 import { USE_BACKEND, isMongoDbConnected, setMongoDbConnected } from '@/lib/config';
+import { apiCache } from '@/lib/apiCache';
 import { toast } from '@/hooks/use-toast';
 
 interface AuthContextType {
@@ -392,6 +393,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     saveCurrentUser(null);
     removeToken();
+    apiCache.clear(); // Clear cache on logout
   };
 
   return (

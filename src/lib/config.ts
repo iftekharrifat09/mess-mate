@@ -12,11 +12,17 @@ let mongoDbConnected = false;
 let backendAvailable = false;
 let lastHealthCheck = 0;
 let healthCheckInProgress = false;
-const HEALTH_CHECK_INTERVAL = 30000; // 30 seconds cache
+const HEALTH_CHECK_INTERVAL = 60000; // 60 seconds cache (increased from 30s)
+
+// Once backend is confirmed working, we trust it for longer
+let backendConfirmedWorking = false;
 
 export function setMongoDbConnected(status: boolean) {
   mongoDbConnected = status;
   lastHealthCheck = Date.now();
+  if (status) {
+    backendConfirmedWorking = true;
+  }
 }
 
 export function isMongoDbConnected() {
@@ -25,6 +31,9 @@ export function isMongoDbConnected() {
 
 export function setBackendAvailable(status: boolean) {
   backendAvailable = status;
+  if (status) {
+    backendConfirmedWorking = true;
+  }
 }
 
 export function isBackendAvailable() {
@@ -33,6 +42,10 @@ export function isBackendAvailable() {
 
 // Check if health check is still valid (within cache interval)
 export function isHealthCheckValid() {
+  // If backend was confirmed working, use longer cache
+  if (backendConfirmedWorking) {
+    return Date.now() - lastHealthCheck < HEALTH_CHECK_INTERVAL * 2;
+  }
   return Date.now() - lastHealthCheck < HEALTH_CHECK_INTERVAL;
 }
 
@@ -50,11 +63,20 @@ export function shouldUseBackend() {
   // If USE_BACKEND is false, always use localStorage
   if (!USE_BACKEND) return false;
   
+  // If backend was confirmed working before, trust it
+  if (backendConfirmedWorking && backendAvailable && mongoDbConnected) return true;
+  
   // If health check was done and backend+mongo are available, use backend
   if (backendAvailable && mongoDbConnected) return true;
   
   // Otherwise use localStorage
   return false;
+}
+
+// Reset backend confirmation (useful for reconnection scenarios)
+export function resetBackendConfirmation() {
+  backendConfirmedWorking = false;
+  lastHealthCheck = 0;
 }
 
 // Demo configuration for testing
@@ -65,6 +87,6 @@ export const CONFIG = {
   // API endpoints
   api: {
     baseUrl: API_BASE_URL,
-    timeout: 15000, // 15 seconds (increased for slower connections)
+    timeout: 5000, // 5 seconds (reduced from 15s for faster feedback)
   },
 };
