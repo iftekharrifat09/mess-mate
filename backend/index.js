@@ -46,6 +46,18 @@ function transformDoc(doc) {
   return { id: _id.toString(), ...rest };
 }
 
+// Helper to transform Mess document with messCode field for frontend compatibility
+function transformMessDoc(doc) {
+  if (!doc) return null;
+  const { _id, code, ...rest } = doc;
+  return { 
+    id: _id.toString(), 
+    messCode: code,  // Frontend expects messCode instead of code
+    code,  // Keep original code for backward compatibility
+    ...rest 
+  };
+}
+
 function transformDocs(docs) {
   return docs.map(transformDoc);
 }
@@ -642,7 +654,7 @@ app.get("/api/mess", authMiddleware, async (req, res) => {
     const mess = await collections.messes.findOne({
       _id: new ObjectId(req.user.messId),
     });
-    res.json({ success: true, mess: transformDoc(mess) });
+    res.json({ success: true, mess: transformMessDoc(mess) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to get mess" });
   }
@@ -653,9 +665,35 @@ app.get("/api/mess/:id", authMiddleware, async (req, res) => {
     const mess = await collections.messes.findOne({
       _id: new ObjectId(req.params.id),
     });
-    res.json({ success: true, mess: transformDoc(mess) });
+    res.json({ success: true, mess: transformMessDoc(mess) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to get mess" });
+  }
+});
+
+// Get members by messId parameter (for frontend compatibility)
+app.get("/api/mess/:id/members", authMiddleware, async (req, res) => {
+  try {
+    const messId = req.params.id;
+    const members = await collections.users
+      .find({ messId, isActive: { $ne: false } })
+      .toArray();
+    res.json({
+      success: true,
+      members: members.map((m) => ({
+        id: m._id.toString(),
+        name: m.name,
+        fullName: m.name,
+        email: m.email,
+        phone: m.phone || "",
+        role: m.role,
+        messId: m.messId,
+        isApproved: m.isApproved !== false,
+        isActive: m.isActive !== false,
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to get members" });
   }
 });
 
@@ -729,7 +767,7 @@ app.put("/api/mess", authMiddleware, async (req, res) => {
       type: "mess_update",
     });
 
-    res.json({ success: true, mess: transformDoc(mess) });
+    res.json({ success: true, mess: transformMessDoc(mess) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to update mess" });
   }

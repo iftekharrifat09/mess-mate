@@ -59,7 +59,9 @@ export default function ManageMess() {
     setLoading(true);
     
     try {
+      console.log('Loading mess data for messId:', user.messId);
       const messData = await dataService.getMessById(user.messId);
+      console.log('Mess data loaded:', messData);
       setMess(messData || null);
       if (messData) {
         setNewMessName(messData.name);
