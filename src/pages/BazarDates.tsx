@@ -208,8 +208,19 @@ export default function BazarDates() {
     new Date(a.date).getTime() - new Date(b.date).getTime()
   );
 
-  const upcomingDates = sortedDates.filter(d => isToday(new Date(d.date)) || isFuture(new Date(d.date)));
-  const pastDates = sortedDates.filter(d => isPast(new Date(d.date)) && !isToday(new Date(d.date)));
+  // Use startOfDay to properly compare dates ignoring time component
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const upcomingDates = sortedDates.filter(d => {
+    const dateObj = new Date(d.date + 'T00:00:00'); // Ensure local timezone
+    return dateObj >= today;
+  });
+  
+  const pastDates = sortedDates.filter(d => {
+    const dateObj = new Date(d.date + 'T00:00:00'); // Ensure local timezone
+    return dateObj < today;
+  });
 
   if (isLoading) {
     return (
