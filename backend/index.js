@@ -19,11 +19,9 @@
 const express = require("express");
 const { MongoClient, ObjectId } = require("mongodb");
 const cors = require("cors");
-
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
-
 require("dotenv").config();
 
 const app = express();
@@ -33,16 +31,24 @@ app.use(cors());
 app.use(express.json());
 
 // MongoDB Connection
-const MONGO_URI =
-  process.env.MONGO_URI ||
-  "mongodb+srv://demoUser:demoPass@cluster0.mongodb.net/messDB";
-const JWT_SECRET =
-  process.env.JWT_SECRET || "your-super-secret-jwt-key-change-this";
+const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/messDB";
+const JWT_SECRET = process.env.JWT_SECRET || "your-super-secret-jwt-key-change-this";
 const PORT = process.env.PORT || 5000;
 
 let db;
 let collections = {};
 let mongoDbConnected = false;
+
+// Helper to transform MongoDB document to frontend format
+function transformDoc(doc) {
+  if (!doc) return null;
+  const { _id, ...rest } = doc;
+  return { id: _id.toString(), ...rest };
+}
+
+function transformDocs(docs) {
+  return docs.map(transformDoc);
+}
 
 // Connect to MongoDB
 async function connectToDatabase() {
@@ -81,15 +87,15 @@ async function connectToDatabase() {
       collections.meals.createIndex({ monthId: 1 }),
       collections.meals.createIndex({ date: 1 }),
       collections.deposits.createIndex({ monthId: 1 }),
-      collections.deposits.createIndex({ oderId: 1 }),
+      collections.deposits.createIndex({ userId: 1 }),
       collections.mealCosts.createIndex({ monthId: 1 }),
-      collections.mealCosts.createIndex({ oderId: 1 }),
+      collections.mealCosts.createIndex({ userId: 1 }),
       collections.otherCosts.createIndex({ monthId: 1 }),
       collections.joinRequests.createIndex({ messId: 1 }),
-      collections.joinRequests.createIndex({ oderId: 1 }),
+      collections.joinRequests.createIndex({ userId: 1 }),
       collections.notices.createIndex({ messId: 1 }),
       collections.bazarDates.createIndex({ messId: 1 }),
-      collections.notifications.createIndex({ oderId: 1 }),
+      collections.notifications.createIndex({ userId: 1 }),
       collections.notes.createIndex({ messId: 1 }),
       collections.otps.createIndex({ email: 1 }),
       collections.otps.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
@@ -141,9 +147,7 @@ const authMiddleware = async (req, res, next) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
     if (!token) {
-      return res
-        .status(401)
-        .json({ success: false, error: "No token provided" });
+      return res.status(401).json({ success: false, error: "No token provided" });
     }
     const decoded = jwt.verify(token, JWT_SECRET);
     req.userId = decoded.userId;
@@ -169,7 +173,7 @@ async function notifyMembers(messId, excludeUserId, notification) {
     .toArray();
 
   const notifications = members.map((member) => ({
-    oderId: member._id.toString(),
+    userId: member._id.toString(),
     messId,
     ...notification,
     seen: false,
@@ -186,7 +190,7 @@ async function notifyManager(messId, notification) {
   const mess = await collections.messes.findOne({ _id: new ObjectId(messId) });
   if (mess) {
     await collections.notifications.insertOne({
-      oderId: mess.managerId,
+      userId: mess.managerId,
       messId,
       ...notification,
       seen: false,
@@ -202,15 +206,13 @@ async function notifyManager(messId, notification) {
 // Register Manager
 app.post("/api/auth/register-manager", async (req, res) => {
   try {
-    const { name, email, password, messName } = req.body;
+    const { name, email, password, messName, phone } = req.body;
 
     const existingUser = await collections.users.findOne({
       email: email.toLowerCase(),
     });
     if (existingUser) {
-      return res
-        .status(400)
-        .json({ success: false, error: "Email already registered" });
+      return res.status(400).json({ success: false, error: "Email already registered" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -220,10 +222,12 @@ app.post("/api/auth/register-manager", async (req, res) => {
       name,
       email: email.toLowerCase(),
       password: hashedPassword,
+      phone: phone || "",
       role: "manager",
       messId: null,
+      isApproved: true,
+      isActive: true,
       emailVerified: false,
-      phone: "",
       createdAt: new Date(),
     });
 
@@ -239,6 +243,22 @@ app.post("/api/auth/register-manager", async (req, res) => {
       { $set: { messId: messResult.insertedId.toString() } }
     );
 
+    // Create initial month
+    const now = new Date();
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June',
+      'July', 'August', 'September', 'October', 'November', 'December'];
+    
+    await collections.months.insertOne({
+      messId: messResult.insertedId.toString(),
+      name: `${monthNames[now.getMonth()]} ${now.getFullYear()}`,
+      year: now.getFullYear(),
+      month: now.getMonth() + 1,
+      startDate: now.toISOString().split('T')[0],
+      endDate: null,
+      isActive: true,
+      createdAt: new Date(),
+    });
+
     const token = jwt.sign(
       { userId: userResult.insertedId.toString() },
       JWT_SECRET,
@@ -251,8 +271,11 @@ app.post("/api/auth/register-manager", async (req, res) => {
         id: userResult.insertedId.toString(),
         name,
         email: email.toLowerCase(),
+        phone: phone || "",
         role: "manager",
         messId: messResult.insertedId.toString(),
+        isApproved: true,
+        isActive: true,
         emailVerified: false,
       },
       mess: {
@@ -271,15 +294,13 @@ app.post("/api/auth/register-manager", async (req, res) => {
 // Register Member
 app.post("/api/auth/register-member", async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, phone } = req.body;
 
     const existingUser = await collections.users.findOne({
       email: email.toLowerCase(),
     });
     if (existingUser) {
-      return res
-        .status(400)
-        .json({ success: false, error: "Email already registered" });
+      return res.status(400).json({ success: false, error: "Email already registered" });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -288,10 +309,12 @@ app.post("/api/auth/register-member", async (req, res) => {
       name,
       email: email.toLowerCase(),
       password: hashedPassword,
+      phone: phone || "",
       role: "member",
       messId: null,
+      isApproved: false,
+      isActive: true,
       emailVerified: false,
-      phone: "",
       createdAt: new Date(),
     });
 
@@ -307,8 +330,11 @@ app.post("/api/auth/register-member", async (req, res) => {
         id: userResult.insertedId.toString(),
         name,
         email: email.toLowerCase(),
+        phone: phone || "",
         role: "member",
         messId: null,
+        isApproved: false,
+        isActive: true,
         emailVerified: false,
       },
       token,
@@ -328,16 +354,16 @@ app.post("/api/auth/login", async (req, res) => {
       email: email.toLowerCase(),
     });
     if (!user) {
-      return res
-        .status(400)
-        .json({ success: false, error: "Invalid email or password" });
+      return res.status(400).json({ success: false, error: "Invalid email or password" });
     }
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res
-        .status(400)
-        .json({ success: false, error: "Invalid email or password" });
+      return res.status(400).json({ success: false, error: "Invalid email or password" });
+    }
+
+    if (!user.isActive) {
+      return res.status(400).json({ success: false, error: "Your account has been deactivated" });
     }
 
     const token = jwt.sign({ userId: user._id.toString() }, JWT_SECRET, {
@@ -353,6 +379,8 @@ app.post("/api/auth/login", async (req, res) => {
         phone: user.phone || "",
         role: user.role,
         messId: user.messId,
+        isApproved: user.isApproved !== false,
+        isActive: user.isActive !== false,
         emailVerified: user.emailVerified || false,
       },
       token,
@@ -376,6 +404,8 @@ app.get("/api/auth/me", authMiddleware, async (req, res) => {
         phone: user.phone || "",
         role: user.role,
         messId: user.messId,
+        isApproved: user.isApproved !== false,
+        isActive: user.isActive !== false,
         emailVerified: user.emailVerified || false,
       },
     });
@@ -406,6 +436,8 @@ app.put("/api/auth/profile", authMiddleware, async (req, res) => {
         phone: user.phone || "",
         role: user.role,
         messId: user.messId,
+        isApproved: user.isApproved !== false,
+        isActive: user.isActive !== false,
         emailVerified: user.emailVerified || false,
       },
     });
@@ -424,9 +456,7 @@ app.put("/api/auth/change-password", authMiddleware, async (req, res) => {
 
     const isMatch = await bcrypt.compare(currentPassword, user.password);
     if (!isMatch) {
-      return res
-        .status(400)
-        .json({ success: false, error: "Current password is incorrect" });
+      return res.status(400).json({ success: false, error: "Current password is incorrect" });
     }
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
@@ -437,9 +467,7 @@ app.put("/api/auth/change-password", authMiddleware, async (req, res) => {
 
     res.json({ success: true, message: "Password changed successfully" });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, error: "Failed to change password" });
+    res.status(500).json({ success: false, error: "Failed to change password" });
   }
 });
 
@@ -452,16 +480,13 @@ app.post("/api/send-otp", async (req, res) => {
     const { type, email } = req.body;
 
     if (!type || !email) {
-      return res
-        .status(400)
-        .json({ success: false, error: "Type and email are required" });
+      return res.status(400).json({ success: false, error: "Type and email are required" });
     }
 
-    // Delete existing OTPs for this email and type
     await collections.otps.deleteMany({ email: email.toLowerCase(), type });
 
     const otp = generateOTP();
-    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
 
     await collections.otps.insertOne({
       email: email.toLowerCase(),
@@ -477,47 +502,36 @@ app.post("/api/send-otp", async (req, res) => {
     switch (type) {
       case "VERIFY_EMAIL":
         subject = "Verify Your Email - Mess Manager";
-        html = `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h1 style="color: #4F46E5;">Email Verification</h1>
-            <p>Your verification OTP is:</p>
-            <h2 style="background: #F3F4F6; padding: 20px; text-align: center; font-size: 32px; letter-spacing: 8px;">${otp}</h2>
-            <p>This code expires in 10 minutes.</p>
-            <p style="color: #6B7280; font-size: 12px;">If you didn't request this, please ignore this email.</p>
-          </div>
-        `;
+        html = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #4F46E5;">Email Verification</h1>
+          <p>Your verification OTP is:</p>
+          <h2 style="background: #F3F4F6; padding: 20px; text-align: center; font-size: 32px; letter-spacing: 8px;">${otp}</h2>
+          <p>This code expires in 10 minutes.</p>
+        </div>`;
         break;
 
       case "CHANGE_EMAIL":
         subject = "Verify Your New Email - Mess Manager";
-        html = `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h1 style="color: #4F46E5;">Email Change Verification</h1>
-            <p>Use this OTP to confirm your new email address:</p>
-            <h2 style="background: #F3F4F6; padding: 20px; text-align: center; font-size: 32px; letter-spacing: 8px;">${otp}</h2>
-            <p>This code expires in 10 minutes.</p>
-            <p style="color: #6B7280; font-size: 12px;">If you didn't request this, please ignore this email.</p>
-          </div>
-        `;
+        html = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #4F46E5;">Email Change Verification</h1>
+          <p>Use this OTP to confirm your new email address:</p>
+          <h2 style="background: #F3F4F6; padding: 20px; text-align: center; font-size: 32px; letter-spacing: 8px;">${otp}</h2>
+          <p>This code expires in 10 minutes.</p>
+        </div>`;
         break;
 
       case "FORGOT_PASSWORD":
         subject = "Reset Your Password - Mess Manager";
-        html = `
-          <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
-            <h1 style="color: #4F46E5;">Password Reset</h1>
-            <p>Your password reset OTP is:</p>
-            <h2 style="background: #F3F4F6; padding: 20px; text-align: center; font-size: 32px; letter-spacing: 8px;">${otp}</h2>
-            <p>This code expires in 10 minutes.</p>
-            <p style="color: #6B7280; font-size: 12px;">If you didn't request this, please ignore this email.</p>
-          </div>
-        `;
+        html = `<div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+          <h1 style="color: #4F46E5;">Password Reset</h1>
+          <p>Your password reset OTP is:</p>
+          <h2 style="background: #F3F4F6; padding: 20px; text-align: center; font-size: 32px; letter-spacing: 8px;">${otp}</h2>
+          <p>This code expires in 10 minutes.</p>
+        </div>`;
         break;
 
       default:
-        return res
-          .status(400)
-          .json({ success: false, error: "Invalid OTP type" });
+        return res.status(400).json({ success: false, error: "Invalid OTP type" });
     }
 
     await transporter.sendMail({
@@ -546,15 +560,11 @@ app.post("/api/verify-otp", async (req, res) => {
     });
 
     if (!otpRecord) {
-      return res
-        .status(400)
-        .json({ success: false, error: "Invalid or expired OTP" });
+      return res.status(400).json({ success: false, error: "Invalid or expired OTP" });
     }
 
-    // Delete used OTP
     await collections.otps.deleteOne({ _id: otpRecord._id });
 
-    // If verifying email, update user
     if (type === "VERIFY_EMAIL") {
       await collections.users.updateOne(
         { email: email.toLowerCase() },
@@ -592,40 +602,134 @@ app.post("/api/reset-password", async (req, res) => {
 });
 
 // ============================================
+// USER ROUTES
+// ============================================
+
+app.get("/api/users/:id", authMiddleware, async (req, res) => {
+  try {
+    const user = await collections.users.findOne({ _id: new ObjectId(req.params.id) });
+    if (!user) {
+      return res.status(404).json({ success: false, error: "User not found" });
+    }
+    res.json({
+      success: true,
+      user: {
+        id: user._id.toString(),
+        name: user.name,
+        email: user.email,
+        phone: user.phone || "",
+        role: user.role,
+        messId: user.messId,
+        isApproved: user.isApproved !== false,
+        isActive: user.isActive !== false,
+        emailVerified: user.emailVerified || false,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to get user" });
+  }
+});
+
+// ============================================
 // MESS ROUTES
 // ============================================
 
 app.get("/api/mess", authMiddleware, async (req, res) => {
   try {
+    if (!req.user.messId) {
+      return res.json({ success: true, mess: null });
+    }
     const mess = await collections.messes.findOne({
       _id: new ObjectId(req.user.messId),
     });
-    res.json({ success: true, mess });
+    res.json({ success: true, mess: transformDoc(mess) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to get mess" });
   }
 });
 
+app.get("/api/mess/:id", authMiddleware, async (req, res) => {
+  try {
+    const mess = await collections.messes.findOne({
+      _id: new ObjectId(req.params.id),
+    });
+    res.json({ success: true, mess: transformDoc(mess) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to get mess" });
+  }
+});
+
+app.get("/api/mess/code/:code", async (req, res) => {
+  try {
+    const mess = await collections.messes.findOne({
+      code: req.params.code.toUpperCase(),
+    });
+    if (!mess) {
+      return res.status(404).json({ success: false, error: "Mess not found" });
+    }
+    res.json({
+      success: true,
+      mess: {
+        id: mess._id.toString(),
+        name: mess.name,
+        code: mess.code,
+        messCode: mess.code,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to search mess" });
+  }
+});
+
+app.get("/api/mess/search/:query", async (req, res) => {
+  try {
+    const query = req.params.query;
+    const messes = await collections.messes
+      .find({
+        $or: [
+          { code: { $regex: query, $options: "i" } },
+          { name: { $regex: query, $options: "i" } },
+        ],
+      })
+      .toArray();
+    
+    res.json({
+      success: true,
+      messes: messes.map((m) => ({
+        id: m._id.toString(),
+        name: m.name,
+        code: m.code,
+        messCode: m.code,
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to search messes" });
+  }
+});
+
 app.put("/api/mess", authMiddleware, async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, code } = req.body;
+    const updateData = {};
+    if (name) updateData.name = name;
+    if (code) updateData.code = code.toUpperCase();
+
     await collections.messes.updateOne(
       { _id: new ObjectId(req.user.messId) },
-      { $set: { name } }
+      { $set: updateData }
     );
 
     const mess = await collections.messes.findOne({
       _id: new ObjectId(req.user.messId),
     });
 
-    // Notify members
     await notifyMembers(req.user.messId, req.userId, {
-      title: "Mess Name Updated",
-      message: `Mess name changed to "${name}"`,
+      title: "Mess Updated",
+      message: name ? `Mess name changed to "${name}"` : "Mess code has been updated",
       type: "mess_update",
     });
 
-    res.json({ success: true, mess });
+    res.json({ success: true, mess: transformDoc(mess) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to update mess" });
   }
@@ -636,7 +740,6 @@ app.delete("/api/mess", authMiddleware, async (req, res) => {
     const messId = req.user.messId;
     const messObjectId = new ObjectId(messId);
 
-    // Delete all related data
     await Promise.all([
       collections.users.updateMany({ messId }, { $set: { messId: null } }),
       collections.months.deleteMany({ messId }),
@@ -661,16 +764,20 @@ app.delete("/api/mess", authMiddleware, async (req, res) => {
 app.get("/api/mess/members", authMiddleware, async (req, res) => {
   try {
     const members = await collections.users
-      .find({ messId: req.user.messId })
+      .find({ messId: req.user.messId, isActive: { $ne: false } })
       .toArray();
     res.json({
       success: true,
       members: members.map((m) => ({
         id: m._id.toString(),
         name: m.name,
+        fullName: m.name,
         email: m.email,
         phone: m.phone || "",
         role: m.role,
+        messId: m.messId,
+        isApproved: m.isApproved !== false,
+        isActive: m.isActive !== false,
       })),
     });
   } catch (error) {
@@ -688,7 +795,7 @@ app.get("/api/months", authMiddleware, async (req, res) => {
       .find({ messId: req.user.messId })
       .sort({ createdAt: -1 })
       .toArray();
-    res.json({ success: true, months });
+    res.json({ success: true, months: transformDocs(months) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to get months" });
   }
@@ -696,9 +803,8 @@ app.get("/api/months", authMiddleware, async (req, res) => {
 
 app.post("/api/months", authMiddleware, async (req, res) => {
   try {
-    const { name, startDate } = req.body;
+    const { name, startDate, year, month } = req.body;
 
-    // Close active months
     await collections.months.updateMany(
       { messId: req.user.messId, isActive: true },
       {
@@ -709,19 +815,20 @@ app.post("/api/months", authMiddleware, async (req, res) => {
       }
     );
 
-    const month = {
+    const monthDoc = {
       messId: req.user.messId,
       name,
       startDate,
+      year: year || new Date().getFullYear(),
+      month: month || new Date().getMonth() + 1,
       endDate: null,
       isActive: true,
       createdAt: new Date(),
     };
 
-    const result = await collections.months.insertOne(month);
-    month._id = result.insertedId.toString();
+    const result = await collections.months.insertOne(monthDoc);
 
-    res.json({ success: true, month });
+    res.json({ success: true, month: { id: result.insertedId.toString(), ...monthDoc } });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to create month" });
   }
@@ -733,11 +840,32 @@ app.get("/api/months/active", authMiddleware, async (req, res) => {
       messId: req.user.messId,
       isActive: true,
     });
-    res.json({ success: true, month });
+    res.json({ success: true, month: transformDoc(month) });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, error: "Failed to get active month" });
+    res.status(500).json({ success: false, error: "Failed to get active month" });
+  }
+});
+
+app.put("/api/months/:id", authMiddleware, async (req, res) => {
+  try {
+    const { isActive, ...updates } = req.body;
+    
+    if (isActive === true) {
+      await collections.months.updateMany(
+        { messId: req.user.messId, isActive: true },
+        { $set: { isActive: false, endDate: new Date().toISOString().split("T")[0] } }
+      );
+    }
+
+    await collections.months.updateOne(
+      { _id: new ObjectId(req.params.id) },
+      { $set: { ...updates, isActive: isActive !== undefined ? isActive : undefined } }
+    );
+
+    const month = await collections.months.findOne({ _id: new ObjectId(req.params.id) });
+    res.json({ success: true, month: transformDoc(month) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to update month" });
   }
 });
 
@@ -749,7 +877,7 @@ app.get("/api/meals", authMiddleware, async (req, res) => {
   try {
     const { monthId } = req.query;
     const meals = await collections.meals.find({ monthId }).toArray();
-    res.json({ success: true, meals });
+    res.json({ success: true, meals: transformDocs(meals) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to get meals" });
   }
@@ -757,41 +885,31 @@ app.get("/api/meals", authMiddleware, async (req, res) => {
 
 app.post("/api/meals", authMiddleware, async (req, res) => {
   try {
-    const { monthId, date, meals } = req.body;
+    const { monthId, userId, date, breakfast, lunch, dinner } = req.body;
 
-    // Check if meal exists for this date
-    let existingMeal = await collections.meals.findOne({ monthId, date });
+    let existingMeal = await collections.meals.findOne({ monthId, userId, date });
 
     if (existingMeal) {
       await collections.meals.updateOne(
         { _id: existingMeal._id },
-        { $set: { meals } }
+        { $set: { breakfast, lunch, dinner } }
       );
+      existingMeal = await collections.meals.findOne({ _id: existingMeal._id });
     } else {
       const result = await collections.meals.insertOne({
-        oderId: req.userId,
+        userId,
         monthId,
+        messId: req.user.messId,
         date,
-        meals,
+        breakfast: breakfast || 0,
+        lunch: lunch || 0,
+        dinner: dinner || 0,
         createdAt: new Date(),
       });
-      existingMeal = {
-        _id: result.insertedId.toString(),
-        oderId: req.userId,
-        monthId,
-        date,
-        meals,
-      };
+      existingMeal = await collections.meals.findOne({ _id: result.insertedId });
     }
 
-    // Notify members
-    await notifyMembers(req.user.messId, req.userId, {
-      title: "Meals Updated",
-      message: `Meals for ${date} have been updated`,
-      type: "meal_update",
-    });
-
-    res.json({ success: true, meal: existingMeal });
+    res.json({ success: true, meal: transformDoc(existingMeal) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to save meals" });
   }
@@ -799,25 +917,28 @@ app.post("/api/meals", authMiddleware, async (req, res) => {
 
 app.put("/api/meals/:id", authMiddleware, async (req, res) => {
   try {
-    const { meals } = req.body;
+    const { breakfast, lunch, dinner } = req.body;
     await collections.meals.updateOne(
       { _id: new ObjectId(req.params.id) },
-      { $set: { meals } }
+      { $set: { breakfast, lunch, dinner } }
     );
 
     const meal = await collections.meals.findOne({
       _id: new ObjectId(req.params.id),
     });
 
-    await notifyMembers(req.user.messId, req.userId, {
-      title: "Meals Updated",
-      message: `Meals for ${meal.date} have been updated`,
-      type: "meal_update",
-    });
-
-    res.json({ success: true, meal });
+    res.json({ success: true, meal: transformDoc(meal) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to update meals" });
+  }
+});
+
+app.delete("/api/meals/:id", authMiddleware, async (req, res) => {
+  try {
+    await collections.meals.deleteOne({ _id: new ObjectId(req.params.id) });
+    res.json({ success: true, message: "Meal deleted" });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to delete meal" });
   }
 });
 
@@ -829,7 +950,7 @@ app.get("/api/deposits", authMiddleware, async (req, res) => {
   try {
     const { monthId } = req.query;
     const deposits = await collections.deposits.find({ monthId }).toArray();
-    res.json({ success: true, deposits });
+    res.json({ success: true, deposits: transformDocs(deposits) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to get deposits" });
   }
@@ -837,25 +958,31 @@ app.get("/api/deposits", authMiddleware, async (req, res) => {
 
 app.post("/api/deposits", authMiddleware, async (req, res) => {
   try {
+    const { monthId, userId, amount, date, note } = req.body;
+    
     const deposit = {
-      ...req.body,
+      monthId,
+      userId,
+      messId: req.user.messId,
+      amount: parseFloat(amount),
+      date,
+      note: note || "",
       createdAt: new Date(),
     };
 
     const result = await collections.deposits.insertOne(deposit);
-    deposit._id = result.insertedId.toString();
 
     await collections.notifications.insertOne({
-      oderId: deposit.oderId,
+      userId,
       messId: req.user.messId,
       title: "Deposit Added",
-      message: `A deposit of ৳${deposit.amount} has been added`,
-      type: "deposit_add",
+      message: `A deposit of ৳${amount} has been added`,
+      type: "deposit",
       seen: false,
       createdAt: new Date(),
     });
 
-    res.json({ success: true, deposit });
+    res.json({ success: true, deposit: { id: result.insertedId.toString(), ...deposit } });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to create deposit" });
   }
@@ -863,26 +990,17 @@ app.post("/api/deposits", authMiddleware, async (req, res) => {
 
 app.put("/api/deposits/:id", authMiddleware, async (req, res) => {
   try {
+    const { userId, amount, date, note } = req.body;
     await collections.deposits.updateOne(
       { _id: new ObjectId(req.params.id) },
-      { $set: req.body }
+      { $set: { userId, amount: parseFloat(amount), date, note: note || "" } }
     );
 
     const deposit = await collections.deposits.findOne({
       _id: new ObjectId(req.params.id),
     });
 
-    await collections.notifications.insertOne({
-      oderId: deposit.oderId,
-      messId: req.user.messId,
-      title: "Deposit Updated",
-      message: `Your deposit has been updated to ৳${deposit.amount}`,
-      type: "deposit_update",
-      seen: false,
-      createdAt: new Date(),
-    });
-
-    res.json({ success: true, deposit });
+    res.json({ success: true, deposit: transformDoc(deposit) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to update deposit" });
   }
@@ -905,7 +1023,7 @@ app.get("/api/meal-costs", authMiddleware, async (req, res) => {
   try {
     const { monthId } = req.query;
     const costs = await collections.mealCosts.find({ monthId }).toArray();
-    res.json({ success: true, costs });
+    res.json({ success: true, costs: transformDocs(costs) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to get meal costs" });
   }
@@ -913,75 +1031,65 @@ app.get("/api/meal-costs", authMiddleware, async (req, res) => {
 
 app.post("/api/meal-costs", authMiddleware, async (req, res) => {
   try {
-    const { addAsDeposit, ...costData } = req.body;
+    const { monthId, userId, amount, date, description, addAsDeposit } = req.body;
 
     const cost = {
-      ...costData,
+      monthId,
+      userId,
+      messId: req.user.messId,
+      amount: parseFloat(amount),
+      date,
+      description: description || "",
+      addedAsDeposit: addAsDeposit || false,
       createdAt: new Date(),
     };
 
     const result = await collections.mealCosts.insertOne(cost);
-    cost._id = result.insertedId.toString();
+    cost.id = result.insertedId.toString();
 
-    // If addAsDeposit is true, also create a deposit
     if (addAsDeposit) {
       await collections.deposits.insertOne({
-        oderId: costData.oderId,
-        odername: costData.odername,
-        monthId: costData.monthId,
-        amount: costData.amount,
-        date: costData.date,
-        note: `Auto-deposit from meal cost: ${costData.description}`,
+        userId,
+        monthId,
+        messId: req.user.messId,
+        amount: parseFloat(amount),
+        date,
+        note: `Auto-deposit from meal cost: ${description}`,
         createdAt: new Date(),
       });
     }
 
     await collections.notifications.insertOne({
-      oderId: cost.oderId,
+      userId,
       messId: req.user.messId,
       title: "Meal Cost Added",
-      message: `A meal cost of ৳${cost.amount} has been added${
-        addAsDeposit ? " (also added as deposit)" : ""
-      }`,
-      type: "cost_add",
+      message: `A meal cost of ৳${amount} has been added${addAsDeposit ? " (also added as deposit)" : ""}`,
+      type: "cost",
       seen: false,
       createdAt: new Date(),
     });
 
     res.json({ success: true, cost });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, error: "Failed to create meal cost" });
+    res.status(500).json({ success: false, error: "Failed to create meal cost" });
   }
 });
 
 app.put("/api/meal-costs/:id", authMiddleware, async (req, res) => {
   try {
+    const { userId, amount, date, description } = req.body;
     await collections.mealCosts.updateOne(
       { _id: new ObjectId(req.params.id) },
-      { $set: req.body }
+      { $set: { userId, amount: parseFloat(amount), date, description } }
     );
 
     const cost = await collections.mealCosts.findOne({
       _id: new ObjectId(req.params.id),
     });
 
-    await collections.notifications.insertOne({
-      oderId: cost.oderId,
-      messId: req.user.messId,
-      title: "Meal Cost Updated",
-      message: `Your meal cost has been updated to ৳${cost.amount}`,
-      type: "cost_update",
-      seen: false,
-      createdAt: new Date(),
-    });
-
-    res.json({ success: true, cost });
+    res.json({ success: true, cost: transformDoc(cost) });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, error: "Failed to update meal cost" });
+    res.status(500).json({ success: false, error: "Failed to update meal cost" });
   }
 });
 
@@ -990,9 +1098,7 @@ app.delete("/api/meal-costs/:id", authMiddleware, async (req, res) => {
     await collections.mealCosts.deleteOne({ _id: new ObjectId(req.params.id) });
     res.json({ success: true, message: "Meal cost deleted" });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, error: "Failed to delete meal cost" });
+    res.status(500).json({ success: false, error: "Failed to delete meal cost" });
   }
 });
 
@@ -1004,53 +1110,55 @@ app.get("/api/other-costs", authMiddleware, async (req, res) => {
   try {
     const { monthId } = req.query;
     const costs = await collections.otherCosts.find({ monthId }).toArray();
-    res.json({ success: true, costs });
+    res.json({ success: true, costs: transformDocs(costs) });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, error: "Failed to get other costs" });
+    res.status(500).json({ success: false, error: "Failed to get other costs" });
   }
 });
 
 app.post("/api/other-costs", authMiddleware, async (req, res) => {
   try {
+    const { monthId, userId, amount, date, description, isShared } = req.body;
+
     const cost = {
-      ...req.body,
+      monthId,
+      userId,
+      messId: req.user.messId,
+      amount: parseFloat(amount),
+      date,
+      description: description || "",
+      isShared: isShared || false,
       createdAt: new Date(),
     };
 
     const result = await collections.otherCosts.insertOne(cost);
-    cost._id = result.insertedId.toString();
 
     await notifyMembers(req.user.messId, req.userId, {
       title: "Other Cost Added",
-      message: `A new cost of ৳${cost.amount} has been added: ${cost.description}`,
-      type: "cost_add",
+      message: `A new cost of ৳${amount} has been added: ${description}`,
+      type: "cost",
     });
 
-    res.json({ success: true, cost });
+    res.json({ success: true, cost: { id: result.insertedId.toString(), ...cost } });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, error: "Failed to create other cost" });
+    res.status(500).json({ success: false, error: "Failed to create other cost" });
   }
 });
 
 app.put("/api/other-costs/:id", authMiddleware, async (req, res) => {
   try {
+    const { userId, amount, date, description, isShared } = req.body;
     await collections.otherCosts.updateOne(
       { _id: new ObjectId(req.params.id) },
-      { $set: req.body }
+      { $set: { userId, amount: parseFloat(amount), date, description, isShared } }
     );
 
     const cost = await collections.otherCosts.findOne({
       _id: new ObjectId(req.params.id),
     });
-    res.json({ success: true, cost });
+    res.json({ success: true, cost: transformDoc(cost) });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, error: "Failed to update other cost" });
+    res.status(500).json({ success: false, error: "Failed to update other cost" });
   }
 });
 
@@ -1061,9 +1169,7 @@ app.delete("/api/other-costs/:id", authMiddleware, async (req, res) => {
     });
     res.json({ success: true, message: "Other cost deleted" });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, error: "Failed to delete other cost" });
+    res.status(500).json({ success: false, error: "Failed to delete other cost" });
   }
 });
 
@@ -1074,26 +1180,40 @@ app.delete("/api/other-costs/:id", authMiddleware, async (req, res) => {
 app.get("/api/join-requests", authMiddleware, async (req, res) => {
   try {
     const requests = await collections.joinRequests
-      .find({ messId: req.user.messId })
+      .find({ messId: req.user.messId, status: "pending" })
       .toArray();
 
     const populatedRequests = await Promise.all(
       requests.map(async (request) => {
         const user = await collections.users.findOne({
-          _id: new ObjectId(request.oderId),
+          _id: new ObjectId(request.userId),
         });
         return {
-          ...request,
+          id: request._id.toString(),
+          messId: request.messId,
+          userId: request.userId,
+          status: request.status,
+          createdAt: request.createdAt,
           userName: user?.name,
           userEmail: user?.email,
+          userPhone: user?.phone,
         };
       })
     );
     res.json({ success: true, requests: populatedRequests });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, error: "Failed to get join requests" });
+    res.status(500).json({ success: false, error: "Failed to get join requests" });
+  }
+});
+
+app.get("/api/join-requests/user", authMiddleware, async (req, res) => {
+  try {
+    const requests = await collections.joinRequests
+      .find({ userId: req.userId })
+      .toArray();
+    res.json({ success: true, requests: transformDocs(requests) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to get user join requests" });
   }
 });
 
@@ -1105,25 +1225,21 @@ app.post("/api/join-requests", authMiddleware, async (req, res) => {
     });
 
     if (!mess) {
-      return res
-        .status(400)
-        .json({ success: false, error: "Invalid mess code" });
+      return res.status(400).json({ success: false, error: "Invalid mess code" });
     }
 
     const existingRequest = await collections.joinRequests.findOne({
-      oderId: req.userId,
+      userId: req.userId,
       messId: mess._id.toString(),
       status: "pending",
     });
 
     if (existingRequest) {
-      return res
-        .status(400)
-        .json({ success: false, error: "Request already pending" });
+      return res.status(400).json({ success: false, error: "Request already pending" });
     }
 
     const request = {
-      oderId: req.userId,
+      userId: req.userId,
       messId: mess._id.toString(),
       messCode: messCode.toUpperCase(),
       status: "pending",
@@ -1131,44 +1247,59 @@ app.post("/api/join-requests", authMiddleware, async (req, res) => {
     };
 
     const result = await collections.joinRequests.insertOne(request);
-    request._id = result.insertedId.toString();
 
-    // Notify manager
     await notifyManager(mess._id.toString(), {
       title: "New Join Request",
       message: `${req.user.name} has requested to join your mess`,
       type: "join_request",
     });
 
-    res.json({ success: true, request });
+    res.json({ success: true, request: { id: result.insertedId.toString(), ...request } });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, error: "Failed to create join request" });
+    res.status(500).json({ success: false, error: "Failed to create join request" });
   }
 });
 
 app.put("/api/join-requests/:id/approve", authMiddleware, async (req, res) => {
   try {
+    const request = await collections.joinRequests.findOne({
+      _id: new ObjectId(req.params.id),
+    });
+
+    if (!request) {
+      return res.status(404).json({ success: false, error: "Request not found" });
+    }
+
     await collections.joinRequests.updateOne(
       { _id: new ObjectId(req.params.id) },
       { $set: { status: "approved" } }
     );
 
-    const request = await collections.joinRequests.findOne({
-      _id: new ObjectId(req.params.id),
-    });
-
     await collections.users.updateOne(
-      { _id: new ObjectId(request.oderId) },
-      { $set: { messId: request.messId } }
+      { _id: new ObjectId(request.userId) },
+      { $set: { messId: request.messId, isApproved: true } }
     );
 
-    res.json({ success: true, request });
+    // Delete other pending requests for this user
+    await collections.joinRequests.deleteMany({
+      userId: request.userId,
+      _id: { $ne: new ObjectId(req.params.id) },
+      status: "pending",
+    });
+
+    await collections.notifications.insertOne({
+      userId: request.userId,
+      messId: request.messId,
+      title: "Request Approved",
+      message: "Your join request has been approved!",
+      type: "join_request",
+      seen: false,
+      createdAt: new Date(),
+    });
+
+    res.json({ success: true, request: { ...request, id: request._id.toString(), status: "approved" } });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, error: "Failed to approve request" });
+    res.status(500).json({ success: false, error: "Failed to approve request" });
   }
 });
 
@@ -1182,7 +1313,18 @@ app.put("/api/join-requests/:id/reject", authMiddleware, async (req, res) => {
     const request = await collections.joinRequests.findOne({
       _id: new ObjectId(req.params.id),
     });
-    res.json({ success: true, request });
+
+    await collections.notifications.insertOne({
+      userId: request.userId,
+      messId: request.messId,
+      title: "Request Rejected",
+      message: "Your join request has been rejected.",
+      type: "join_request",
+      seen: false,
+      createdAt: new Date(),
+    });
+
+    res.json({ success: true, request: transformDoc(request) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to reject request" });
   }
@@ -1198,7 +1340,7 @@ app.get("/api/notices", authMiddleware, async (req, res) => {
       .find({ messId: req.user.messId })
       .sort({ createdAt: -1 })
       .toArray();
-    res.json({ success: true, notices });
+    res.json({ success: true, notices: transformDocs(notices) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to get notices" });
   }
@@ -1210,17 +1352,14 @@ app.get("/api/notices/active", authMiddleware, async (req, res) => {
       messId: req.user.messId,
       isActive: true,
     });
-    res.json({ success: true, notice });
+    res.json({ success: true, notice: transformDoc(notice) });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, error: "Failed to get active notice" });
+    res.status(500).json({ success: false, error: "Failed to get active notice" });
   }
 });
 
 app.post("/api/notices", authMiddleware, async (req, res) => {
   try {
-    // Deactivate existing notices
     await collections.notices.updateMany(
       { messId: req.user.messId },
       { $set: { isActive: false } }
@@ -1236,15 +1375,14 @@ app.post("/api/notices", authMiddleware, async (req, res) => {
     };
 
     const result = await collections.notices.insertOne(notice);
-    notice._id = result.insertedId.toString();
 
     await notifyMembers(req.user.messId, req.userId, {
       title: "New Notice",
       message: `New notice: ${notice.title}`,
-      type: "notice_add",
+      type: "notice",
     });
 
-    res.json({ success: true, notice });
+    res.json({ success: true, notice: { id: result.insertedId.toString(), ...notice } });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to create notice" });
   }
@@ -1261,13 +1399,7 @@ app.put("/api/notices/:id", authMiddleware, async (req, res) => {
       _id: new ObjectId(req.params.id),
     });
 
-    await notifyMembers(req.user.messId, req.userId, {
-      title: "Notice Updated",
-      message: `Notice "${notice.title}" has been updated`,
-      type: "notice_update",
-    });
-
-    res.json({ success: true, notice });
+    res.json({ success: true, notice: transformDoc(notice) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to update notice" });
   }
@@ -1276,13 +1408,6 @@ app.put("/api/notices/:id", authMiddleware, async (req, res) => {
 app.delete("/api/notices/:id", authMiddleware, async (req, res) => {
   try {
     await collections.notices.deleteOne({ _id: new ObjectId(req.params.id) });
-
-    await notifyMembers(req.user.messId, req.userId, {
-      title: "Notice Deleted",
-      message: "A notice has been removed",
-      type: "notice_delete",
-    });
-
     res.json({ success: true, message: "Notice deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to delete notice" });
@@ -1298,19 +1423,16 @@ app.get("/api/bazar-dates", authMiddleware, async (req, res) => {
     const dates = await collections.bazarDates
       .find({ messId: req.user.messId })
       .toArray();
-    res.json({ success: true, dates });
+    res.json({ success: true, dates: transformDocs(dates) });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, error: "Failed to get bazar dates" });
+    res.status(500).json({ success: false, error: "Failed to get bazar dates" });
   }
 });
 
 app.post("/api/bazar-dates", authMiddleware, async (req, res) => {
   try {
-    const { oderId, odername, dates } = req.body;
+    const { userId, userName, dates } = req.body;
 
-    // Check for conflicts
     const existingDates = await collections.bazarDates
       .find({
         messId: req.user.messId,
@@ -1328,8 +1450,8 @@ app.post("/api/bazar-dates", authMiddleware, async (req, res) => {
 
     const newDates = dates.map((date) => ({
       messId: req.user.messId,
-      oderId,
-      odername,
+      userId,
+      userName,
       date,
       createdAt: new Date(),
     }));
@@ -1337,11 +1459,11 @@ app.post("/api/bazar-dates", authMiddleware, async (req, res) => {
     const result = await collections.bazarDates.insertMany(newDates);
 
     await collections.notifications.insertOne({
-      oderId,
+      userId,
       messId: req.user.messId,
       title: "Bazar Dates Assigned",
       message: `You have been assigned bazar duty for: ${dates.join(", ")}`,
-      type: "bazar_date",
+      type: "bazar",
       seen: false,
       createdAt: new Date(),
     });
@@ -1350,13 +1472,11 @@ app.post("/api/bazar-dates", authMiddleware, async (req, res) => {
       success: true,
       dates: newDates.map((date, index) => ({
         ...date,
-        _id: result.insertedIds[index].toString(),
+        id: result.insertedIds[index].toString(),
       })),
     });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, error: "Failed to create bazar dates" });
+    res.status(500).json({ success: false, error: "Failed to create bazar dates" });
   }
 });
 
@@ -1367,9 +1487,7 @@ app.delete("/api/bazar-dates/:id", authMiddleware, async (req, res) => {
     });
     res.json({ success: true, message: "Bazar date deleted" });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, error: "Failed to delete bazar date" });
+    res.status(500).json({ success: false, error: "Failed to delete bazar date" });
   }
 });
 
@@ -1380,14 +1498,12 @@ app.delete("/api/bazar-dates/:id", authMiddleware, async (req, res) => {
 app.get("/api/notifications", authMiddleware, async (req, res) => {
   try {
     const notifications = await collections.notifications
-      .find({ oderId: req.userId })
+      .find({ userId: req.userId })
       .sort({ createdAt: -1 })
       .toArray();
-    res.json({ success: true, notifications });
+    res.json({ success: true, notifications: transformDocs(notifications) });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, error: "Failed to get notifications" });
+    res.status(500).json({ success: false, error: "Failed to get notifications" });
   }
 });
 
@@ -1401,7 +1517,7 @@ app.put("/api/notifications/:id/read", authMiddleware, async (req, res) => {
     const notification = await collections.notifications.findOne({
       _id: new ObjectId(req.params.id),
     });
-    res.json({ success: true, notification });
+    res.json({ success: true, notification: transformDoc(notification) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to mark as read" });
   }
@@ -1410,14 +1526,12 @@ app.put("/api/notifications/:id/read", authMiddleware, async (req, res) => {
 app.put("/api/notifications/read-all", authMiddleware, async (req, res) => {
   try {
     await collections.notifications.updateMany(
-      { oderId: req.userId },
+      { userId: req.userId },
       { $set: { seen: true } }
     );
     res.json({ success: true, message: "All notifications marked as read" });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, error: "Failed to mark all as read" });
+    res.status(500).json({ success: false, error: "Failed to mark all as read" });
   }
 });
 
@@ -1428,20 +1542,16 @@ app.delete("/api/notifications/:id", authMiddleware, async (req, res) => {
     });
     res.json({ success: true, message: "Notification deleted" });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, error: "Failed to delete notification" });
+    res.status(500).json({ success: false, error: "Failed to delete notification" });
   }
 });
 
 app.delete("/api/notifications", authMiddleware, async (req, res) => {
   try {
-    await collections.notifications.deleteMany({ oderId: req.userId });
+    await collections.notifications.deleteMany({ userId: req.userId });
     res.json({ success: true, message: "All notifications deleted" });
   } catch (error) {
-    res
-      .status(500)
-      .json({ success: false, error: "Failed to delete notifications" });
+    res.status(500).json({ success: false, error: "Failed to delete notifications" });
   }
 });
 
@@ -1455,7 +1565,7 @@ app.get("/api/notes", authMiddleware, async (req, res) => {
       .find({ messId: req.user.messId })
       .sort({ createdAt: -1 })
       .toArray();
-    res.json({ success: true, notes });
+    res.json({ success: true, notes: transformDocs(notes) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to get notes" });
   }
@@ -1472,15 +1582,14 @@ app.post("/api/notes", authMiddleware, async (req, res) => {
     };
 
     const result = await collections.notes.insertOne(note);
-    note._id = result.insertedId.toString();
 
     await notifyMembers(req.user.messId, req.userId, {
       title: "New Note Added",
       message: `New note: ${note.title}`,
-      type: "note_add",
+      type: "notice",
     });
 
-    res.json({ success: true, note });
+    res.json({ success: true, note: { id: result.insertedId.toString(), ...note } });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to create note" });
   }
@@ -1496,7 +1605,7 @@ app.put("/api/notes/:id", authMiddleware, async (req, res) => {
     const note = await collections.notes.findOne({
       _id: new ObjectId(req.params.id),
     });
-    res.json({ success: true, note });
+    res.json({ success: true, note: transformDoc(note) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to update note" });
   }
@@ -1515,11 +1624,57 @@ app.delete("/api/notes/:id", authMiddleware, async (req, res) => {
 // MEMBER MANAGEMENT ROUTES
 // ============================================
 
+app.put("/api/members/:id", authMiddleware, async (req, res) => {
+  try {
+    const { role, isApproved, isActive } = req.body;
+    const updates = {};
+    if (role !== undefined) updates.role = role;
+    if (isApproved !== undefined) updates.isApproved = isApproved;
+    if (isActive !== undefined) updates.isActive = isActive;
+
+    await collections.users.updateOne(
+      { _id: new ObjectId(req.params.id) },
+      { $set: updates }
+    );
+
+    // If making someone a manager, update the mess
+    if (role === "manager") {
+      await collections.messes.updateOne(
+        { _id: new ObjectId(req.user.messId) },
+        { $set: { managerId: req.params.id } }
+      );
+      // Demote current manager
+      await collections.users.updateOne(
+        { _id: new ObjectId(req.userId) },
+        { $set: { role: "member" } }
+      );
+    }
+
+    const user = await collections.users.findOne({ _id: new ObjectId(req.params.id) });
+    res.json({
+      success: true,
+      user: {
+        id: user._id.toString(),
+        name: user.name,
+        fullName: user.name,
+        email: user.email,
+        phone: user.phone || "",
+        role: user.role,
+        messId: user.messId,
+        isApproved: user.isApproved !== false,
+        isActive: user.isActive !== false,
+      },
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to update member" });
+  }
+});
+
 app.delete("/api/members/:id", authMiddleware, async (req, res) => {
   try {
     await collections.users.updateOne(
       { _id: new ObjectId(req.params.id) },
-      { $set: { messId: null } }
+      { $set: { messId: null, isApproved: false } }
     );
     res.json({ success: true, message: "Member removed" });
   } catch (error) {
@@ -1527,20 +1682,45 @@ app.delete("/api/members/:id", authMiddleware, async (req, res) => {
   }
 });
 
+// ============================================
+// UTILITY ROUTES
+// ============================================
+
+app.get("/api/mess-code/check/:code", async (req, res) => {
+  try {
+    const mess = await collections.messes.findOne({
+      code: req.params.code.toUpperCase(),
+    });
+    res.json({ success: true, exists: !!mess });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to check code" });
+  }
+});
+
+app.get("/api/mess-code/generate", authMiddleware, async (req, res) => {
+  try {
+    const code = await generateUniqueMessCode();
+    res.json({ success: true, code });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to generate code" });
+  }
+});
+
 // ===========================
-// 🌍 DEFAULT ROUTE
+// DEFAULT ROUTE
 // ===========================
 app.get("/", (req, res) => {
   res.send("🚀 Mess Mate backend is running...");
 });
 
 // ===========================
-// 🏥 HEALTH CHECK ROUTE
+// HEALTH CHECK ROUTE
 // ===========================
 app.get("/api/health", (req, res) => {
   res.json({
     success: true,
     mongodb: mongoDbConnected ? "connected" : "disconnected",
+    mongoDbConnected,
     timestamp: new Date().toISOString(),
   });
 });
