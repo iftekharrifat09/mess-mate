@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
 import * as dataService from '@/lib/dataService';
+import * as api from '@/lib/api';
 import { User } from '@/types';
 import { Users, UserPlus, Shield, Trash2, Mail, Phone, Crown, Loader2 } from 'lucide-react';
 
@@ -109,17 +110,12 @@ export default function Members() {
     if (!user) return;
 
     try {
-      // Update the new manager
-      await dataService.updateUser(memberId, { role: 'manager' });
+      // Use the dedicated makeManager API endpoint which handles both role changes atomically
+      const result = await api.makeManagerAPI(memberId);
       
-      // Update the mess manager ID
-      const mess = await dataService.getMessById(user.messId);
-      if (mess) {
-        await dataService.updateMess(mess.id, { managerId: memberId });
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to change manager');
       }
-      
-      // Demote current manager to member
-      await dataService.updateUser(user.id, { role: 'member' });
       
       refreshUser();
       loadMembers();

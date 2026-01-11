@@ -196,7 +196,7 @@ export async function generateUniqueMessCode(): Promise<string> {
 
 export async function isMessCodeUnique(code: string, excludeMessId?: string): Promise<boolean> {
   if (shouldUseBackend()) {
-    const result = await api.checkMessCodeAPI(code);
+    const result = await api.checkMessCodeAPI(code, excludeMessId);
     if (result.success && result.data) {
       return (result.data as any).isUnique;
     }

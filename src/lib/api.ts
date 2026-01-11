@@ -315,8 +315,11 @@ export async function getMessMembersAPI(messId?: string) {
   return apiRequest('/mess/members', { method: 'GET' });
 }
 
-export async function checkMessCodeAPI(code: string) {
-  return apiRequest(`/mess-code/check/${code}`, { method: 'GET' });
+export async function checkMessCodeAPI(code: string, excludeMessId?: string) {
+  const url = excludeMessId 
+    ? `/mess-code/check/${code}?excludeMessId=${excludeMessId}`
+    : `/mess-code/check/${code}`;
+  return apiRequest(url, { method: 'GET' });
 }
 
 export async function generateMessCodeAPI() {
