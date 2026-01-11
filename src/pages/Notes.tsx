@@ -18,15 +18,9 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  getNotesByMessId, 
-  createNote, 
-  updateNote, 
-  deleteNote,
-  notifyMessMembers,
-} from '@/lib/storage';
+import * as dataService from '@/lib/dataService';
 import { Note } from '@/types';
-import { StickyNote, Plus, Edit2, Trash2, Calendar, Eye } from 'lucide-react';
+import { StickyNote, Plus, Edit2, Trash2, Calendar, Eye, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Notes() {
@@ -37,6 +31,7 @@ export default function Notes() {
   const [editingNote, setEditingNote] = useState<Note | null>(null);
   const [viewingNote, setViewingNote] = useState<Note | null>(null);
   const [formData, setFormData] = useState({ title: '', description: '' });
+  const [isLoading, setIsLoading] = useState(true);
 
   const isManager = user?.role === 'manager';
 
@@ -44,9 +39,23 @@ export default function Notes() {
     loadNotes();
   }, [user]);
 
-  const loadNotes = () => {
+  const loadNotes = async () => {
     if (!user) return;
-    setNotes(getNotesByMessId(user.messId));
+    
+    setIsLoading(true);
+    try {
+      const allNotes = await dataService.getNotesByMessId(user.messId);
+      setNotes(allNotes);
+    } catch (error) {
+      console.error('Error loading notes:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load notes',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const resetForm = () => {
@@ -54,31 +63,40 @@ export default function Notes() {
     setEditingNote(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !isManager) return;
 
-    if (editingNote) {
-      updateNote(editingNote.id, { title: formData.title, description: formData.description });
-      notifyMessMembers(user.messId, user.id, {
-        type: 'notice',
-        title: 'Note Updated',
-        message: `"${formData.title}" has been updated`,
-      });
-      toast({ title: 'Note updated' });
-    } else {
-      createNote({ messId: user.messId, title: formData.title, description: formData.description });
-      notifyMessMembers(user.messId, user.id, {
-        type: 'notice',
-        title: 'New Note Added',
-        message: formData.title,
-      });
-      toast({ title: 'Note created' });
-    }
+    try {
+      if (editingNote) {
+        await dataService.updateNote(editingNote.id, { title: formData.title, description: formData.description });
+        await dataService.notifyMessMembers(user.messId, user.id, {
+          type: 'notice',
+          title: 'Note Updated',
+          message: `"${formData.title}" has been updated`,
+        });
+        toast({ title: 'Note updated' });
+      } else {
+        await dataService.createNote({ messId: user.messId, title: formData.title, description: formData.description });
+        await dataService.notifyMessMembers(user.messId, user.id, {
+          type: 'notice',
+          title: 'New Note Added',
+          message: formData.title,
+        });
+        toast({ title: 'Note created' });
+      }
 
-    setIsAddDialogOpen(false);
-    resetForm();
-    loadNotes();
+      setIsAddDialogOpen(false);
+      resetForm();
+      loadNotes();
+    } catch (error) {
+      console.error('Error saving note:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save note',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleEdit = (note: Note) => {
@@ -87,17 +105,36 @@ export default function Notes() {
     setIsAddDialogOpen(true);
   };
 
-  const handleDelete = (id: string, title: string) => {
+  const handleDelete = async (id: string, title: string) => {
     if (!user) return;
-    deleteNote(id);
-    notifyMessMembers(user.messId, user.id, {
-      type: 'notice',
-      title: 'Note Deleted',
-      message: `"${title}" has been removed`,
-    });
-    toast({ title: 'Note deleted' });
-    loadNotes();
+    
+    try {
+      await dataService.deleteNote(id);
+      await dataService.notifyMessMembers(user.messId, user.id, {
+        type: 'notice',
+        title: 'Note Deleted',
+        message: `"${title}" has been removed`,
+      });
+      toast({ title: 'Note deleted' });
+      loadNotes();
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete note',
+        variant: 'destructive',
+      });
+    }
   };
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

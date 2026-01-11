@@ -23,16 +23,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  getBazarDatesByMessId, 
-  createBazarDate, 
-  updateBazarDate, 
-  deleteBazarDate,
-  getMessMembers,
-  notifyMessMembers,
-} from '@/lib/storage';
+import * as dataService from '@/lib/dataService';
 import { BazarDate, User } from '@/types';
-import { ShoppingCart, Plus, Edit2, Trash2, Calendar, AlertCircle, X } from 'lucide-react';
+import { ShoppingCart, Plus, Edit2, Trash2, Calendar, AlertCircle, X, Loader2 } from 'lucide-react';
 import { format, isToday, isFuture, isPast } from 'date-fns';
 import { Navigate } from 'react-router-dom';
 
@@ -46,21 +39,39 @@ export default function BazarDates() {
   const [formData, setFormData] = useState<{ userId: string; dates: string[] }>({ userId: '', dates: [] });
   const [dateError, setDateError] = useState<string | null>(null);
   const [currentDate, setCurrentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
+  const [isLoading, setIsLoading] = useState(true);
 
   const isManager = user?.role === 'manager';
+
+  useEffect(() => {
+    if (isManager) {
+      loadData();
+    }
+  }, [user, isManager]);
 
   if (!isManager) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  useEffect(() => {
-    loadData();
-  }, [user]);
-
-  const loadData = () => {
+  const loadData = async () => {
     if (!user) return;
-    setBazarDates(getBazarDatesByMessId(user.messId));
-    setMembers(getMessMembers(user.messId));
+    
+    setIsLoading(true);
+    try {
+      const dates = await dataService.getBazarDatesByMessId(user.messId);
+      setBazarDates(dates);
+      const membersData = await dataService.getMessMembers(user.messId);
+      setMembers(membersData);
+    } catch (error) {
+      console.error('Error loading bazar dates:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load bazar dates',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const resetForm = () => {
@@ -107,48 +118,57 @@ export default function BazarDates() {
     setFormData(prev => ({ ...prev, dates: prev.dates.filter(d => d !== dateToRemove) }));
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
-    const member = members.find(m => m.id === formData.userId);
+    try {
+      const member = members.find(m => m.id === formData.userId);
 
-    if (editingBazar) {
-      // For editing, we only update a single date
-      if (formData.dates.length === 0) {
-        toast({ title: 'Please select a date', variant: 'destructive' });
-        return;
+      if (editingBazar) {
+        // For editing, we only update a single date
+        if (formData.dates.length === 0) {
+          toast({ title: 'Please select a date', variant: 'destructive' });
+          return;
+        }
+        
+        await dataService.updateBazarDate(editingBazar.id, { userId: formData.userId, date: formData.dates[0] });
+        await dataService.notifyMessMembers(user.messId, user.id, {
+          type: 'bazar',
+          title: 'Bazar Date Updated',
+          message: `${member?.fullName}'s bazar date changed to ${format(new Date(formData.dates[0]), 'MMM d')}`,
+        });
+        toast({ title: 'Bazar date updated' });
+      } else {
+        // Create multiple bazar dates
+        if (formData.dates.length === 0) {
+          toast({ title: 'Please add at least one date', variant: 'destructive' });
+          return;
+        }
+        
+        for (const date of formData.dates) {
+          await dataService.createBazarDate({ messId: user.messId, userId: formData.userId, date });
+        }
+        
+        await dataService.notifyMessMembers(user.messId, user.id, {
+          type: 'bazar',
+          title: 'Bazar Dates Set',
+          message: `${member?.fullName} is assigned for bazar on ${formData.dates.length} date(s)`,
+        });
+        toast({ title: `${formData.dates.length} bazar date(s) added` });
       }
-      
-      updateBazarDate(editingBazar.id, { userId: formData.userId, date: formData.dates[0] });
-      notifyMessMembers(user.messId, user.id, {
-        type: 'bazar',
-        title: 'Bazar Date Updated',
-        message: `${member?.fullName}'s bazar date changed to ${format(new Date(formData.dates[0]), 'MMM d')}`,
+
+      setIsAddDialogOpen(false);
+      resetForm();
+      loadData();
+    } catch (error) {
+      console.error('Error saving bazar date:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save bazar date',
+        variant: 'destructive',
       });
-      toast({ title: 'Bazar date updated' });
-    } else {
-      // Create multiple bazar dates
-      if (formData.dates.length === 0) {
-        toast({ title: 'Please add at least one date', variant: 'destructive' });
-        return;
-      }
-      
-      formData.dates.forEach(date => {
-        createBazarDate({ messId: user.messId, userId: formData.userId, date });
-      });
-      
-      notifyMessMembers(user.messId, user.id, {
-        type: 'bazar',
-        title: 'Bazar Dates Set',
-        message: `${member?.fullName} is assigned for bazar on ${formData.dates.length} date(s)`,
-      });
-      toast({ title: `${formData.dates.length} bazar date(s) added` });
     }
-
-    setIsAddDialogOpen(false);
-    resetForm();
-    loadData();
   };
 
   const handleEdit = (bazar: BazarDate) => {
@@ -159,10 +179,18 @@ export default function BazarDates() {
     setIsAddDialogOpen(true);
   };
 
-  const handleDelete = (bazar: BazarDate) => {
-    deleteBazarDate(bazar.id);
-    toast({ title: 'Bazar date deleted' });
-    loadData();
+  const handleDelete = async (bazar: BazarDate) => {
+    try {
+      await dataService.deleteBazarDate(bazar.id);
+      toast({ title: 'Bazar date deleted' });
+      loadData();
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete bazar date',
+        variant: 'destructive',
+      });
+    }
   };
 
   const sortedDates = [...bazarDates].sort((a, b) => 
@@ -171,6 +199,16 @@ export default function BazarDates() {
 
   const upcomingDates = sortedDates.filter(d => isToday(new Date(d.date)) || isFuture(new Date(d.date)));
   const pastDates = sortedDates.filter(d => isPast(new Date(d.date)) && !isToday(new Date(d.date)));
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

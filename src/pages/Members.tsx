@@ -3,17 +3,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '@/components/ui/dialog';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -26,24 +16,16 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  getMessMembers, 
-  getUsers, 
-  updateUser, 
-  deleteUser,
-  updateMess,
-  getMessById,
-} from '@/lib/storage';
+import * as dataService from '@/lib/dataService';
 import { User } from '@/types';
-import { Users, UserPlus, Shield, Trash2, Mail, Phone, Crown } from 'lucide-react';
+import { Users, UserPlus, Shield, Trash2, Mail, Phone, Crown, Loader2 } from 'lucide-react';
 
 export default function Members() {
   const { user, refreshUser } = useAuth();
   const { toast } = useToast();
   const [members, setMembers] = useState<User[]>([]);
   const [pendingMembers, setPendingMembers] = useState<User[]>([]);
-  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
-  const [newMemberEmail, setNewMemberEmail] = useState('');
+  const [isLoading, setIsLoading] = useState(true);
 
   const isManager = user?.role === 'manager';
 
@@ -51,64 +33,119 @@ export default function Members() {
     loadMembers();
   }, [user]);
 
-  const loadMembers = () => {
+  const loadMembers = async () => {
     if (!user) return;
     
-    const allUsers = getUsers().filter(u => u.messId === user.messId);
-    setMembers(allUsers.filter(u => u.isApproved));
-    setPendingMembers(allUsers.filter(u => !u.isApproved));
-  };
-
-  const handleApprove = (memberId: string) => {
-    updateUser(memberId, { isApproved: true });
-    loadMembers();
-    toast({
-      title: 'Member approved',
-      description: 'The member can now access the mess.',
-    });
-  };
-
-  const handleReject = (memberId: string) => {
-    deleteUser(memberId);
-    loadMembers();
-    toast({
-      title: 'Request rejected',
-      description: 'The join request has been rejected.',
-    });
-  };
-
-  const handleRemove = (memberId: string) => {
-    deleteUser(memberId);
-    loadMembers();
-    toast({
-      title: 'Member removed',
-      description: 'The member has been removed from the mess.',
-    });
-  };
-
-  const handleMakeManager = (memberId: string) => {
-    if (!user) return;
-
-    // Update the new manager
-    updateUser(memberId, { role: 'manager' });
-    
-    // Update the mess manager ID
-    const mess = getMessById(user.messId);
-    if (mess) {
-      updateMess(mess.id, { managerId: memberId });
+    setIsLoading(true);
+    try {
+      const allUsers = await dataService.getUsers();
+      const messUsers = allUsers.filter(u => u.messId === user.messId);
+      setMembers(messUsers.filter(u => u.isApproved));
+      setPendingMembers(messUsers.filter(u => !u.isApproved));
+    } catch (error) {
+      console.error('Error loading members:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load members',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
     }
-    
-    // Demote current manager to member
-    updateUser(user.id, { role: 'member' });
-    
-    refreshUser();
-    loadMembers();
-    
-    toast({
-      title: 'Manager changed',
-      description: 'The member is now the manager of this mess.',
-    });
   };
+
+  const handleApprove = async (memberId: string) => {
+    try {
+      await dataService.updateUser(memberId, { isApproved: true });
+      loadMembers();
+      toast({
+        title: 'Member approved',
+        description: 'The member can now access the mess.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to approve member',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleReject = async (memberId: string) => {
+    try {
+      await dataService.deleteUser(memberId);
+      loadMembers();
+      toast({
+        title: 'Request rejected',
+        description: 'The join request has been rejected.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to reject request',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleRemove = async (memberId: string) => {
+    try {
+      await dataService.deleteUser(memberId);
+      loadMembers();
+      toast({
+        title: 'Member removed',
+        description: 'The member has been removed from the mess.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to remove member',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleMakeManager = async (memberId: string) => {
+    if (!user) return;
+
+    try {
+      // Update the new manager
+      await dataService.updateUser(memberId, { role: 'manager' });
+      
+      // Update the mess manager ID
+      const mess = await dataService.getMessById(user.messId);
+      if (mess) {
+        await dataService.updateMess(mess.id, { managerId: memberId });
+      }
+      
+      // Demote current manager to member
+      await dataService.updateUser(user.id, { role: 'member' });
+      
+      refreshUser();
+      loadMembers();
+      
+      toast({
+        title: 'Manager changed',
+        description: 'The member is now the manager of this mess.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to change manager',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

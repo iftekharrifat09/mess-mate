@@ -4,17 +4,9 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  getJoinRequests, 
-  updateJoinRequest, 
-  updateUser, 
-  deleteJoinRequest,
-  cleanupPendingJoinRequests,
-  getUserById,
-  getMesses
-} from '@/lib/storage';
-import { JoinRequest, User, Mess } from '@/types';
-import { UserPlus, Mail, Phone, Check, X } from 'lucide-react';
+import * as dataService from '@/lib/dataService';
+import { JoinRequest, User } from '@/types';
+import { UserPlus, Mail, Phone, Check, X, Loader2 } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
 
 interface PendingRequest extends JoinRequest {
@@ -25,67 +17,102 @@ export default function JoinRequests() {
   const { user, refreshUser } = useAuth();
   const { toast } = useToast();
   const [pendingRequests, setPendingRequests] = useState<PendingRequest[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const isManager = user?.role === 'manager';
+
+  useEffect(() => {
+    if (isManager) {
+      loadPendingRequests();
+    }
+  }, [user, isManager]);
 
   if (!isManager) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  useEffect(() => {
-    loadPendingRequests();
-  }, [user]);
-
-  const loadPendingRequests = () => {
+  const loadPendingRequests = async () => {
     if (!user) return;
     
-    // Get pending join requests for this mess
-    const requests = getJoinRequests().filter(
-      r => r.messId === user.messId && r.status === 'pending'
+    setIsLoading(true);
+    try {
+      // Get pending join requests for this mess
+      const requests = await dataService.getJoinRequests();
+      const pendingForMess = requests.filter(
+        r => r.messId === user.messId && r.status === 'pending'
+      );
+      
+      // Get user details for each request
+      const requestsWithUsers: PendingRequest[] = [];
+      for (const r of pendingForMess) {
+        const requestUser = await dataService.getUserById(r.userId);
+        if (requestUser) {
+          requestsWithUsers.push({ ...r, user: requestUser });
+        }
+      }
+      
+      setPendingRequests(requestsWithUsers);
+    } catch (error) {
+      console.error('Error loading pending requests:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load pending requests',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleApprove = async (request: PendingRequest) => {
+    if (!user) return;
+    
+    try {
+      await dataService.approveJoinRequest(request.id);
+      
+      loadPendingRequests();
+      toast({
+        title: 'Member approved',
+        description: `${request.user.fullName} can now access the mess.`,
+      });
+    } catch (error) {
+      console.error('Error approving request:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to approve request',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  const handleReject = async (request: PendingRequest) => {
+    try {
+      await dataService.rejectJoinRequest(request.id);
+      
+      loadPendingRequests();
+      toast({
+        title: 'Request rejected',
+        description: 'The join request has been rejected.',
+      });
+    } catch (error) {
+      console.error('Error rejecting request:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to reject request',
+        variant: 'destructive',
+      });
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
     );
-    
-    // Get user details for each request
-    const requestsWithUsers: PendingRequest[] = requests.map(r => {
-      const requestUser = getUserById(r.userId);
-      return {
-        ...r,
-        user: requestUser!
-      };
-    }).filter(r => r.user); // Filter out requests where user doesn't exist
-    
-    setPendingRequests(requestsWithUsers);
-  };
-
-  const handleApprove = (request: PendingRequest) => {
-    // Update join request status
-    updateJoinRequest(request.id, { status: 'approved' });
-    
-    // Update user's messId and approval status
-    updateUser(request.userId, { 
-      messId: user!.messId, 
-      isApproved: true 
-    });
-    
-    // Clean up all other pending join requests for this user
-    cleanupPendingJoinRequests(request.userId, user!.messId);
-    
-    loadPendingRequests();
-    toast({
-      title: 'Member approved',
-      description: `${request.user.fullName} can now access the mess.`,
-    });
-  };
-
-  const handleReject = (request: PendingRequest) => {
-    // Update join request status
-    updateJoinRequest(request.id, { status: 'rejected' });
-    
-    loadPendingRequests();
-    toast({
-      title: 'Request rejected',
-      description: 'The join request has been rejected.',
-    });
-  };
+  }
 
   return (
     <DashboardLayout>

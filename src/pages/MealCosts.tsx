@@ -33,18 +33,9 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  getActiveMonth,
-  getMealCostsByMonthId,
-  getMessMembers,
-  createMealCost,
-  updateMealCost,
-  deleteMealCost,
-  createDeposit,
-  notifyMessMembers,
-} from '@/lib/storage';
+import * as dataService from '@/lib/dataService';
 import { MealCost, User } from '@/types';
-import { ShoppingCart, Plus, Trash2, Edit2, Wallet } from 'lucide-react';
+import { ShoppingCart, Plus, Trash2, Edit2, Wallet, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/calculations';
 import { Navigate } from 'react-router-dom';
@@ -57,6 +48,7 @@ export default function MealCosts() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingCost, setEditingCost] = useState<MealCost | null>(null);
   const [addAsDeposit, setAddAsDeposit] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
   const [formData, setFormData] = useState({
     userId: '',
     amount: '',
@@ -66,24 +58,40 @@ export default function MealCosts() {
 
   const isManager = user?.role === 'manager';
 
+  useEffect(() => {
+    if (isManager) {
+      loadData();
+    }
+  }, [user, isManager]);
+
   if (!isManager) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  useEffect(() => {
-    loadData();
-  }, [user]);
-
-  const loadData = () => {
+  const loadData = async () => {
     if (!user) return;
     
-    const activeMonth = getActiveMonth(user.messId);
-    if (activeMonth) {
-      setMealCosts(getMealCostsByMonthId(activeMonth.id).sort((a, b) => 
-        new Date(b.date).getTime() - new Date(a.date).getTime()
-      ));
+    setIsLoading(true);
+    try {
+      const activeMonth = await dataService.getActiveMonth(user.messId);
+      if (activeMonth) {
+        const costs = await dataService.getMealCostsByMonthId(activeMonth.id);
+        setMealCosts(costs.sort((a, b) => 
+          new Date(b.date).getTime() - new Date(a.date).getTime()
+        ));
+      }
+      const membersData = await dataService.getMessMembers(user.messId);
+      setMembers(membersData);
+    } catch (error) {
+      console.error('Error loading meal costs:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load meal costs',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
     }
-    setMembers(getMessMembers(user.messId));
   };
 
   const resetForm = () => {
@@ -97,90 +105,99 @@ export default function MealCosts() {
     setAddAsDeposit(false);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!user) return;
     
-    const activeMonth = getActiveMonth(user.messId);
-    if (!activeMonth) {
-      toast({
-        title: 'No active month',
-        description: 'Please start a new month first.',
-        variant: 'destructive',
-      });
-      return;
-    }
+    try {
+      const activeMonth = await dataService.getActiveMonth(user.messId);
+      if (!activeMonth) {
+        toast({
+          title: 'No active month',
+          description: 'Please start a new month first.',
+          variant: 'destructive',
+        });
+        return;
+      }
 
-    const amount = parseFloat(formData.amount);
-    if (isNaN(amount) || amount <= 0) {
-      toast({
-        title: 'Invalid amount',
-        description: 'Please enter a valid amount.',
-        variant: 'destructive',
-      });
-      return;
-    }
+      const amount = parseFloat(formData.amount);
+      if (isNaN(amount) || amount <= 0) {
+        toast({
+          title: 'Invalid amount',
+          description: 'Please enter a valid amount.',
+          variant: 'destructive',
+        });
+        return;
+      }
 
-    const member = members.find(m => m.id === formData.userId);
+      const member = members.find(m => m.id === formData.userId);
 
-    if (editingCost) {
-      updateMealCost(editingCost.id, {
-        userId: formData.userId,
-        amount,
-        date: formData.date,
-        description: formData.description,
-      });
-      
-      notifyMessMembers(user.messId, user.id, {
-        type: 'cost',
-        title: 'Meal Cost Updated',
-        message: `${member?.fullName}'s meal cost of ${formatCurrency(amount)} was updated`,
-      });
-      
-      toast({ title: 'Meal cost updated' });
-    } else {
-      // Create meal cost
-      createMealCost({
-        monthId: activeMonth.id,
-        userId: formData.userId,
-        amount,
-        date: formData.date,
-        description: formData.description,
-      });
-      
-      // Also add as deposit if checkbox is checked
-      if (addAsDeposit) {
-        createDeposit({
+      if (editingCost) {
+        await dataService.updateMealCost(editingCost.id, {
+          userId: formData.userId,
+          amount,
+          date: formData.date,
+          description: formData.description,
+        });
+        
+        await dataService.notifyMessMembers(user.messId, user.id, {
+          type: 'cost',
+          title: 'Meal Cost Updated',
+          message: `${member?.fullName}'s meal cost of ${formatCurrency(amount)} was updated`,
+        });
+        
+        toast({ title: 'Meal cost updated' });
+      } else {
+        // Create meal cost
+        await dataService.createMealCost({
           monthId: activeMonth.id,
           userId: formData.userId,
           amount,
           date: formData.date,
-          note: `Auto-deposit from meal cost: ${formData.description}`,
+          description: formData.description,
         });
         
-        notifyMessMembers(user.messId, user.id, {
-          type: 'deposit',
-          title: 'Deposit Added',
-          message: `${member?.fullName} deposited ${formatCurrency(amount)} (from meal cost)`,
+        // Also add as deposit if checkbox is checked
+        if (addAsDeposit) {
+          await dataService.createDeposit({
+            monthId: activeMonth.id,
+            userId: formData.userId,
+            amount,
+            date: formData.date,
+            note: `Auto-deposit from meal cost: ${formData.description}`,
+          });
+          
+          await dataService.notifyMessMembers(user.messId, user.id, {
+            type: 'deposit',
+            title: 'Deposit Added',
+            message: `${member?.fullName} deposited ${formatCurrency(amount)} (from meal cost)`,
+          });
+        }
+        
+        await dataService.notifyMessMembers(user.messId, user.id, {
+          type: 'cost',
+          title: 'Meal Cost Added',
+          message: `${member?.fullName} spent ${formatCurrency(amount)} for ${formData.description}`,
+        });
+        
+        toast({ 
+          title: addAsDeposit ? 'Meal cost & deposit added' : 'Meal cost added',
+          description: addAsDeposit ? `Added ${formatCurrency(amount)} as both meal cost and deposit for ${member?.fullName}` : undefined,
         });
       }
-      
-      notifyMessMembers(user.messId, user.id, {
-        type: 'cost',
-        title: 'Meal Cost Added',
-        message: `${member?.fullName} spent ${formatCurrency(amount)} for ${formData.description}`,
-      });
-      
-      toast({ 
-        title: addAsDeposit ? 'Meal cost & deposit added' : 'Meal cost added',
-        description: addAsDeposit ? `Added ${formatCurrency(amount)} as both meal cost and deposit for ${member?.fullName}` : undefined,
+
+      setIsAddDialogOpen(false);
+      resetForm();
+      loadData();
+    } catch (error) {
+      console.error('Error saving meal cost:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save meal cost',
+        variant: 'destructive',
       });
     }
-
-    setIsAddDialogOpen(false);
-    resetForm();
-    loadData();
   };
 
   const handleEdit = (cost: MealCost) => {
@@ -195,10 +212,18 @@ export default function MealCosts() {
     setIsAddDialogOpen(true);
   };
 
-  const handleDelete = (costId: string) => {
-    deleteMealCost(costId);
-    loadData();
-    toast({ title: 'Meal cost deleted' });
+  const handleDelete = async (costId: string) => {
+    try {
+      await dataService.deleteMealCost(costId);
+      loadData();
+      toast({ title: 'Meal cost deleted' });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete meal cost',
+        variant: 'destructive',
+      });
+    }
   };
 
   const getMemberName = (userId: string) => {
@@ -207,6 +232,16 @@ export default function MealCosts() {
   };
 
   const totalCosts = mealCosts.reduce((sum, c) => sum + c.amount, 0);
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
