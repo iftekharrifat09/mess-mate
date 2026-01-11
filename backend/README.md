@@ -1,4 +1,4 @@
-# Mess Manager Backend
+# Mess Management System - Backend API
 
 A Node.js + Express + MongoDB backend for the Mess Management System.
 
@@ -9,7 +9,7 @@ A Node.js + Express + MongoDB backend for the Mess Management System.
 ```bash
 cd backend
 npm init -y
-npm install express mongoose cors bcryptjs jsonwebtoken nodemailer dotenv
+npm install express mongodb cors bcryptjs jsonwebtoken nodemailer dotenv
 ```
 
 ### 2. Configure Environment Variables
@@ -23,7 +23,7 @@ cp .env.example .env
 Required environment variables:
 - `MONGO_URI` - Your MongoDB Atlas connection string
 - `PORT` - Server port (default: 5000)
-- `JWT_SECRET` - Secret key for JWT tokens
+- `JWT_SECRET` - Secret key for JWT tokens (use a strong random string in production)
 - `EMAIL_USER` - Gmail address for sending OTP emails
 - `EMAIL_PASS` - Gmail App Password (NOT your regular password)
 
@@ -50,119 +50,122 @@ node index.js
 ```
 
 The server will start on `http://localhost:5000` (or your configured port).
+Check `http://localhost:5000/api/health` to verify MongoDB connection.
+
+## Frontend Configuration
+
+In your frontend project root, create a `.env` file:
+
+```env
+VITE_API_BASE_URL=http://localhost:5000/api
+VITE_USE_BACKEND=true
+```
+
+For production, update `VITE_API_BASE_URL` to your deployed backend URL.
 
 ## API Endpoints
 
+### Health Check
+- `GET /api/health` - Check server and MongoDB connection status
+
 ### Authentication
-- `POST /api/auth/register/manager` - Register a new manager with mess
-- `POST /api/auth/register/member` - Register a new member
+- `POST /api/auth/register-manager` - Register a new manager with mess
+- `POST /api/auth/register-member` - Register a new member
 - `POST /api/auth/login` - Login user
-- `POST /api/auth/update-password` - Update user password
-- `POST /api/auth/verify-password` - Verify user password
+- `GET /api/auth/me` - Get current user (requires auth)
+- `PUT /api/auth/profile` - Update profile (requires auth)
+- `PUT /api/auth/change-password` - Change password (requires auth)
 
-### OTP
-- `POST /api/send-otp` - Send OTP email
-- `POST /api/verify-otp` - Verify OTP code
+### Mess Management
+- `GET /api/mess` - Get user's mess (requires auth)
+- `GET /api/mess/:id` - Get mess by ID
+- `GET /api/mess/code/:code` - Get mess by code
+- `PUT /api/mess` - Update mess (requires auth)
+- `GET /api/mess/members` - Get mess members (requires auth)
+- `GET /api/mess/:id/members` - Get mess members by mess ID
 
-### Users
-- `GET /api/users` - Get all users
-- `GET /api/users/:id` - Get user by ID
-- `GET /api/users/email/:email` - Get user by email
-- `GET /api/users/mess/:messId` - Get users by mess ID
-- `POST /api/users` - Create user
-- `PUT /api/users/:id` - Update user
-- `DELETE /api/users/:id` - Delete user
-
-### Messes
-- `GET /api/messes` - Get all messes
-- `GET /api/messes/:id` - Get mess by ID
-- `GET /api/messes/code/:code` - Get mess by code
-- `POST /api/messes` - Create mess
-- `PUT /api/messes/:id` - Update mess
-- `DELETE /api/messes/:id` - Delete mess (and all related data)
+### Join Requests
+- `GET /api/join-requests` - Get pending join requests for user's mess (requires auth)
+- `GET /api/join-requests/user` - Get user's join requests (requires auth)
+- `POST /api/join-requests` - Create join request with mess code (requires auth)
+- `PUT /api/join-requests/:id/approve` - Approve request (requires auth)
+- `PUT /api/join-requests/:id/reject` - Reject request (requires auth)
 
 ### Months
-- `GET /api/months` - Get all months
-- `GET /api/months/mess/:messId` - Get months by mess ID
-- `GET /api/months/mess/:messId/active` - Get active month
-- `POST /api/months` - Create month
-- `PUT /api/months/:id` - Update month
+- `GET /api/months` - Get all months (requires auth)
+- `GET /api/months/active` - Get active month (requires auth)
+- `POST /api/months` - Create new month (requires auth)
+- `PUT /api/months/:id` - Update month (requires auth)
 
 ### Meals
-- `GET /api/meals/month/:monthId` - Get meals by month
-- `GET /api/meals/user/:userId/month/:monthId` - Get user meals
-- `POST /api/meals` - Create meal
+- `GET /api/meals?monthId=xxx` - Get meals by month
+- `POST /api/meals` - Create/update meal
 - `PUT /api/meals/:id` - Update meal
 - `DELETE /api/meals/:id` - Delete meal
 
 ### Deposits
-- `GET /api/deposits/month/:monthId` - Get deposits by month
-- `GET /api/deposits/user/:userId/month/:monthId` - Get user deposits
+- `GET /api/deposits?monthId=xxx` - Get deposits by month
 - `POST /api/deposits` - Create deposit
 - `PUT /api/deposits/:id` - Update deposit
 - `DELETE /api/deposits/:id` - Delete deposit
 
 ### Meal Costs
-- `GET /api/meal-costs/month/:monthId` - Get meal costs by month
+- `GET /api/meal-costs?monthId=xxx` - Get meal costs by month
 - `POST /api/meal-costs` - Create meal cost
 - `PUT /api/meal-costs/:id` - Update meal cost
 - `DELETE /api/meal-costs/:id` - Delete meal cost
 
 ### Other Costs
-- `GET /api/other-costs/month/:monthId` - Get other costs by month
+- `GET /api/other-costs?monthId=xxx` - Get other costs by month
 - `POST /api/other-costs` - Create other cost
 - `PUT /api/other-costs/:id` - Update other cost
 - `DELETE /api/other-costs/:id` - Delete other cost
 
-### Join Requests
-- `GET /api/join-requests/mess/:messId` - Get join requests by mess
-- `GET /api/join-requests/mess/:messId/pending` - Get pending join requests
-- `GET /api/join-requests/user/:userId` - Get user's join requests
-- `POST /api/join-requests` - Create join request
-- `PUT /api/join-requests/:id` - Update join request
-- `DELETE /api/join-requests/:id` - Delete join request
-
 ### Notices
-- `GET /api/notices/mess/:messId` - Get notices by mess
-- `GET /api/notices/mess/:messId/latest` - Get latest notice
+- `GET /api/notices` - Get notices for user's mess
+- `GET /api/notices/active` - Get active notice
 - `POST /api/notices` - Create notice
 - `PUT /api/notices/:id` - Update notice
 - `DELETE /api/notices/:id` - Delete notice
 
 ### Bazar Dates
-- `GET /api/bazar-dates/mess/:messId` - Get bazar dates by mess
-- `POST /api/bazar-dates` - Create bazar date
-- `PUT /api/bazar-dates/:id` - Update bazar date
+- `GET /api/bazar-dates` - Get bazar dates for user's mess
+- `POST /api/bazar-dates` - Create bazar dates
 - `DELETE /api/bazar-dates/:id` - Delete bazar date
 
 ### Notifications
-- `GET /api/notifications/user/:userId` - Get user notifications
-- `GET /api/notifications/user/:userId/unseen-count` - Get unseen count
-- `POST /api/notifications` - Create notification
-- `PUT /api/notifications/:id/seen` - Mark as seen
-- `PUT /api/notifications/user/:userId/seen-all` - Mark all as seen
+- `GET /api/notifications` - Get user's notifications
+- `GET /api/notifications/unseen-count` - Get unseen count
+- `PUT /api/notifications/mark-seen` - Mark all as seen
 - `DELETE /api/notifications/:id` - Delete notification
-- `DELETE /api/notifications/user/:userId` - Delete all user notifications
 
-### Notes
-- `GET /api/notes/mess/:messId` - Get notes by mess
-- `POST /api/notes` - Create note
-- `PUT /api/notes/:id` - Update note
-- `DELETE /api/notes/:id` - Delete note
+## Troubleshooting
 
-## Frontend Integration
+### "Failed to fetch" error
+- Ensure the backend server is running on the correct port
+- Check CORS settings if frontend and backend are on different domains
+- Verify `VITE_API_BASE_URL` in frontend `.env` matches your backend URL
 
-In your frontend, update `src/lib/config.ts`:
+### "Mess not found" on dashboard
+- Check MongoDB connection by visiting `/api/health`
+- Verify user's `messId` is set correctly in the database
+- Check the backend console for any error messages
 
-```typescript
-export const USE_BACKEND = true;
-export const API_BASE_URL = 'http://localhost:5000/api';
-```
+### Member approval not working
+- Check the join request exists in the `joinRequests` collection
+- Verify the manager has the correct `messId`
+- Check backend logs for the approve endpoint
+- After approval, the member's `messId` and `isApproved` should be updated
+
+### Slow dashboard loading
+- Check your MongoDB Atlas cluster location (choose one close to your users)
+- Monitor MongoDB Atlas metrics for slow queries
+- Ensure proper indexes are created (the backend creates them automatically)
 
 ## Production Deployment
 
-1. Use a process manager like PM2: `npm install -g pm2 && pm2 start index.js`
-2. Set up proper environment variables
-3. Use HTTPS
-4. Restrict CORS to your frontend domain
-5. Use a strong JWT_SECRET
+1. **Use a process manager:** `npm install -g pm2 && pm2 start index.js`
+2. **Set strong JWT_SECRET:** Generate with `node -e "console.log(require('crypto').randomBytes(64).toString('hex'))"`
+3. **Use HTTPS:** Put behind a reverse proxy like nginx with SSL
+4. **Restrict CORS:** Update CORS settings to only allow your frontend domain
+5. **Environment variables:** Never commit `.env` files to version control

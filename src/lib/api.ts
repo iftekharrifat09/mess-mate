@@ -1,4 +1,4 @@
-import { API_BASE_URL, USE_BACKEND, setMongoDbConnected, setBackendAvailable, isMongoDbConnected, isBackendAvailable } from './config';
+import { API_BASE_URL, USE_BACKEND, setMongoDbConnected, setBackendAvailable, isMongoDbConnected, isBackendAvailable, isHealthCheckValid } from './config';
 import { toast } from '@/hooks/use-toast';
 
 // Token management
@@ -16,7 +16,9 @@ export function removeToken(): void {
   localStorage.removeItem(TOKEN_KEY);
 }
 
-// Check MongoDB connection status
+// Check MongoDB connection status - with caching
+let healthCheckPromise: Promise<boolean> | null = null;
+
 export async function checkMongoDbStatus(): Promise<boolean> {
   if (!USE_BACKEND) {
     setMongoDbConnected(false);
@@ -24,28 +26,50 @@ export async function checkMongoDbStatus(): Promise<boolean> {
     return false;
   }
 
-  try {
-    const response = await fetch(`${API_BASE_URL.replace('/api', '')}/api/health`, {
-      method: 'GET',
-      headers: { 'Content-Type': 'application/json' },
-    });
-    
-    if (response.ok) {
-      const data = await response.json();
-      const connected = data.mongodb === 'connected';
-      setMongoDbConnected(connected);
-      setBackendAvailable(true);
-      return connected;
-    }
-    setMongoDbConnected(false);
-    setBackendAvailable(false);
-    return false;
-  } catch (error) {
-    console.error('Backend health check failed:', error);
-    setMongoDbConnected(false);
-    setBackendAvailable(false);
-    return false;
+  // Return cached result if still valid
+  if (isHealthCheckValid() && isMongoDbConnected()) {
+    return true;
   }
+
+  // Deduplicate concurrent health check calls
+  if (healthCheckPromise) {
+    return healthCheckPromise;
+  }
+
+  healthCheckPromise = (async () => {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+
+      const response = await fetch(`${API_BASE_URL.replace('/api', '')}/api/health`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
+      });
+
+      clearTimeout(timeoutId);
+
+      if (response.ok) {
+        const data = await response.json();
+        const connected = data.mongodb === 'connected';
+        setMongoDbConnected(connected);
+        setBackendAvailable(true);
+        return connected;
+      }
+      setMongoDbConnected(false);
+      setBackendAvailable(false);
+      return false;
+    } catch (error) {
+      console.error('Backend health check failed:', error);
+      setMongoDbConnected(false);
+      setBackendAvailable(false);
+      return false;
+    } finally {
+      healthCheckPromise = null;
+    }
+  })();
+
+  return healthCheckPromise;
 }
 
 // Show localStorage fallback alert

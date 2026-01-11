@@ -1,16 +1,21 @@
 // API Configuration
 // Uses environment variable for API URL, falls back to localhost for development
+// IMPORTANT: When deploying, set VITE_API_BASE_URL in .env file (e.g., http://your-server:5000/api)
 export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api';
 
 // Backend enabled flag - set to true to use backend API
-export const USE_BACKEND = true;
+// This can also be controlled via VITE_USE_BACKEND environment variable
+export const USE_BACKEND = import.meta.env.VITE_USE_BACKEND !== 'false';
 
-// MongoDB connection status
+// MongoDB connection status - cached to avoid repeated checks
 let mongoDbConnected = false;
 let backendAvailable = false;
+let lastHealthCheck = 0;
+const HEALTH_CHECK_INTERVAL = 30000; // 30 seconds cache
 
 export function setMongoDbConnected(status: boolean) {
   mongoDbConnected = status;
+  lastHealthCheck = Date.now();
 }
 
 export function isMongoDbConnected() {
@@ -23,6 +28,11 @@ export function setBackendAvailable(status: boolean) {
 
 export function isBackendAvailable() {
   return backendAvailable;
+}
+
+// Check if health check is still valid (within cache interval)
+export function isHealthCheckValid() {
+  return Date.now() - lastHealthCheck < HEALTH_CHECK_INTERVAL;
 }
 
 // Check if we should use backend (backend available AND MongoDB connected)
@@ -38,6 +48,6 @@ export const CONFIG = {
   // API endpoints
   api: {
     baseUrl: API_BASE_URL,
-    timeout: 10000, // 10 seconds
+    timeout: 15000, // 15 seconds (increased for slower connections)
   },
 };

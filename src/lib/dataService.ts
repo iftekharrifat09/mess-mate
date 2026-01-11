@@ -485,7 +485,10 @@ export async function getJoinRequests(): Promise<JoinRequest[]> {
     try {
       const result = await api.getJoinRequestsAPI();
       if (result.success && result.data) {
-        return (result.data as any).joinRequests || result.data || [];
+        const data = result.data as any;
+        // Handle both 'joinRequests' and 'requests' response formats
+        const requests = data.joinRequests || data.requests || data || [];
+        return requests;
       }
     } catch (error) {
       console.error('Error fetching join requests from API:', error);

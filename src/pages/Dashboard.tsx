@@ -52,30 +52,34 @@ export default function Dashboard() {
     try {
       console.log('Loading dashboard data for user:', user.id, 'messId:', user.messId);
       
-      const mess = await dataService.getMessById(user.messId);
-      console.log('Mess data loaded:', mess);
+      // Load data in parallel for better performance
+      const [mess, messMembers, activeMonth, dates] = await Promise.all([
+        dataService.getMessById(user.messId),
+        dataService.getMessMembers(user.messId),
+        dataService.getActiveMonth(user.messId),
+        dataService.getBazarDatesByMessId(user.messId),
+      ]);
+
+      console.log('Parallel load complete - Mess:', mess, 'Members:', messMembers?.length, 'Month:', activeMonth);
+
       if (mess) {
         setMessName(mess.name);
       }
 
-      const messMembers = await dataService.getMessMembers(user.messId);
-      console.log('Members loaded:', messMembers);
-      setMembers(messMembers);
+      setMembers(messMembers || []);
+      setBazarDates(dates || []);
 
-      const activeMonth = await dataService.getActiveMonth(user.messId);
-      console.log('Active month loaded:', activeMonth);
-      
       if (activeMonth) {
-        const mSummary = await calculateMonthSummary(activeMonth.id, user.messId);
-        console.log('Month summary:', mSummary);
+        // Load month-related data in parallel
+        const [mSummary, pSummary, allMembers] = await Promise.all([
+          calculateMonthSummary(activeMonth.id, user.messId),
+          calculateMemberSummary(user.id, activeMonth.id),
+          getAllMembersSummary(activeMonth.id, user.messId),
+        ]);
+
+        console.log('Month data loaded - Summary:', mSummary);
         setMonthSummary(mSummary);
-
-        const pSummary = await calculateMemberSummary(user.id, activeMonth.id);
-        console.log('Personal summary:', pSummary);
         setPersonalSummary(pSummary);
-
-        const allMembers = await getAllMembersSummary(activeMonth.id, user.messId);
-        console.log('All members summary:', allMembers);
         setMembersSummary(allMembers);
       } else {
         console.log('No active month found - creating empty summaries');
@@ -101,11 +105,8 @@ export default function Dashboard() {
           sharedCost: 0,
           balance: 0,
         });
+        setMembersSummary([]);
       }
-
-      const dates = await dataService.getBazarDatesByMessId(user.messId);
-      console.log('Bazar dates loaded:', dates);
-      setBazarDates(dates);
     } catch (error) {
       console.error('Error loading dashboard data:', error);
     } finally {

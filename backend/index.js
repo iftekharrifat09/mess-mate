@@ -1228,8 +1228,9 @@ app.delete("/api/other-costs/:id", authMiddleware, async (req, res) => {
 
 app.get("/api/join-requests", authMiddleware, async (req, res) => {
   try {
+    const messId = req.query.messId || req.user.messId;
     const requests = await collections.joinRequests
-      .find({ messId: req.user.messId, status: "pending" })
+      .find({ messId, status: "pending" })
       .toArray();
 
     const populatedRequests = await Promise.all(
@@ -1249,7 +1250,8 @@ app.get("/api/join-requests", authMiddleware, async (req, res) => {
         };
       })
     );
-    res.json({ success: true, requests: populatedRequests });
+    // Return as joinRequests for frontend compatibility
+    res.json({ success: true, joinRequests: populatedRequests });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to get join requests" });
   }
@@ -1260,7 +1262,8 @@ app.get("/api/join-requests/user", authMiddleware, async (req, res) => {
     const requests = await collections.joinRequests
       .find({ userId: req.userId })
       .toArray();
-    res.json({ success: true, requests: transformDocs(requests) });
+    // Return as joinRequests for frontend compatibility
+    res.json({ success: true, joinRequests: transformDocs(requests) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to get user join requests" });
   }
