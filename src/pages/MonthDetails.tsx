@@ -45,7 +45,14 @@ import {
 } from '@/lib/calculations';
 import { exportToPDF, exportToExcel } from '@/lib/export';
 import { Month, MonthSummary, MemberSummary, User, Meal, Deposit, MealCost, OtherCost } from '@/types';
-import { CalendarDays, Plus, TrendingUp, TrendingDown, Download, FileText, FileSpreadsheet, History, Loader2 } from 'lucide-react';
+import { CalendarDays, Plus, TrendingUp, TrendingDown, Download, FileText, FileSpreadsheet, History, Loader2, Filter, X } from 'lucide-react';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { format } from 'date-fns';
 
 interface DailyRecord {
@@ -79,6 +86,7 @@ export default function MonthDetails() {
   const [isExporting, setIsExporting] = useState(false);
   const [confirmNewMonth, setConfirmNewMonth] = useState('');
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedMemberFilter, setSelectedMemberFilter] = useState<string>('all');
 
   const isManager = user?.role === 'manager';
 
@@ -641,8 +649,34 @@ export default function MonthDetails() {
               
               <TabsContent value="daily">
                 <Card>
-                  <CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between flex-wrap gap-4">
                     <CardTitle>Daily Details</CardTitle>
+                    <div className="flex items-center gap-2">
+                      <Filter className="h-4 w-4 text-muted-foreground" />
+                      <Select value={selectedMemberFilter} onValueChange={setSelectedMemberFilter}>
+                        <SelectTrigger className="w-[180px]">
+                          <SelectValue placeholder="Filter by member" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Members</SelectItem>
+                          {members.map(member => (
+                            <SelectItem key={member.id} value={member.id}>
+                              {member.fullName} {member.id === user?.id ? '(You)' : ''}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {selectedMemberFilter !== 'all' && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => setSelectedMemberFilter('all')}
+                          className="h-8 w-8"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </CardHeader>
                   <CardContent>
                     {dailyRecords.length === 0 ? (
@@ -650,43 +684,59 @@ export default function MonthDetails() {
                         <p className="text-muted-foreground">No daily records yet.</p>
                       </div>
                     ) : (
-                      <div className="overflow-x-auto">
-                        <Table>
-                          <TableHeader>
-                            <TableRow>
-                              <TableHead>Date</TableHead>
-                              <TableHead>Member</TableHead>
-                              <TableHead className="text-right">Meals</TableHead>
-                              <TableHead className="text-right">Deposit</TableHead>
-                              <TableHead className="text-right">Meal Cost</TableHead>
-                              <TableHead className="text-right">Other Cost</TableHead>
-                            </TableRow>
-                          </TableHeader>
-                          <TableBody>
-                            {dailyRecords.map((record, index) => (
-                              <TableRow key={`${record.date}-${record.memberId}`} className={record.memberId === user?.id ? 'bg-primary/5' : ''}>
-                                <TableCell>{format(new Date(record.date), 'MMM dd, yyyy')}</TableCell>
-                                <TableCell className="font-medium">
-                                  {record.memberName}
-                                  {record.memberId === user?.id && (
-                                    <span className="ml-2 text-xs text-primary">(You)</span>
-                                  )}
-                                </TableCell>
-                                <TableCell className="text-right">{formatNumber(record.meals)}</TableCell>
-                                <TableCell className="text-right text-success">
-                                  {record.deposit > 0 ? formatCurrency(record.deposit) : '-'}
-                                </TableCell>
-                                <TableCell className="text-right text-warning">
-                                  {record.mealCost > 0 ? formatCurrency(record.mealCost) : '-'}
-                                </TableCell>
-                                <TableCell className="text-right text-info">
-                                  {record.otherCost > 0 ? formatCurrency(record.otherCost) : '-'}
-                                </TableCell>
+                      <>
+                        {selectedMemberFilter !== 'all' && (
+                          <div className="mb-4 p-3 bg-primary/5 rounded-lg flex items-center justify-between">
+                            <span className="text-sm text-muted-foreground">
+                              Showing records for: <span className="font-medium text-foreground">
+                                {members.find(m => m.id === selectedMemberFilter)?.fullName || 'Unknown'}
+                              </span>
+                            </span>
+                            <span className="text-sm text-muted-foreground">
+                              {dailyRecords.filter(r => r.memberId === selectedMemberFilter).length} records
+                            </span>
+                          </div>
+                        )}
+                        <div className="overflow-x-auto">
+                          <Table>
+                            <TableHeader>
+                              <TableRow>
+                                <TableHead>Date</TableHead>
+                                <TableHead>Member</TableHead>
+                                <TableHead className="text-right">Meals</TableHead>
+                                <TableHead className="text-right">Deposit</TableHead>
+                                <TableHead className="text-right">Meal Cost</TableHead>
+                                <TableHead className="text-right">Other Cost</TableHead>
                               </TableRow>
-                            ))}
-                          </TableBody>
-                        </Table>
-                      </div>
+                            </TableHeader>
+                            <TableBody>
+                              {dailyRecords
+                                .filter(record => selectedMemberFilter === 'all' || record.memberId === selectedMemberFilter)
+                                .map((record) => (
+                                  <TableRow key={`${record.date}-${record.memberId}`} className={record.memberId === user?.id ? 'bg-primary/5' : ''}>
+                                    <TableCell>{format(new Date(record.date), 'MMM dd, yyyy')}</TableCell>
+                                    <TableCell className="font-medium">
+                                      {record.memberName}
+                                      {record.memberId === user?.id && (
+                                        <span className="ml-2 text-xs text-primary">(You)</span>
+                                      )}
+                                    </TableCell>
+                                    <TableCell className="text-right">{formatNumber(record.meals)}</TableCell>
+                                    <TableCell className="text-right text-success">
+                                      {record.deposit > 0 ? formatCurrency(record.deposit) : '-'}
+                                    </TableCell>
+                                    <TableCell className="text-right text-warning">
+                                      {record.mealCost > 0 ? formatCurrency(record.mealCost) : '-'}
+                                    </TableCell>
+                                    <TableCell className="text-right text-info">
+                                      {record.otherCost > 0 ? formatCurrency(record.otherCost) : '-'}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                            </TableBody>
+                          </Table>
+                        </div>
+                      </>
                     )}
                   </CardContent>
                 </Card>
