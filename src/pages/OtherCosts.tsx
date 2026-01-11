@@ -33,16 +33,9 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  getActiveMonth,
-  getOtherCostsByMonthId,
-  getMessMembers,
-  createOtherCost,
-  updateOtherCost,
-  deleteOtherCost,
-} from '@/lib/storage';
+import * as dataService from '@/lib/dataService';
 import { OtherCost, User } from '@/types';
-import { Receipt, Plus, Trash2, Edit2 } from 'lucide-react';
+import { Receipt, Plus, Trash2, Edit2, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/calculations';
 import { Navigate } from 'react-router-dom';
@@ -54,6 +47,7 @@ export default function OtherCosts() {
   const [members, setMembers] = useState<User[]>([]);
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingCost, setEditingCost] = useState<OtherCost | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [formData, setFormData] = useState({
     userId: '',
     amount: '',
@@ -64,24 +58,40 @@ export default function OtherCosts() {
 
   const isManager = user?.role === 'manager';
 
+  useEffect(() => {
+    if (isManager) {
+      loadData();
+    }
+  }, [user, isManager]);
+
   if (!isManager) {
     return <Navigate to="/dashboard" replace />;
   }
 
-  useEffect(() => {
-    loadData();
-  }, [user]);
-
-  const loadData = () => {
+  const loadData = async () => {
     if (!user) return;
     
-    const activeMonth = getActiveMonth(user.messId);
-    if (activeMonth) {
-      setOtherCosts(getOtherCostsByMonthId(activeMonth.id).sort((a, b) => 
-        new Date(b.date).getTime() - new Date(a.date).getTime()
-      ));
+    setIsLoading(true);
+    try {
+      const activeMonth = await dataService.getActiveMonth(user.messId);
+      if (activeMonth) {
+        const costs = await dataService.getOtherCostsByMonthId(activeMonth.id);
+        setOtherCosts(costs.sort((a, b) => 
+          new Date(b.date).getTime() - new Date(a.date).getTime()
+        ));
+      }
+      const membersData = await dataService.getMessMembers(user.messId);
+      setMembers(membersData);
+    } catch (error) {
+      console.error('Error loading other costs:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load other costs',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
     }
-    setMembers(getMessMembers(user.messId));
   };
 
   const resetForm = () => {
@@ -95,55 +105,64 @@ export default function OtherCosts() {
     setEditingCost(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
     if (!user) return;
     
-    const activeMonth = getActiveMonth(user.messId);
-    if (!activeMonth) {
+    try {
+      const activeMonth = await dataService.getActiveMonth(user.messId);
+      if (!activeMonth) {
+        toast({
+          title: 'No active month',
+          description: 'Please start a new month first.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const amount = parseFloat(formData.amount);
+      if (isNaN(amount) || amount <= 0) {
+        toast({
+          title: 'Invalid amount',
+          description: 'Please enter a valid amount.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (editingCost) {
+        await dataService.updateOtherCost(editingCost.id, {
+          userId: formData.userId,
+          amount,
+          date: formData.date,
+          description: formData.description,
+          isShared: formData.isShared,
+        });
+        toast({ title: 'Cost updated' });
+      } else {
+        await dataService.createOtherCost({
+          monthId: activeMonth.id,
+          userId: formData.userId,
+          amount,
+          date: formData.date,
+          description: formData.description,
+          isShared: formData.isShared,
+        });
+        toast({ title: 'Cost added' });
+      }
+
+      setIsAddDialogOpen(false);
+      resetForm();
+      loadData();
+    } catch (error) {
+      console.error('Error saving other cost:', error);
       toast({
-        title: 'No active month',
-        description: 'Please start a new month first.',
+        title: 'Error',
+        description: 'Failed to save cost',
         variant: 'destructive',
       });
-      return;
     }
-
-    const amount = parseFloat(formData.amount);
-    if (isNaN(amount) || amount <= 0) {
-      toast({
-        title: 'Invalid amount',
-        description: 'Please enter a valid amount.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    if (editingCost) {
-      updateOtherCost(editingCost.id, {
-        userId: formData.userId,
-        amount,
-        date: formData.date,
-        description: formData.description,
-        isShared: formData.isShared,
-      });
-      toast({ title: 'Cost updated' });
-    } else {
-      createOtherCost({
-        monthId: activeMonth.id,
-        userId: formData.userId,
-        amount,
-        date: formData.date,
-        description: formData.description,
-        isShared: formData.isShared,
-      });
-      toast({ title: 'Cost added' });
-    }
-
-    setIsAddDialogOpen(false);
-    resetForm();
-    loadData();
   };
 
   const handleEdit = (cost: OtherCost) => {
@@ -158,10 +177,18 @@ export default function OtherCosts() {
     setIsAddDialogOpen(true);
   };
 
-  const handleDelete = (costId: string) => {
-    deleteOtherCost(costId);
-    loadData();
-    toast({ title: 'Cost deleted' });
+  const handleDelete = async (costId: string) => {
+    try {
+      await dataService.deleteOtherCost(costId);
+      loadData();
+      toast({ title: 'Cost deleted' });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete cost',
+        variant: 'destructive',
+      });
+    }
   };
 
   const getMemberName = (userId: string) => {
@@ -173,6 +200,16 @@ export default function OtherCosts() {
   const individualCosts = otherCosts.filter(c => !c.isShared);
   const totalShared = sharedCosts.reduce((sum, c) => sum + c.amount, 0);
   const totalIndividual = individualCosts.reduce((sum, c) => sum + c.amount, 0);
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

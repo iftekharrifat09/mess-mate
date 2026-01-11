@@ -18,15 +18,9 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  getNoticesByMessId, 
-  createNotice, 
-  updateNotice, 
-  deleteNotice,
-  notifyMessMembers,
-} from '@/lib/storage';
+import * as dataService from '@/lib/dataService';
 import { Notice } from '@/types';
-import { Megaphone, Plus, Edit2, Trash2, Calendar, Eye } from 'lucide-react';
+import { Megaphone, Plus, Edit2, Trash2, Calendar, Eye, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Notices() {
@@ -37,6 +31,7 @@ export default function Notices() {
   const [editingNotice, setEditingNotice] = useState<Notice | null>(null);
   const [viewingNotice, setViewingNotice] = useState<Notice | null>(null);
   const [formData, setFormData] = useState({ title: '', content: '' });
+  const [isLoading, setIsLoading] = useState(true);
 
   const isManager = user?.role === 'manager';
 
@@ -44,11 +39,23 @@ export default function Notices() {
     loadNotices();
   }, [user]);
 
-  const loadNotices = () => {
+  const loadNotices = async () => {
     if (!user) return;
-    const allNotices = getNoticesByMessId(user.messId)
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    setNotices(allNotices);
+    
+    setIsLoading(true);
+    try {
+      const allNotices = await dataService.getNoticesByMessId(user.messId);
+      setNotices(allNotices.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+    } catch (error) {
+      console.error('Error loading notices:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load notices',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const resetForm = () => {
@@ -56,31 +63,40 @@ export default function Notices() {
     setEditingNotice(null);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
-    if (editingNotice) {
-      updateNotice(editingNotice.id, { title: formData.title, content: formData.content });
-      notifyMessMembers(user.messId, user.id, {
-        type: 'notice',
-        title: 'Notice Updated',
-        message: `"${formData.title}" has been updated`,
-      });
-      toast({ title: 'Notice updated' });
-    } else {
-      createNotice({ messId: user.messId, title: formData.title, content: formData.content });
-      notifyMessMembers(user.messId, user.id, {
-        type: 'notice',
-        title: 'New Notice',
-        message: formData.title,
-      });
-      toast({ title: 'Notice created' });
-    }
+    try {
+      if (editingNotice) {
+        await dataService.updateNotice(editingNotice.id, { title: formData.title, content: formData.content });
+        await dataService.notifyMessMembers(user.messId, user.id, {
+          type: 'notice',
+          title: 'Notice Updated',
+          message: `"${formData.title}" has been updated`,
+        });
+        toast({ title: 'Notice updated' });
+      } else {
+        await dataService.createNotice({ messId: user.messId, title: formData.title, content: formData.content });
+        await dataService.notifyMessMembers(user.messId, user.id, {
+          type: 'notice',
+          title: 'New Notice',
+          message: formData.title,
+        });
+        toast({ title: 'Notice created' });
+      }
 
-    setIsAddDialogOpen(false);
-    resetForm();
-    loadNotices();
+      setIsAddDialogOpen(false);
+      resetForm();
+      loadNotices();
+    } catch (error) {
+      console.error('Error saving notice:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save notice',
+        variant: 'destructive',
+      });
+    }
   };
 
   const handleEdit = (notice: Notice) => {
@@ -89,17 +105,36 @@ export default function Notices() {
     setIsAddDialogOpen(true);
   };
 
-  const handleDelete = (notice: Notice) => {
+  const handleDelete = async (notice: Notice) => {
     if (!user) return;
-    deleteNotice(notice.id);
-    notifyMessMembers(user.messId, user.id, {
-      type: 'notice',
-      title: 'Notice Removed',
-      message: `"${notice.title}" has been removed`,
-    });
-    toast({ title: 'Notice deleted' });
-    loadNotices();
+    
+    try {
+      await dataService.deleteNotice(notice.id);
+      await dataService.notifyMessMembers(user.messId, user.id, {
+        type: 'notice',
+        title: 'Notice Removed',
+        message: `"${notice.title}" has been removed`,
+      });
+      toast({ title: 'Notice deleted' });
+      loadNotices();
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete notice',
+        variant: 'destructive',
+      });
+    }
   };
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>

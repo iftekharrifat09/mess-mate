@@ -634,6 +634,19 @@ export async function createBazarDate(dateData: Omit<BazarDate, 'id' | 'createdA
   return storage.createBazarDate(dateData);
 }
 
+export async function updateBazarDate(id: string, updates: Partial<BazarDate>): Promise<BazarDate | undefined> {
+  if (shouldUseBackend()) {
+    const result = await api.updateBazarDateAPI(id, updates);
+    if (result.success && result.data) {
+      return result.data as any;
+    }
+    if (result.usingLocalStorage) {
+      showFallbackAlert();
+    }
+  }
+  return storage.updateBazarDate(id, updates);
+}
+
 export async function deleteBazarDate(id: string): Promise<boolean> {
   if (shouldUseBackend()) {
     const result = await api.deleteBazarDateAPI(id);

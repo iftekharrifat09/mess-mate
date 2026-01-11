@@ -16,17 +16,9 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  getActiveMonth,
-  getMealsByMonthId,
-  getMessMembers,
-  createMeal,
-  updateMeal,
-  deleteMeal,
-  notifyMessMembers,
-} from '@/lib/storage';
+import * as dataService from '@/lib/dataService';
 import { Meal, User } from '@/types';
-import { Utensils, Plus, Trash2, Edit2, Minus, Coffee, Sun, Moon, Settings2, Calendar } from 'lucide-react';
+import { Utensils, Plus, Trash2, Edit2, Minus, Coffee, Sun, Moon, Settings2, Calendar, Loader2 } from 'lucide-react';
 import { format, isToday, isBefore } from 'date-fns';
 
 // Default meal settings storage
@@ -62,6 +54,7 @@ export default function Meals() {
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [memberMeals, setMemberMeals] = useState<Record<string, { breakfast: number; lunch: number; dinner: number }>>({});
   const [defaultMeals, setDefaultMeals] = useState<DefaultMeals>({ breakfast: 0, lunch: 1, dinner: 1 });
+  const [isLoading, setIsLoading] = useState(true);
 
   const isManager = user?.role === 'manager';
 
@@ -99,16 +92,30 @@ export default function Meals() {
     }
   }, [members, selectedDate, meals, user]);
 
-  const loadData = () => {
+  const loadData = async () => {
     if (!user) return;
     
-    const activeMonth = getActiveMonth(user.messId);
-    if (activeMonth) {
-      setMeals(getMealsByMonthId(activeMonth.id).sort((a, b) => 
-        new Date(b.date).getTime() - new Date(a.date).getTime()
-      ));
+    setIsLoading(true);
+    try {
+      const activeMonth = await dataService.getActiveMonth(user.messId);
+      if (activeMonth) {
+        const mealsData = await dataService.getMealsByMonthId(activeMonth.id);
+        setMeals(mealsData.sort((a, b) => 
+          new Date(b.date).getTime() - new Date(a.date).getTime()
+        ));
+      }
+      const membersData = await dataService.getMessMembers(user.messId);
+      setMembers(membersData);
+    } catch (error) {
+      console.error('Error loading meals:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load meals',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
     }
-    setMembers(getMessMembers(user.messId));
   };
 
   // Check if date already has meals
@@ -141,62 +148,71 @@ export default function Meals() {
     }));
   };
 
-  const handleSubmitAll = () => {
+  const handleSubmitAll = async () => {
     if (!user) return;
     
-    const activeMonth = getActiveMonth(user.messId);
-    if (!activeMonth) {
+    try {
+      const activeMonth = await dataService.getActiveMonth(user.messId);
+      if (!activeMonth) {
+        toast({
+          title: 'No active month',
+          description: 'Please start a new month first.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Check if date already has meals (for adding new)
+      const existingMealsForDate = meals.filter(m => m.date === selectedDate);
+      const isEditing = existingMealsForDate.length > 0;
+
+      let mealsCreated = 0;
+      let mealsUpdated = 0;
+
+      for (const [memberId, mealData] of Object.entries(memberMeals)) {
+        const existingMeal = existingMealsForDate.find(m => m.userId === memberId);
+        
+        if (existingMeal) {
+          await dataService.updateMeal(existingMeal.id, {
+            breakfast: mealData.breakfast,
+            lunch: mealData.lunch,
+            dinner: mealData.dinner,
+          });
+          mealsUpdated++;
+        } else {
+          await dataService.createMeal({
+            monthId: activeMonth.id,
+            userId: memberId,
+            date: selectedDate,
+            breakfast: mealData.breakfast,
+            lunch: mealData.lunch,
+            dinner: mealData.dinner,
+          });
+          mealsCreated++;
+        }
+      }
+
+      await dataService.notifyMessMembers(user.messId, user.id, {
+        type: 'meal',
+        title: isEditing ? 'Meals Updated' : 'Meals Added',
+        message: `Meals for ${format(new Date(selectedDate), 'MMM d')} have been ${isEditing ? 'updated' : 'recorded'}`,
+      });
+
+      toast({ 
+        title: isEditing ? 'Meals updated' : 'Meals added',
+        description: `${mealsCreated + mealsUpdated} meal records saved`,
+      });
+
+      setIsAddDialogOpen(false);
+      loadData();
+    } catch (error) {
+      console.error('Error saving meals:', error);
       toast({
-        title: 'No active month',
-        description: 'Please start a new month first.',
+        title: 'Error',
+        description: 'Failed to save meals',
         variant: 'destructive',
       });
-      return;
     }
-
-    // Check if date already has meals (for adding new)
-    const existingMealsForDate = meals.filter(m => m.date === selectedDate);
-    const isEditing = existingMealsForDate.length > 0;
-
-    let mealsCreated = 0;
-    let mealsUpdated = 0;
-
-    Object.entries(memberMeals).forEach(([memberId, mealData]) => {
-      const existingMeal = existingMealsForDate.find(m => m.userId === memberId);
-      
-      if (existingMeal) {
-        updateMeal(existingMeal.id, {
-          breakfast: mealData.breakfast,
-          lunch: mealData.lunch,
-          dinner: mealData.dinner,
-        });
-        mealsUpdated++;
-      } else {
-        createMeal({
-          monthId: activeMonth.id,
-          userId: memberId,
-          date: selectedDate,
-          breakfast: mealData.breakfast,
-          lunch: mealData.lunch,
-          dinner: mealData.dinner,
-        });
-        mealsCreated++;
-      }
-    });
-
-    notifyMessMembers(user.messId, user.id, {
-      type: 'meal',
-      title: isEditing ? 'Meals Updated' : 'Meals Added',
-      message: `Meals for ${format(new Date(selectedDate), 'MMM d')} have been ${isEditing ? 'updated' : 'recorded'}`,
-    });
-
-    toast({ 
-      title: isEditing ? 'Meals updated' : 'Meals added',
-      description: `${mealsCreated + mealsUpdated} meal records saved`,
-    });
-
-    setIsAddDialogOpen(false);
-    loadData();
   };
 
   const handleSaveDefaults = () => {
@@ -212,10 +228,18 @@ export default function Meals() {
     setIsAddDialogOpen(true);
   };
 
-  const handleDelete = (mealId: string) => {
-    deleteMeal(mealId);
-    loadData();
-    toast({ title: 'Meal deleted' });
+  const handleDelete = async (mealId: string) => {
+    try {
+      await dataService.deleteMeal(mealId);
+      loadData();
+      toast({ title: 'Meal deleted' });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete meal',
+        variant: 'destructive',
+      });
+    }
   };
 
   const getMemberName = (userId: string) => {
@@ -284,6 +308,16 @@ export default function Meals() {
       </motion.button>
     </div>
   );
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -497,12 +531,8 @@ export default function Meals() {
                 </div>
 
                 <DialogFooter className="mt-4">
-                  <Button 
-                    onClick={handleSubmitAll} 
-                    className="w-full gradient-primary"
-                    disabled={!isDateValidForAdding()}
-                  >
-                    {dateHasMeals(selectedDate) ? 'Update Meals' : 'Submit'}
+                  <Button onClick={handleSubmitAll} className="w-full gradient-primary">
+                    {dateHasMeals(selectedDate) ? 'Update All Meals' : 'Save All Meals'}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -510,170 +540,99 @@ export default function Meals() {
           </div>
         </div>
 
-        {/* Meal Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-          >
-            <Card className="bg-warning/10 border-warning/20">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 rounded-xl bg-warning">
-                    <Coffee className="h-6 w-6 text-warning-foreground" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Total Breakfast</p>
-                    <p className="text-2xl font-bold text-foreground">
-                      {meals.reduce((sum, m) => sum + m.breakfast, 0)}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-          >
-            <Card className="bg-success/10 border-success/20">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 rounded-xl bg-success">
-                    <Sun className="h-6 w-6 text-success-foreground" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Total Lunch</p>
-                    <p className="text-2xl font-bold text-foreground">
-                      {meals.reduce((sum, m) => sum + m.lunch, 0)}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
-            <Card className="bg-primary/10 border-primary/20">
-              <CardContent className="pt-6">
-                <div className="flex items-center gap-3">
-                  <div className="p-3 rounded-xl bg-primary">
-                    <Moon className="h-6 w-6 text-primary-foreground" />
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Total Dinner</p>
-                    <p className="text-2xl font-bold text-foreground">
-                      {meals.reduce((sum, m) => sum + m.dinner, 0)}
-                    </p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        </div>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Utensils className="h-5 w-5 text-primary" />
-              Meal Records
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {meals.length === 0 ? (
-              <div className="text-center py-12">
-                <Utensils className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">No meals recorded yet.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                <AnimatePresence>
-                  {Object.entries(groupedMeals).map(([date, dateMeals], dateIndex) => (
-                    <motion.div
-                      key={date}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -20 }}
-                      transition={{ delay: dateIndex * 0.05 }}
-                      className="space-y-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-medium text-muted-foreground sticky top-0 bg-background py-1">
-                          {format(new Date(date), 'EEEE, MMMM d, yyyy')}
-                        </h3>
-                        {isManager && (
-                          <Button 
-                            variant="ghost" 
-                            size="sm"
-                            onClick={() => {
-                              setSelectedDate(date);
-                              setIsAddDialogOpen(true);
-                            }}
-                          >
-                            <Edit2 className="h-4 w-4 mr-1" />
-                            Edit Day
-                          </Button>
-                        )}
-                      </div>
-                      <div className="grid gap-2">
-                        {dateMeals.map((meal) => {
-                          const total = meal.breakfast + meal.lunch + meal.dinner;
-                          const canEdit = isManager || meal.userId === user?.id;
-                          
-                          return (
-                            <motion.div
-                              key={meal.id}
-                              whileHover={{ scale: 1.01 }}
-                              className="flex items-center justify-between p-4 bg-muted/50 rounded-lg hover:bg-muted transition-colors"
+        {/* Meals by Date */}
+        {Object.keys(groupedMeals).length === 0 ? (
+          <Card>
+            <CardContent className="text-center py-12">
+              <Utensils className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+              <p className="text-muted-foreground">No meals recorded yet.</p>
+              <p className="text-sm text-muted-foreground mt-1">Click "Add Meal" to start tracking.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {Object.entries(groupedMeals)
+              .sort(([a], [b]) => new Date(b).getTime() - new Date(a).getTime())
+              .map(([date, dateMeals]) => {
+                const totalMeals = dateMeals.reduce((sum, m) => sum + m.breakfast + m.lunch + m.dinner, 0);
+                const isDateToday = isToday(new Date(date));
+                
+                return (
+                  <motion.div
+                    key={date}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                  >
+                    <Card className={isDateToday ? 'border-primary/50 bg-primary/5' : ''}>
+                      <CardHeader className="pb-2">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-lg flex items-center gap-2">
+                            <Calendar className="h-4 w-4 text-primary" />
+                            {format(new Date(date), 'EEEE, MMMM d, yyyy')}
+                            {isDateToday && (
+                              <span className="px-2 py-0.5 text-xs bg-primary text-primary-foreground rounded-full">Today</span>
+                            )}
+                          </CardTitle>
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm text-muted-foreground">Total: {totalMeals} meals</span>
+                            <Button 
+                              variant="ghost" 
+                              size="sm"
+                              onClick={() => {
+                                setSelectedDate(date);
+                                setIsAddDialogOpen(true);
+                              }}
                             >
-                              <div className="flex items-center gap-4">
-                                <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
-                                  <Utensils className="h-5 w-5 text-primary" />
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+                          {dateMeals.map(meal => (
+                            <div 
+                              key={meal.id}
+                              className="flex items-center justify-between p-2 bg-muted/50 rounded-lg"
+                            >
+                              <div className="flex items-center gap-2">
+                                <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                  <span className="text-xs font-medium text-primary">
+                                    {getMemberName(meal.userId).charAt(0)}
+                                  </span>
                                 </div>
                                 <div>
-                                  <p className="font-medium">{getMemberName(meal.userId)}</p>
-                                  <div className="flex gap-3 text-sm text-muted-foreground">
-                                    <span className="flex items-center gap-1">
-                                      <Coffee className="h-3 w-3" /> {meal.breakfast}
-                                    </span>
-                                    <span className="flex items-center gap-1">
-                                      <Sun className="h-3 w-3" /> {meal.lunch}
-                                    </span>
-                                    <span className="flex items-center gap-1">
-                                      <Moon className="h-3 w-3" /> {meal.dinner}
-                                    </span>
-                                  </div>
+                                  <p className="text-sm font-medium">{getMemberName(meal.userId)}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    B:{meal.breakfast} L:{meal.lunch} D:{meal.dinner}
+                                  </p>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-3">
-                                <div className="text-right">
-                                  <p className="text-2xl font-bold text-primary">{total}</p>
-                                  <p className="text-xs text-muted-foreground">meals</p>
-                                </div>
-                                {canEdit && isManager && (
-                                  <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDelete(meal.id)}>
-                                    <Trash2 className="h-4 w-4" />
+                              <div className="flex items-center gap-1">
+                                <span className="text-sm font-bold text-primary">
+                                  {meal.breakfast + meal.lunch + meal.dinner}
+                                </span>
+                                {(isManager || meal.userId === user?.id) && (
+                                  <Button 
+                                    variant="ghost" 
+                                    size="sm"
+                                    className="h-6 w-6 p-0 text-destructive"
+                                    onClick={() => handleDelete(meal.id)}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
                                   </Button>
                                 )}
                               </div>
-                            </motion.div>
-                          );
-                        })}
-                      </div>
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  </motion.div>
+                );
+              })}
+          </div>
+        )}
       </motion.div>
     </DashboardLayout>
   );

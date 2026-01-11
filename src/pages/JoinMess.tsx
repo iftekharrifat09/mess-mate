@@ -5,17 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useToast } from '@/hooks/use-toast';
-import { Utensils, Search, ArrowLeft, Check, AlertCircle } from 'lucide-react';
-import { 
-  getMesses, 
-  createJoinRequest, 
-  getJoinRequests, 
-  getUserById,
-  getMessByCode,
-  getPendingJoinRequestsForUser,
-  updateUser,
-  notifyManager,
-} from '@/lib/storage';
+import { Utensils, Search, ArrowLeft, Check, AlertCircle, Loader2 } from 'lucide-react';
+import * as dataService from '@/lib/dataService';
 import { Mess, User } from '@/types';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -26,6 +17,8 @@ export default function JoinMess() {
   const [requestedMessIds, setRequestedMessIds] = useState<string[]>([]);
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [isPartOfMess, setIsPartOfMess] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isSearching, setIsSearching] = useState(false);
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -36,48 +29,73 @@ export default function JoinMess() {
   const userEmail = location.state?.email || authUser?.email;
 
   useEffect(() => {
-    if (userId) {
-      const user = getUserById(userId);
-      setCurrentUser(user || null);
-      
-      // Check if user is already part of a mess
-      if (user?.messId && user?.isApproved) {
-        setIsPartOfMess(true);
-      }
-      
-      // Load existing pending requests
-      if (user) {
-        const pendingRequests = getPendingJoinRequestsForUser(user.id);
-        setRequestedMessIds(pendingRequests.map(r => r.messId));
-      }
-    }
+    loadUserData();
   }, [userId]);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const messes = getMesses();
-    const query = searchQuery.trim();
-    
-    // Search by mess code first, then by name
-    const byCode = getMessByCode(query);
-    if (byCode) {
-      setSearchResults([byCode]);
-      setHasSearched(true);
-      return;
+  const loadUserData = async () => {
+    if (userId) {
+      setIsLoading(true);
+      try {
+        const user = await dataService.getUserById(userId);
+        setCurrentUser(user || null);
+        
+        // Check if user is already part of a mess
+        if (user?.messId && user?.isApproved) {
+          setIsPartOfMess(true);
+        }
+        
+        // Load existing pending requests
+        if (user) {
+          const pendingRequests = await dataService.getPendingJoinRequestsForUser(user.id);
+          setRequestedMessIds(pendingRequests.map(r => r.messId));
+        }
+      } catch (error) {
+        console.error('Error loading user data:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    } else {
+      setIsLoading(false);
     }
-    
-    // Search by name
-    const results = messes.filter(mess => 
-      mess.name.toLowerCase().includes(query.toLowerCase()) ||
-      mess.messCode?.toLowerCase().includes(query.toLowerCase())
-    );
-    
-    setSearchResults(results);
-    setHasSearched(true);
   };
 
-  const handleJoinRequest = (mess: Mess) => {
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    setIsSearching(true);
+    try {
+      const query = searchQuery.trim();
+      
+      // Search by mess code first
+      const byCode = await dataService.getMessByCode(query);
+      if (byCode) {
+        setSearchResults([byCode]);
+        setHasSearched(true);
+        return;
+      }
+      
+      // Search by name
+      const messes = await dataService.getMesses();
+      const results = messes.filter(mess => 
+        mess.name.toLowerCase().includes(query.toLowerCase()) ||
+        mess.messCode?.toLowerCase().includes(query.toLowerCase())
+      );
+      
+      setSearchResults(results);
+      setHasSearched(true);
+    } catch (error) {
+      console.error('Error searching:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to search for mess',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleJoinRequest = async (mess: Mess) => {
     if (!currentUser) {
       toast({
         title: 'Error',
@@ -98,42 +116,59 @@ export default function JoinMess() {
       return;
     }
 
-    // Check if already requested
-    const existingRequests = getJoinRequests();
-    const alreadyRequested = existingRequests.some(
-      r => r.userId === currentUser.id && r.messId === mess.id && r.status === 'pending'
-    );
+    try {
+      // Check if already requested
+      const existingRequests = await dataService.getJoinRequests();
+      const alreadyRequested = existingRequests.some(
+        r => r.userId === currentUser.id && r.messId === mess.id && r.status === 'pending'
+      );
 
-    if (alreadyRequested) {
+      if (alreadyRequested) {
+        toast({
+          title: 'Already Requested',
+          description: 'You have already sent a join request to this mess.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Create join request (don't update messId until approved)
+      await dataService.createJoinRequest({
+        messId: mess.id,
+        userId: currentUser.id,
+        status: 'pending',
+      });
+
+      // Notify manager about the join request
+      await dataService.notifyManager(mess.id, {
+        type: 'join_request',
+        title: 'New Join Request',
+        message: `${currentUser.fullName} has requested to join your mess`,
+      });
+
+      setRequestedMessIds(prev => [...prev, mess.id]);
+
       toast({
-        title: 'Already Requested',
-        description: 'You have already sent a join request to this mess.',
+        title: 'Request Sent!',
+        description: `Your request to join "${mess.name}" has been sent. Please wait for manager approval.`,
+      });
+    } catch (error) {
+      console.error('Error sending join request:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to send join request',
         variant: 'destructive',
       });
-      return;
     }
-
-    // Create join request (don't update messId until approved)
-    createJoinRequest({
-      messId: mess.id,
-      userId: currentUser.id,
-      status: 'pending',
-    });
-
-    // Notify manager about the join request
-    notifyManager(mess.id, {
-      type: 'join_request',
-      title: 'New Join Request',
-      message: `${currentUser.fullName} has requested to join your mess`,
-    });
-
-    setRequestedMessIds(prev => [...prev, mess.id]);
-
-    toast({
-      title: 'Request Sent!',
-      description: `Your request to join "${mess.name}" has been sent. Please wait for manager approval.`,
-    });
   };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      </div>
+    );
+  }
 
   if (isPartOfMess) {
     return (
@@ -187,8 +222,8 @@ export default function JoinMess() {
                     onChange={(e) => setSearchQuery(e.target.value)}
                     required
                   />
-                  <Button type="submit" className="gradient-primary">
-                    <Search className="h-4 w-4" />
+                  <Button type="submit" className="gradient-primary" disabled={isSearching}>
+                    {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
                   </Button>
                 </div>
               </div>
