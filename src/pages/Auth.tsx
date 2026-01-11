@@ -67,6 +67,11 @@ export default function Auth() {
     if (result.success) {
       const loggedInUser = result.user;
 
+      // Ensure latest notice popup shows after each login
+      if (loggedInUser?.id) {
+        sessionStorage.removeItem(`mess_manager_notice_shown_session_${loggedInUser.id}`);
+      }
+
       if (loggedInUser?.role === 'member') {
         // Check if member has a mess and is approved
         if (!loggedInUser.messId) {

@@ -9,37 +9,49 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
-import { getLatestNotice } from '@/lib/storage';
+import { getLatestNotice } from '@/lib/dataService';
 import { Notice } from '@/types';
 import { format } from 'date-fns';
 import { Megaphone } from 'lucide-react';
 
 const LAST_SEEN_NOTICE_KEY = 'mess_manager_last_seen_notice';
-
+const SESSION_NOTICE_SHOWN_KEY = 'mess_manager_notice_shown_session';
 export default function NoticePopup() {
   const { user } = useAuth();
   const [notice, setNotice] = useState<Notice | null>(null);
   const [isOpen, setIsOpen] = useState(false);
 
   useEffect(() => {
-    if (user?.messId) {
-      const latestNotice = getLatestNotice(user.messId);
-      if (latestNotice) {
-        const lastSeenNoticeId = localStorage.getItem(`${LAST_SEEN_NOTICE_KEY}_${user.id}`);
-        const lastSeenNoticeTime = localStorage.getItem(`${LAST_SEEN_NOTICE_KEY}_time_${user.id}`);
-        
-        // Show notice if it's new or updated since last seen
-        const noticeTime = latestNotice.updatedAt || latestNotice.createdAt;
-        if (lastSeenNoticeId !== latestNotice.id || (lastSeenNoticeTime && new Date(noticeTime) > new Date(lastSeenNoticeTime))) {
-          setNotice(latestNotice);
-          setIsOpen(true);
-        }
+    let cancelled = false;
+
+    const load = async () => {
+      if (!user?.messId || !user?.id) return;
+
+      const latestNotice = await getLatestNotice(user.messId);
+      if (cancelled || !latestNotice) return;
+
+      // Always show the latest notice once per login/session
+      const sessionKey = `${SESSION_NOTICE_SHOWN_KEY}_${user.id}`;
+      const alreadyShownThisSession = sessionStorage.getItem(sessionKey);
+
+      if (!alreadyShownThisSession) {
+        setNotice(latestNotice);
+        setIsOpen(true);
       }
-    }
-  }, [user]);
+    };
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.messId, user?.id]);
 
   const handleClose = () => {
     if (notice && user) {
+      // Mark shown for this login/session
+      sessionStorage.setItem(`${SESSION_NOTICE_SHOWN_KEY}_${user.id}`, notice.id);
+
+      // Keep last-seen tracking (harmless, but useful if you want "only new" behavior later)
       localStorage.setItem(`${LAST_SEEN_NOTICE_KEY}_${user.id}`, notice.id);
       localStorage.setItem(`${LAST_SEEN_NOTICE_KEY}_time_${user.id}`, new Date().toISOString());
     }

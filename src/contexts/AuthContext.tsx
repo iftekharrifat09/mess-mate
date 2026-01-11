@@ -237,6 +237,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         name: data.fullName,
         email: data.email,
         password: data.password,
+        phone: data.phone,
         messName: data.messName,
       });
       
@@ -333,6 +334,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         name: data.fullName,
         email: data.email,
         password: data.password,
+        phone: data.phone,
       });
       
       if (result.success && result.user) {
