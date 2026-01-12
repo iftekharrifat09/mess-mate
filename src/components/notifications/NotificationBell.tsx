@@ -54,7 +54,18 @@ export default function NotificationBell() {
     if (user) {
       loadNotifications();
     }
-  }, [user, isOpen, loadNotifications]);
+  }, [user, loadNotifications]);
+
+  // Poll for new notifications every 10 seconds
+  useEffect(() => {
+    if (!user) return;
+    
+    const intervalId = setInterval(() => {
+      loadNotifications();
+    }, 10000);
+
+    return () => clearInterval(intervalId);
+  }, [user, loadNotifications]);
 
   const handleMarkAsSeen = async (id: string) => {
     try {

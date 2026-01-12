@@ -34,46 +34,30 @@ export function useNotificationSound() {
 
       try {
         const ctx = audioContextRef.current;
-        const currentTime = ctx.currentTime;
+        const now = ctx.currentTime;
 
-        // Create oscillator for the main tone
-        const oscillator = ctx.createOscillator();
-        const gainNode = ctx.createGain();
+        // Create a pleasant three-tone ascending chime (C5, E5, G5 - major chord)
+        const frequencies = [523.25, 659.25, 783.99];
+        const durations = [0.12, 0.12, 0.25];
 
-        oscillator.connect(gainNode);
-        gainNode.connect(ctx.destination);
+        frequencies.forEach((freq, i) => {
+          const oscillator = ctx.createOscillator();
+          const gainNode = ctx.createGain();
 
-        // Pleasant notification sound - two-tone chime
-        oscillator.frequency.setValueAtTime(880, currentTime); // A5
-        oscillator.frequency.setValueAtTime(1318.5, currentTime + 0.1); // E6
-        oscillator.type = 'sine';
+          oscillator.connect(gainNode);
+          gainNode.connect(ctx.destination);
 
-        // Envelope for smooth sound
-        gainNode.gain.setValueAtTime(0, currentTime);
-        gainNode.gain.linearRampToValueAtTime(0.4, currentTime + 0.02);
-        gainNode.gain.linearRampToValueAtTime(0.25, currentTime + 0.1);
-        gainNode.gain.linearRampToValueAtTime(0.3, currentTime + 0.12);
-        gainNode.gain.linearRampToValueAtTime(0, currentTime + 0.4);
+          oscillator.type = 'triangle'; // Softer, more bell-like tone
+          oscillator.frequency.setValueAtTime(freq, now);
 
-        oscillator.start(currentTime);
-        oscillator.stop(currentTime + 0.4);
+          const startTime = now + i * 0.1;
+          gainNode.gain.setValueAtTime(0, startTime);
+          gainNode.gain.linearRampToValueAtTime(0.25, startTime + 0.02);
+          gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + durations[i] + 0.3);
 
-        // Second chime for pleasant effect
-        const oscillator2 = ctx.createOscillator();
-        const gainNode2 = ctx.createGain();
-
-        oscillator2.connect(gainNode2);
-        gainNode2.connect(ctx.destination);
-
-        oscillator2.frequency.setValueAtTime(1318.5, currentTime + 0.15); // E6
-        oscillator2.type = 'sine';
-
-        gainNode2.gain.setValueAtTime(0, currentTime + 0.15);
-        gainNode2.gain.linearRampToValueAtTime(0.25, currentTime + 0.17);
-        gainNode2.gain.linearRampToValueAtTime(0, currentTime + 0.5);
-
-        oscillator2.start(currentTime + 0.15);
-        oscillator2.stop(currentTime + 0.5);
+          oscillator.start(startTime);
+          oscillator.stop(startTime + durations[i] + 0.35);
+        });
       } catch (error) {
         console.warn('Could not play notification sound:', error);
       }
