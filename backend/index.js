@@ -1222,15 +1222,36 @@ app.post("/api/deposits", authMiddleware, async (req, res) => {
 
     const result = await collections.deposits.insertOne(deposit);
 
-    await collections.notifications.insertOne({
-      userId,
-      messId: req.user.messId,
+    // Get the member name for notification
+    const depositUser = await collections.users.findOne({ _id: new ObjectId(userId) });
+    const memberName = depositUser?.name || "A member";
+
+    // Notify all members about the deposit
+    await notifyMembers(req.user.messId, req.userId, {
       title: "Deposit Added",
-      message: `A deposit of ৳${amount} has been added`,
+      message: `${memberName} deposited ৳${amount}`,
       type: "deposit",
-      seen: false,
-      createdAt: new Date(),
     });
+
+    // Also notify the user who received the deposit if it's not the manager adding for themselves
+    if (userId !== req.userId) {
+      const notification = {
+        title: "Deposit Added",
+        message: `A deposit of ৳${amount} has been added to your account`,
+        type: "deposit",
+      };
+      await collections.notifications.insertOne({
+        userId,
+        messId: req.user.messId,
+        ...notification,
+        seen: false,
+        createdAt: new Date(),
+      });
+      // Send email to the specific user
+      if (depositUser?.emailVerified) {
+        await sendNotificationEmail(depositUser, notification);
+      }
+    }
 
     res.json({ success: true, deposit: { id: result.insertedId.toString(), ...deposit } });
   } catch (error) {
@@ -1309,15 +1330,35 @@ app.post("/api/meal-costs", authMiddleware, async (req, res) => {
       });
     }
 
-    await collections.notifications.insertOne({
-      userId,
-      messId: req.user.messId,
+    // Get the shopper name for notification
+    const shopperUser = await collections.users.findOne({ _id: new ObjectId(userId) });
+    const shopperName = shopperUser?.name || "Someone";
+
+    // Notify all members about the meal cost
+    await notifyMembers(req.user.messId, req.userId, {
       title: "Meal Cost Added",
-      message: `A meal cost of ৳${amount} has been added${addAsDeposit ? " (also added as deposit)" : ""}`,
+      message: `${shopperName} spent ৳${amount} on bazar${description ? `: ${description}` : ""}`,
       type: "cost",
-      seen: false,
-      createdAt: new Date(),
     });
+
+    // Also notify the shopper specifically if they're not the manager
+    if (userId !== req.userId) {
+      const notification = {
+        title: "Meal Cost Added",
+        message: `A meal cost of ৳${amount} has been added${addAsDeposit ? " (also added as deposit)" : ""}`,
+        type: "cost",
+      };
+      await collections.notifications.insertOne({
+        userId,
+        messId: req.user.messId,
+        ...notification,
+        seen: false,
+        createdAt: new Date(),
+      });
+      if (shopperUser?.emailVerified) {
+        await sendNotificationEmail(shopperUser, notification);
+      }
+    }
 
     res.json({ success: true, cost });
   } catch (error) {
@@ -1737,15 +1778,30 @@ app.post("/api/bazar-dates", authMiddleware, async (req, res) => {
 
     const result = await collections.bazarDates.insertMany(newDates);
 
-    await collections.notifications.insertOne({
-      userId,
-      messId: req.user.messId,
+    // Notify all members about bazar date assignment
+    await notifyMembers(req.user.messId, req.userId, {
+      title: "Bazar Dates Assigned",
+      message: `${userName} has been assigned bazar duty for: ${dates.join(", ")}`,
+      type: "bazar",
+    });
+
+    // Also notify the assigned user specifically
+    const assignedUser = await collections.users.findOne({ _id: new ObjectId(userId) });
+    const notification = {
       title: "Bazar Dates Assigned",
       message: `You have been assigned bazar duty for: ${dates.join(", ")}`,
       type: "bazar",
+    };
+    await collections.notifications.insertOne({
+      userId,
+      messId: req.user.messId,
+      ...notification,
       seen: false,
       createdAt: new Date(),
     });
+    if (assignedUser?.emailVerified) {
+      await sendNotificationEmail(assignedUser, notification);
+    }
 
     res.json({
       success: true,
