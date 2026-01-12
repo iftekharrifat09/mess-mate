@@ -45,7 +45,8 @@ import {
 } from '@/lib/calculations';
 import { exportToPDF, exportToExcel } from '@/lib/export';
 import { Month, MonthSummary, MemberSummary, User, Meal, Deposit, MealCost, OtherCost } from '@/types';
-import { CalendarDays, Plus, TrendingUp, TrendingDown, Download, FileText, FileSpreadsheet, History, Loader2, Filter, X } from 'lucide-react';
+import { CalendarDays, Plus, TrendingUp, TrendingDown, Download, FileText, FileSpreadsheet, History, Filter, X } from 'lucide-react';
+import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import {
   Select,
   SelectContent,
@@ -321,9 +322,7 @@ export default function MonthDetails() {
   if (authLoading || isLoading) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        </div>
+        <LoadingSkeleton type="table" count={5} />
       </DashboardLayout>
     );
   }

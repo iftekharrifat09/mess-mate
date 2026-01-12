@@ -27,16 +27,25 @@ export default function NoticePopup() {
     const load = async () => {
       if (!user?.messId || !user?.id) return;
 
-      const latestNotice = await getLatestNotice(user.messId);
-      if (cancelled || !latestNotice) return;
+      try {
+        const latestNotice = await getLatestNotice(user.messId);
+        
+        // Handle null, undefined, or empty notice
+        if (cancelled || !latestNotice || !latestNotice.id) {
+          return;
+        }
 
-      // Always show the latest notice once per login/session
-      const sessionKey = `${SESSION_NOTICE_SHOWN_KEY}_${user.id}`;
-      const alreadyShownThisSession = sessionStorage.getItem(sessionKey);
+        // Always show the latest notice once per login/session
+        const sessionKey = `${SESSION_NOTICE_SHOWN_KEY}_${user.id}`;
+        const alreadyShownThisSession = sessionStorage.getItem(sessionKey);
 
-      if (!alreadyShownThisSession) {
-        setNotice(latestNotice);
-        setIsOpen(true);
+        if (!alreadyShownThisSession) {
+          setNotice(latestNotice);
+          setIsOpen(true);
+        }
+      } catch (error) {
+        // Silently handle errors - don't crash if notices fail to load
+        console.warn('Failed to load notice:', error);
       }
     };
 

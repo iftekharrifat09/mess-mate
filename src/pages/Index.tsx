@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Utensils, ArrowRight, Users, Wallet, Shield, ClipboardList } from 'lucide-react';
+import { Utensils, ArrowRight, Users, Wallet, Shield, ClipboardList, Info } from 'lucide-react';
 
 export default function Index() {
   return (
@@ -16,6 +16,12 @@ export default function Index() {
             <span className="font-bold text-xl text-foreground">Mess Manager</span>
           </div>
           <div className="flex items-center gap-3">
+            <Link to="/about">
+              <Button variant="ghost" className="gap-2">
+                <Info className="h-4 w-4" />
+                About Us
+              </Button>
+            </Link>
             <Link to="/auth">
               <Button variant="ghost">Login</Button>
             </Link>
