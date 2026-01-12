@@ -10,6 +10,7 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/AuthContext';
 import * as dataService from '@/lib/dataService';
+import { getNotificationSoundEnabled } from '@/lib/preferences';
 import { Notification } from '@/types';
 import { format } from 'date-fns';
 import { Trash2, Check, CheckCheck } from 'lucide-react';
@@ -20,22 +21,29 @@ export default function NotificationBell() {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unseenCount, setUnseenCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
-  const { playNotificationSound } = useNotificationSound();
+  const { playNotificationSound, primeNotificationSound } = useNotificationSound();
   const prevUnseenCountRef = useRef<number>(0);
+  const hasLoadedOnceRef = useRef(false);
 
   const loadNotifications = useCallback(async () => {
     if (!user) return;
     try {
       const notifs = await dataService.getNotificationsByUserId(user.id);
       setNotifications(notifs);
+
       const count = await dataService.getUnseenNotificationsCount(user.id);
-      
-      // Play sound if new notifications arrived
-      if (count > prevUnseenCountRef.current && prevUnseenCountRef.current !== 0) {
+
+      // Skip sound on the very first load only; afterwards play on any increase (even 0 -> 1)
+      if (
+        hasLoadedOnceRef.current &&
+        count > prevUnseenCountRef.current &&
+        getNotificationSoundEnabled(user.id)
+      ) {
         playNotificationSound();
       }
+
       prevUnseenCountRef.current = count;
-      
+      hasLoadedOnceRef.current = true;
       setUnseenCount(count);
     } catch (error) {
       console.error('Error loading notifications:', error);
@@ -102,7 +110,16 @@ export default function NotificationBell() {
   return (
     <Popover open={isOpen} onOpenChange={setIsOpen}>
       <PopoverTrigger asChild>
-        <Button variant="ghost" size="icon" className="relative">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative"
+          onClick={() => {
+            if (user && getNotificationSoundEnabled(user.id)) {
+              void primeNotificationSound();
+            }
+          }}
+        >
           <Bell className="h-5 w-5" />
           <AnimatePresence>
             {unseenCount > 0 && (
