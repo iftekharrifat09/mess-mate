@@ -40,6 +40,8 @@ export default function BazarDates() {
   const [dateError, setDateError] = useState<string | null>(null);
   const [currentDate, setCurrentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const isManager = user?.role === 'manager';
 
@@ -131,7 +133,8 @@ export default function BazarDates() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || isSaving) return;
+    setIsSaving(true);
 
     try {
       const member = members.find(m => m.id === formData.userId);
@@ -179,6 +182,8 @@ export default function BazarDates() {
         description: 'Failed to save bazar date',
         variant: 'destructive',
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -191,6 +196,8 @@ export default function BazarDates() {
   };
 
   const handleDelete = async (bazar: BazarDate) => {
+    if (deletingId) return;
+    setDeletingId(bazar.id);
     try {
       await dataService.deleteBazarDate(bazar.id);
       toast({ title: 'Bazar date deleted' });
@@ -201,6 +208,8 @@ export default function BazarDates() {
         description: 'Failed to delete bazar date',
         variant: 'destructive',
       });
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -345,9 +354,9 @@ export default function BazarDates() {
                   <Button 
                     type="submit" 
                     className="gradient-primary" 
-                    disabled={!formData.userId || formData.dates.length === 0}
+                    disabled={!formData.userId || formData.dates.length === 0 || isSaving}
                   >
-                    {editingBazar ? 'Update' : `Add ${formData.dates.length || ''}`} Bazar Date{formData.dates.length !== 1 ? 's' : ''}
+                    {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : (<>{editingBazar ? 'Update' : `Add ${formData.dates.length || ''}`} Bazar Date{formData.dates.length !== 1 ? 's' : ''}</>)}
                   </Button>
                 </DialogFooter>
               </form>
@@ -412,8 +421,8 @@ export default function BazarDates() {
                             <Button variant="ghost" size="sm" onClick={() => handleEdit(bazar)}>
                               <Edit2 className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(bazar)}>
-                              <Trash2 className="h-4 w-4" />
+                            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(bazar)} disabled={deletingId === bazar.id}>
+                              {deletingId === bazar.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                             </Button>
                           </div>
                         </motion.div>

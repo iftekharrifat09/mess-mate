@@ -32,6 +32,8 @@ export default function Notices() {
   const [viewingNotice, setViewingNotice] = useState<Notice | null>(null);
   const [formData, setFormData] = useState({ title: '', content: '' });
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const isManager = user?.role === 'manager';
 
@@ -65,7 +67,8 @@ export default function Notices() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user) return;
+    if (!user || isSaving) return;
+    setIsSaving(true);
 
     try {
       if (editingNotice) {
@@ -96,6 +99,8 @@ export default function Notices() {
         description: 'Failed to save notice',
         variant: 'destructive',
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -106,7 +111,8 @@ export default function Notices() {
   };
 
   const handleDelete = async (notice: Notice) => {
-    if (!user) return;
+    if (!user || deletingId) return;
+    setDeletingId(notice.id);
     
     try {
       await dataService.deleteNotice(notice.id);
@@ -123,6 +129,8 @@ export default function Notices() {
         description: 'Failed to delete notice',
         variant: 'destructive',
       });
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -187,8 +195,8 @@ export default function Notices() {
                     />
                   </div>
                   <DialogFooter>
-                    <Button type="submit" className="gradient-primary">
-                      {editingNotice ? 'Update' : 'Create'} Notice
+                    <Button type="submit" className="gradient-primary" disabled={isSaving}>
+                      {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : (<>{editingNotice ? 'Update' : 'Create'} Notice</>)}
                     </Button>
                   </DialogFooter>
                 </form>
@@ -259,8 +267,8 @@ export default function Notices() {
                               <Button variant="ghost" size="sm" onClick={() => handleEdit(notice)}>
                                 <Edit2 className="h-4 w-4" />
                               </Button>
-                              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(notice)}>
-                                <Trash2 className="h-4 w-4" />
+                              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(notice)} disabled={deletingId === notice.id}>
+                                {deletingId === notice.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                               </Button>
                             </>
                           )}

@@ -27,6 +27,10 @@ export default function Members() {
   const [members, setMembers] = useState<User[]>([]);
   const [pendingMembers, setPendingMembers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [rejectingId, setRejectingId] = useState<string | null>(null);
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const [promotingId, setPromotingId] = useState<string | null>(null);
 
   const isManager = user?.role === 'manager';
 
@@ -56,80 +60,60 @@ export default function Members() {
   };
 
   const handleApprove = async (memberId: string) => {
+    if (approvingId) return;
+    setApprovingId(memberId);
     try {
       await dataService.updateUser(memberId, { isApproved: true });
       loadMembers();
-      toast({
-        title: 'Member approved',
-        description: 'The member can now access the mess.',
-      });
+      toast({ title: 'Member approved', description: 'The member can now access the mess.' });
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to approve member',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Failed to approve member', variant: 'destructive' });
+    } finally {
+      setApprovingId(null);
     }
   };
 
   const handleReject = async (memberId: string) => {
+    if (rejectingId) return;
+    setRejectingId(memberId);
     try {
       await dataService.deleteUser(memberId);
       loadMembers();
-      toast({
-        title: 'Request rejected',
-        description: 'The join request has been rejected.',
-      });
+      toast({ title: 'Request rejected', description: 'The join request has been rejected.' });
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to reject request',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Failed to reject request', variant: 'destructive' });
+    } finally {
+      setRejectingId(null);
     }
   };
 
   const handleRemove = async (memberId: string) => {
+    if (removingId) return;
+    setRemovingId(memberId);
     try {
       await dataService.deleteUser(memberId);
       loadMembers();
-      toast({
-        title: 'Member removed',
-        description: 'The member has been removed from the mess.',
-      });
+      toast({ title: 'Member removed', description: 'The member has been removed from the mess.' });
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to remove member',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Failed to remove member', variant: 'destructive' });
+    } finally {
+      setRemovingId(null);
     }
   };
 
   const handleMakeManager = async (memberId: string) => {
-    if (!user) return;
-
+    if (!user || promotingId) return;
+    setPromotingId(memberId);
     try {
-      // Use the dedicated makeManager API endpoint which handles both role changes atomically
       const result = await api.makeManagerAPI(memberId);
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to change manager');
-      }
-      
+      if (!result.success) throw new Error(result.error || 'Failed to change manager');
       refreshUser();
       loadMembers();
-      
-      toast({
-        title: 'Manager changed',
-        description: 'The member is now the manager of this mess.',
-      });
+      toast({ title: 'Manager changed', description: 'The member is now the manager of this mess.' });
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to change manager',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Failed to change manager', variant: 'destructive' });
+    } finally {
+      setPromotingId(null);
     }
   };
 
@@ -180,11 +164,11 @@ export default function Members() {
                       </div>
                     </div>
                     <div className="flex gap-2">
-                      <Button size="sm" onClick={() => handleApprove(member.id)}>
-                        Approve
+                      <Button size="sm" onClick={() => handleApprove(member.id)} disabled={approvingId === member.id}>
+                        {approvingId === member.id ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Approve'}
                       </Button>
-                      <Button size="sm" variant="destructive" onClick={() => handleReject(member.id)}>
-                        Reject
+                      <Button size="sm" variant="destructive" onClick={() => handleReject(member.id)} disabled={rejectingId === member.id}>
+                        {rejectingId === member.id ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Reject'}
                       </Button>
                     </div>
                   </div>
@@ -259,8 +243,8 @@ export default function Members() {
                             </AlertDialogHeader>
                             <AlertDialogFooter>
                               <AlertDialogCancel>Cancel</AlertDialogCancel>
-                              <AlertDialogAction onClick={() => handleMakeManager(member.id)}>
-                                Confirm
+                              <AlertDialogAction onClick={() => handleMakeManager(member.id)} disabled={promotingId === member.id}>
+                                {promotingId === member.id ? 'Processing...' : 'Confirm'}
                               </AlertDialogAction>
                             </AlertDialogFooter>
                           </AlertDialogContent>
