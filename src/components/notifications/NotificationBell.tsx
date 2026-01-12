@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Bell } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Button } from '@/components/ui/button';
@@ -13,12 +13,15 @@ import * as dataService from '@/lib/dataService';
 import { Notification } from '@/types';
 import { format } from 'date-fns';
 import { Trash2, Check, CheckCheck } from 'lucide-react';
+import { useNotificationSound } from '@/hooks/useNotificationSound';
 
 export default function NotificationBell() {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [unseenCount, setUnseenCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
+  const { playNotificationSound } = useNotificationSound();
+  const prevUnseenCountRef = useRef<number>(0);
 
   const loadNotifications = useCallback(async () => {
     if (!user) return;
@@ -26,11 +29,18 @@ export default function NotificationBell() {
       const notifs = await dataService.getNotificationsByUserId(user.id);
       setNotifications(notifs);
       const count = await dataService.getUnseenNotificationsCount(user.id);
+      
+      // Play sound if new notifications arrived
+      if (count > prevUnseenCountRef.current && prevUnseenCountRef.current !== 0) {
+        playNotificationSound();
+      }
+      prevUnseenCountRef.current = count;
+      
       setUnseenCount(count);
     } catch (error) {
       console.error('Error loading notifications:', error);
     }
-  }, [user]);
+  }, [user, playNotificationSound]);
 
   useEffect(() => {
     if (user) {
