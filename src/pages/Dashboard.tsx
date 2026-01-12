@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
+import { useEffect, useState, useRef, useCallback, useTransition } from 'react';
 import { motion } from 'framer-motion';
 import gsap from 'gsap';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,6 +18,19 @@ import {
 import * as dataService from '@/lib/dataService';
 import { Users } from 'lucide-react';
 
+// Default empty states to show UI immediately
+const EMPTY_MONTH_SUMMARY: MonthSummary = {
+  monthId: '',
+  monthName: 'No Active Month',
+  messBalance: 0,
+  totalDeposit: 0,
+  totalMeals: 0,
+  totalMealCost: 0,
+  mealRate: 0,
+  totalIndividualCost: 0,
+  totalSharedCost: 0,
+};
+
 export default function Dashboard() {
   const { user, isLoading: authLoading } = useAuth();
   const [monthSummary, setMonthSummary] = useState<MonthSummary | null>(null);
@@ -27,33 +40,15 @@ export default function Dashboard() {
   const [bazarDates, setBazarDates] = useState<BazarDate[]>([]);
   const [members, setMembers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [isPending, startTransition] = useTransition();
   const headerRef = useRef<HTMLDivElement>(null);
+  const dataLoadedRef = useRef(false);
 
-  useEffect(() => {
-    if (!authLoading && user) {
-      loadDashboardData();
-    }
-  }, [user, authLoading]);
-
-  useEffect(() => {
-    // GSAP entrance animation for header
-    if (headerRef.current && messName) {
-      gsap.fromTo(
-        headerRef.current.children,
-        { opacity: 0, y: -20 },
-        { opacity: 1, y: 0, stagger: 0.1, duration: 0.5, ease: 'power2.out' }
-      );
-    }
-  }, [messName]);
-
-  const loadDashboardData = async () => {
-    if (!user) return;
-    setLoading(true);
-
+  const loadDashboardData = useCallback(async () => {
+    if (!user || dataLoadedRef.current) return;
+    
     try {
-      console.log('Loading dashboard data for user:', user.id, 'messId:', user.messId);
-      
-      // Load data in parallel for better performance
+      // Load all primary data in a single parallel batch
       const [mess, messMembers, activeMonth, dates] = await Promise.all([
         dataService.getMessById(user.messId),
         dataService.getMessMembers(user.messId),
@@ -61,59 +56,67 @@ export default function Dashboard() {
         dataService.getBazarDatesByMessId(user.messId),
       ]);
 
-      console.log('Parallel load complete - Mess:', mess, 'Members:', messMembers?.length, 'Month:', activeMonth);
-
-      if (mess) {
-        setMessName(mess.name);
-      }
-
-      setMembers(messMembers || []);
-      setBazarDates(dates || []);
+      // Set initial data immediately for faster perceived load
+      startTransition(() => {
+        if (mess) setMessName(mess.name);
+        setMembers(messMembers || []);
+        setBazarDates(dates || []);
+      });
 
       if (activeMonth) {
-        // Load month-related data in parallel
+        // Load calculations in parallel
         const [mSummary, pSummary, allMembers] = await Promise.all([
           calculateMonthSummary(activeMonth.id, user.messId),
           calculateMemberSummary(user.id, activeMonth.id),
           getAllMembersSummary(activeMonth.id, user.messId),
         ]);
 
-        console.log('Month data loaded - Summary:', mSummary);
-        setMonthSummary(mSummary);
-        setPersonalSummary(pSummary);
-        setMembersSummary(allMembers);
+        startTransition(() => {
+          setMonthSummary(mSummary);
+          setPersonalSummary(pSummary);
+          setMembersSummary(allMembers);
+        });
       } else {
-        console.log('No active month found - creating empty summaries');
-        // Still show empty summaries even if no active month
-        setMonthSummary({
-          monthId: '',
-          monthName: 'No Active Month',
-          messBalance: 0,
-          totalDeposit: 0,
-          totalMeals: 0,
-          totalMealCost: 0,
-          mealRate: 0,
-          totalIndividualCost: 0,
-          totalSharedCost: 0,
+        startTransition(() => {
+          setMonthSummary(EMPTY_MONTH_SUMMARY);
+          setPersonalSummary({
+            userId: user.id,
+            userName: user.fullName || 'Unknown',
+            totalMeals: 0,
+            totalDeposit: 0,
+            mealCost: 0,
+            individualCost: 0,
+            sharedCost: 0,
+            balance: 0,
+          });
+          setMembersSummary([]);
         });
-        setPersonalSummary({
-          userId: user.id,
-          userName: user.fullName || 'Unknown',
-          totalMeals: 0,
-          totalDeposit: 0,
-          mealCost: 0,
-          individualCost: 0,
-          sharedCost: 0,
-          balance: 0,
-        });
-        setMembersSummary([]);
       }
+      
+      dataLoadedRef.current = true;
     } catch (error) {
       console.error('Error loading dashboard data:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      loadDashboardData();
+    }
+  }, [user, authLoading, loadDashboardData]);
+
+  useEffect(() => {
+    // GSAP entrance animation for header
+    if (headerRef.current && messName) {
+      gsap.fromTo(
+        headerRef.current.children,
+        { opacity: 0, y: -20 },
+        { opacity: 1, y: 0, stagger: 0.1, duration: 0.4, ease: 'power2.out' }
+      );
+    }
+  }, [messName]);
 
   if (authLoading || loading) {
     return (

@@ -1,4 +1,5 @@
 import { motion, Transition } from 'framer-motion';
+import { Loader2 } from 'lucide-react';
 
 interface LoadingSkeletonProps {
   type?: 'dashboard' | 'page' | 'card' | 'table';
@@ -7,7 +8,7 @@ interface LoadingSkeletonProps {
 
 const shimmerTransition: Transition = {
   repeat: Infinity,
-  duration: 1.5,
+  duration: 1.2,
   ease: 'linear'
 };
 
@@ -33,25 +34,47 @@ function PrimaryShimmer() {
   );
 }
 
+function LoadingSpinner({ text = 'Loading...' }: { text?: string }) {
+  return (
+    <div className="flex items-center justify-center py-6 gap-3">
+      <motion.div
+        animate={{ rotate: 360 }}
+        transition={{ repeat: Infinity, duration: 0.8, ease: 'linear' }}
+      >
+        <Loader2 className="h-6 w-6 text-primary" />
+      </motion.div>
+      <motion.span 
+        className="text-muted-foreground font-medium text-sm"
+        animate={{ opacity: [0.5, 1, 0.5] }}
+        transition={{ repeat: Infinity, duration: 1.2 }}
+      >
+        {text}
+      </motion.span>
+    </div>
+  );
+}
+
 export function LoadingSkeleton({ type = 'page', count = 1 }: LoadingSkeletonProps) {
   if (type === 'dashboard') {
     return (
       <div className="space-y-6 animate-fade-in">
+        <LoadingSpinner text="Loading dashboard..." />
+        
         {/* Header Skeleton */}
         <div className="space-y-2">
           <motion.div 
             className="h-8 w-48 bg-muted rounded-lg relative overflow-hidden"
-            initial={{ opacity: 0.5 }}
+            initial={{ opacity: 0.6 }}
             animate={{ opacity: 1 }}
-            transition={{ repeat: Infinity, repeatType: 'reverse', duration: 0.8 }}
+            transition={{ repeat: Infinity, repeatType: 'reverse', duration: 0.6 }}
           >
             <ShimmerOverlay />
           </motion.div>
           <motion.div 
             className="h-4 w-64 bg-muted rounded-lg relative overflow-hidden"
-            initial={{ opacity: 0.5 }}
+            initial={{ opacity: 0.6 }}
             animate={{ opacity: 1 }}
-            transition={{ repeat: Infinity, repeatType: 'reverse', duration: 0.8, delay: 0.1 }}
+            transition={{ repeat: Infinity, repeatType: 'reverse', duration: 0.6, delay: 0.1 }}
           >
             <ShimmerOverlay />
           </motion.div>
@@ -62,31 +85,31 @@ export function LoadingSkeleton({ type = 'page', count = 1 }: LoadingSkeletonPro
           {[1, 2].map((i) => (
             <motion.div
               key={i}
-              className="h-64 bg-card rounded-xl border border-border relative overflow-hidden"
-              initial={{ opacity: 0, y: 20 }}
+              className="h-56 bg-card rounded-xl border border-border relative overflow-hidden"
+              initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: i * 0.1 }}
+              transition={{ delay: i * 0.05, duration: 0.2 }}
             >
               <div className="p-6 space-y-4">
                 <div className="flex items-center gap-3">
                   <motion.div 
                     className="h-10 w-10 bg-muted rounded-lg"
                     animate={{ opacity: [0.5, 1, 0.5] }}
-                    transition={{ repeat: Infinity, duration: 1.5 }}
+                    transition={{ repeat: Infinity, duration: 1 }}
                   />
                   <motion.div 
                     className="h-6 w-32 bg-muted rounded-lg"
                     animate={{ opacity: [0.5, 1, 0.5] }}
-                    transition={{ repeat: Infinity, duration: 1.5, delay: 0.1 }}
+                    transition={{ repeat: Infinity, duration: 1, delay: 0.1 }}
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   {[1, 2, 3, 4].map((j) => (
                     <motion.div
                       key={j}
-                      className="h-16 bg-muted/50 rounded-lg"
-                      animate={{ opacity: [0.3, 0.7, 0.3] }}
-                      transition={{ repeat: Infinity, duration: 1.5, delay: j * 0.1 }}
+                      className="h-14 bg-muted/50 rounded-lg"
+                      animate={{ opacity: [0.4, 0.8, 0.4] }}
+                      transition={{ repeat: Infinity, duration: 1, delay: j * 0.08 }}
                     />
                   ))}
                 </div>
@@ -96,69 +119,42 @@ export function LoadingSkeleton({ type = 'page', count = 1 }: LoadingSkeletonPro
           ))}
         </div>
 
-        {/* Bazar Dates Skeleton */}
-        <motion.div
-          className="h-48 bg-card rounded-xl border border-border relative overflow-hidden"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
-        >
-          <div className="p-6 space-y-4">
-            <motion.div 
-              className="h-6 w-40 bg-muted rounded-lg"
-              animate={{ opacity: [0.5, 1, 0.5] }}
-              transition={{ repeat: Infinity, duration: 1.5 }}
-            />
-            <div className="flex gap-4">
-              {[1, 2, 3].map((i) => (
-                <motion.div
-                  key={i}
-                  className="h-24 w-32 bg-muted/50 rounded-lg"
-                  animate={{ opacity: [0.3, 0.7, 0.3] }}
-                  transition={{ repeat: Infinity, duration: 1.5, delay: i * 0.15 }}
-                />
-              ))}
-            </div>
-          </div>
-          <PrimaryShimmer />
-        </motion.div>
-
         {/* Members Skeleton */}
         <div className="space-y-4">
           <motion.div 
             className="h-6 w-32 bg-muted rounded-lg"
             animate={{ opacity: [0.5, 1, 0.5] }}
-            transition={{ repeat: Infinity, duration: 1.5 }}
+            transition={{ repeat: Infinity, duration: 1 }}
           />
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             {[1, 2, 3].map((i) => (
               <motion.div
                 key={i}
-                className="h-40 bg-card rounded-xl border border-border relative overflow-hidden"
-                initial={{ opacity: 0, scale: 0.95 }}
-                animate={{ opacity: 1, scale: 1 }}
-                transition={{ delay: 0.4 + i * 0.1 }}
+                className="h-32 bg-card rounded-xl border border-border relative overflow-hidden"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: 0.1 + i * 0.05 }}
               >
                 <div className="p-4 space-y-3">
                   <div className="flex items-center gap-3">
                     <motion.div 
                       className="h-10 w-10 bg-muted rounded-full"
                       animate={{ opacity: [0.5, 1, 0.5] }}
-                      transition={{ repeat: Infinity, duration: 1.5 }}
+                      transition={{ repeat: Infinity, duration: 1 }}
                     />
                     <motion.div 
                       className="h-5 w-24 bg-muted rounded-lg"
                       animate={{ opacity: [0.5, 1, 0.5] }}
-                      transition={{ repeat: Infinity, duration: 1.5, delay: 0.1 }}
+                      transition={{ repeat: Infinity, duration: 1, delay: 0.1 }}
                     />
                   </div>
                   <div className="grid grid-cols-2 gap-2">
-                    {[1, 2, 3, 4].map((j) => (
+                    {[1, 2].map((j) => (
                       <motion.div
                         key={j}
-                        className="h-8 bg-muted/50 rounded"
-                        animate={{ opacity: [0.3, 0.7, 0.3] }}
-                        transition={{ repeat: Infinity, duration: 1.5, delay: j * 0.1 }}
+                        className="h-6 bg-muted/50 rounded"
+                        animate={{ opacity: [0.4, 0.8, 0.4] }}
+                        transition={{ repeat: Infinity, duration: 1, delay: j * 0.1 }}
                       />
                     ))}
                   </div>
@@ -175,41 +171,76 @@ export function LoadingSkeleton({ type = 'page', count = 1 }: LoadingSkeletonPro
   if (type === 'table') {
     return (
       <div className="space-y-4 animate-fade-in">
+        <LoadingSpinner text="Loading data..." />
+        
         <div className="flex items-center justify-between">
           <motion.div 
             className="h-8 w-48 bg-muted rounded-lg"
             animate={{ opacity: [0.5, 1, 0.5] }}
-            transition={{ repeat: Infinity, duration: 1.5 }}
+            transition={{ repeat: Infinity, duration: 1 }}
           />
-          <motion.div 
-            className="h-10 w-32 bg-muted rounded-lg"
-            animate={{ opacity: [0.5, 1, 0.5] }}
-            transition={{ repeat: Infinity, duration: 1.5, delay: 0.1 }}
-          />
+          <div className="flex gap-2">
+            <motion.div 
+              className="h-10 w-24 bg-muted rounded-lg"
+              animate={{ opacity: [0.5, 1, 0.5] }}
+              transition={{ repeat: Infinity, duration: 1, delay: 0.1 }}
+            />
+            <motion.div 
+              className="h-10 w-28 bg-muted rounded-lg"
+              animate={{ opacity: [0.5, 1, 0.5] }}
+              transition={{ repeat: Infinity, duration: 1, delay: 0.15 }}
+            />
+          </div>
         </div>
+        
+        {/* Stats cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map((i) => (
+            <motion.div
+              key={i}
+              className="p-4 bg-card rounded-lg border border-border"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ delay: i * 0.05 }}
+            >
+              <motion.div 
+                className="h-4 w-16 bg-muted rounded mb-2"
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ repeat: Infinity, duration: 1 }}
+              />
+              <motion.div 
+                className="h-6 w-20 bg-muted rounded"
+                animate={{ opacity: [0.5, 1, 0.5] }}
+                transition={{ repeat: Infinity, duration: 1, delay: 0.1 }}
+              />
+            </motion.div>
+          ))}
+        </div>
+        
         <motion.div
           className="bg-card rounded-xl border border-border overflow-hidden relative"
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.1, duration: 0.2 }}
         >
           <div className="p-4 border-b border-border flex gap-4">
-            {[1, 2, 3, 4, 5].map((i) => (
+            {[1, 2, 3, 4].map((i) => (
               <motion.div
                 key={i}
-                className="h-6 flex-1 bg-muted rounded"
+                className="h-5 flex-1 bg-muted rounded"
                 animate={{ opacity: [0.5, 1, 0.5] }}
-                transition={{ repeat: Infinity, duration: 1.5, delay: i * 0.1 }}
+                transition={{ repeat: Infinity, duration: 1, delay: i * 0.08 }}
               />
             ))}
           </div>
-          {Array.from({ length: count }).map((_, i) => (
+          {Array.from({ length: Math.min(count, 4) }).map((_, i) => (
             <div key={i} className="p-4 border-b border-border/50 flex gap-4">
-              {[1, 2, 3, 4, 5].map((j) => (
+              {[1, 2, 3, 4].map((j) => (
                 <motion.div
                   key={j}
-                  className="h-5 flex-1 bg-muted/50 rounded"
-                  animate={{ opacity: [0.3, 0.7, 0.3] }}
-                  transition={{ repeat: Infinity, duration: 1.5, delay: (i + j) * 0.05 }}
+                  className="h-4 flex-1 bg-muted/50 rounded"
+                  animate={{ opacity: [0.4, 0.8, 0.4] }}
+                  transition={{ repeat: Infinity, duration: 1, delay: (i + j) * 0.04 }}
                 />
               ))}
             </div>
