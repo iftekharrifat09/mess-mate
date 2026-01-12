@@ -32,6 +32,8 @@ export default function Notes() {
   const [viewingNote, setViewingNote] = useState<Note | null>(null);
   const [formData, setFormData] = useState({ title: '', description: '' });
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const isManager = user?.role === 'manager';
 
@@ -65,7 +67,8 @@ export default function Notes() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !isManager) return;
+    if (!user || !isManager || isSaving) return;
+    setIsSaving(true);
 
     try {
       if (editingNote) {
@@ -96,6 +99,8 @@ export default function Notes() {
         description: 'Failed to save note',
         variant: 'destructive',
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -106,7 +111,8 @@ export default function Notes() {
   };
 
   const handleDelete = async (id: string, title: string) => {
-    if (!user) return;
+    if (!user || deletingId) return;
+    setDeletingId(id);
     
     try {
       await dataService.deleteNote(id);
@@ -123,6 +129,8 @@ export default function Notes() {
         description: 'Failed to delete note',
         variant: 'destructive',
       });
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -189,8 +197,8 @@ export default function Notes() {
                     />
                   </div>
                   <DialogFooter>
-                    <Button type="submit" className="gradient-primary">
-                      {editingNote ? 'Update' : 'Create'} Note
+                    <Button type="submit" className="gradient-primary" disabled={isSaving}>
+                      {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : (<>{editingNote ? 'Update' : 'Create'} Note</>)}
                     </Button>
                   </DialogFooter>
                 </form>
@@ -260,8 +268,8 @@ export default function Notes() {
                               <Button variant="ghost" size="sm" onClick={() => handleEdit(note)}>
                                 <Edit2 className="h-3 w-3" />
                               </Button>
-                              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(note.id, note.title)}>
-                                <Trash2 className="h-3 w-3" />
+                              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(note.id, note.title)} disabled={deletingId === note.id}>
+                                {deletingId === note.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                               </Button>
                             </>
                           )}

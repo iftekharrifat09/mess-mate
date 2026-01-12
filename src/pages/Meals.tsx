@@ -148,9 +148,14 @@ export default function Meals() {
     }));
   };
 
+  const [isSaving, setIsSaving] = useState(false);
+  const [isSavingDefaults, setIsSavingDefaults] = useState(false);
+  const [deletingMealId, setDeletingMealId] = useState<string | null>(null);
+
   const handleSubmitAll = async () => {
-    if (!user) return;
+    if (!user || isSaving) return;
     
+    setIsSaving(true);
     try {
       const activeMonth = await dataService.getActiveMonth(user.messId);
       if (!activeMonth) {
@@ -212,14 +217,22 @@ export default function Meals() {
         description: 'Failed to save meals',
         variant: 'destructive',
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
-  const handleSaveDefaults = () => {
+  const handleSaveDefaults = async () => {
+    if (!user || isSavingDefaults) return;
+    setIsSavingDefaults(true);
     if (!user) return;
-    saveDefaultMeals(user.messId, defaultMeals);
-    toast({ title: 'Default meals saved' });
-    setIsDefaultsDialogOpen(false);
+    try {
+      saveDefaultMeals(user.messId, defaultMeals);
+      toast({ title: 'Default meals saved' });
+      setIsDefaultsDialogOpen(false);
+    } finally {
+      setIsSavingDefaults(false);
+    }
   };
 
   const handleEdit = (meal: Meal) => {
@@ -229,6 +242,8 @@ export default function Meals() {
   };
 
   const handleDelete = async (mealId: string) => {
+    if (deletingMealId) return;
+    setDeletingMealId(mealId);
     try {
       await dataService.deleteMeal(mealId);
       loadData();
@@ -239,6 +254,8 @@ export default function Meals() {
         description: 'Failed to delete meal',
         variant: 'destructive',
       });
+    } finally {
+      setDeletingMealId(null);
     }
   };
 
@@ -388,8 +405,8 @@ export default function Meals() {
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button onClick={handleSaveDefaults} className="w-full gradient-primary">
-                      Save Defaults
+                    <Button onClick={handleSaveDefaults} className="w-full gradient-primary" disabled={isSavingDefaults}>
+                      {isSavingDefaults ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : 'Save Defaults'}
                     </Button>
                   </DialogFooter>
                 </DialogContent>
@@ -532,8 +549,8 @@ export default function Meals() {
                   </div>
 
                   <DialogFooter className="mt-4">
-                    <Button onClick={handleSubmitAll} className="w-full gradient-primary">
-                      {dateHasMeals(selectedDate) ? 'Update All Meals' : 'Save All Meals'}
+                    <Button onClick={handleSubmitAll} className="w-full gradient-primary" disabled={isSaving}>
+                      {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : (dateHasMeals(selectedDate) ? 'Update All Meals' : 'Save All Meals')}
                     </Button>
                   </DialogFooter>
                 </DialogContent>

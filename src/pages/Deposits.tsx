@@ -33,7 +33,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import * as dataService from '@/lib/dataService';
 import { Deposit, User } from '@/types';
-import { Wallet, Plus, Trash2, Edit2 } from 'lucide-react';
+import { Wallet, Plus, Trash2, Edit2, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/calculations';
 import { Navigate } from 'react-router-dom';
@@ -52,6 +52,8 @@ export default function Deposits() {
     date: format(new Date(), 'yyyy-MM-dd'),
     note: '',
   });
+  const [isSaving, setIsSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const isManager = user?.role === 'manager';
 
@@ -98,7 +100,8 @@ export default function Deposits() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!user) return;
+    if (!user || isSaving) return;
+    setIsSaving(true);
     
     const activeMonth = await dataService.getActiveMonth(user.messId);
     if (!activeMonth) {
@@ -149,6 +152,8 @@ export default function Deposits() {
         description: 'Failed to save deposit',
         variant: 'destructive',
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -164,9 +169,15 @@ export default function Deposits() {
   };
 
   const handleDelete = async (depositId: string) => {
-    await dataService.deleteDeposit(depositId);
-    loadData();
-    toast({ title: 'Deposit deleted' });
+    if (deletingId) return;
+    setDeletingId(depositId);
+    try {
+      await dataService.deleteDeposit(depositId);
+      loadData();
+      toast({ title: 'Deposit deleted' });
+    } finally {
+      setDeletingId(null);
+    }
   };
 
   const getMemberName = (userId: string) => {
@@ -267,8 +278,8 @@ export default function Deposits() {
                 </div>
 
                 <DialogFooter>
-                  <Button type="submit" className="gradient-primary">
-                    {editingDeposit ? 'Update Deposit' : 'Add Deposit'}
+                  <Button type="submit" className="gradient-primary" disabled={isSaving}>
+                    {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : (editingDeposit ? 'Update Deposit' : 'Add Deposit')}
                   </Button>
                 </DialogFooter>
               </form>
@@ -346,8 +357,9 @@ export default function Deposits() {
                                 variant="ghost" 
                                 className="text-destructive"
                                 onClick={() => handleDelete(deposit.id)}
+                                disabled={deletingId === deposit.id}
                               >
-                                <Trash2 className="h-4 w-4" />
+                                {deletingId === deposit.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                               </Button>
                             </div>
                           </TableCell>

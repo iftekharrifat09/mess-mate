@@ -49,6 +49,8 @@ export default function MealCosts() {
   const [editingCost, setEditingCost] = useState<MealCost | null>(null);
   const [addAsDeposit, setAddAsDeposit] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     userId: '',
     amount: '',
@@ -118,7 +120,8 @@ export default function MealCosts() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!user) return;
+    if (!user || isSaving) return;
+    setIsSaving(true);
     
     try {
       const activeMonth = await dataService.getActiveMonth(user.messId);
@@ -207,6 +210,8 @@ export default function MealCosts() {
         description: 'Failed to save meal cost',
         variant: 'destructive',
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -223,6 +228,8 @@ export default function MealCosts() {
   };
 
   const handleDelete = async (costId: string) => {
+    if (deletingId) return;
+    setDeletingId(costId);
     try {
       await dataService.deleteMealCost(costId);
       loadData();
@@ -233,6 +240,8 @@ export default function MealCosts() {
         description: 'Failed to delete meal cost',
         variant: 'destructive',
       });
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -369,8 +378,8 @@ export default function MealCosts() {
                 )}
 
                 <DialogFooter>
-                  <Button type="submit" className="gradient-primary" disabled={!formData.userId}>
-                    {editingCost ? 'Update Cost' : 'Add Cost'}
+                  <Button type="submit" className="gradient-primary" disabled={!formData.userId || isSaving}>
+                    {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : (editingCost ? 'Update Cost' : 'Add Cost')}
                   </Button>
                 </DialogFooter>
               </form>
@@ -448,8 +457,9 @@ export default function MealCosts() {
                                 variant="ghost" 
                                 className="text-destructive"
                                 onClick={() => handleDelete(cost.id)}
+                                disabled={deletingId === cost.id}
                               >
-                                <Trash2 className="h-4 w-4" />
+                                {deletingId === cost.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                               </Button>
                             </div>
                           </TableCell>

@@ -48,6 +48,8 @@ export default function OtherCosts() {
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false);
   const [editingCost, setEditingCost] = useState<OtherCost | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     userId: '',
     amount: '',
@@ -118,7 +120,8 @@ export default function OtherCosts() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    if (!user) return;
+    if (!user || isSaving) return;
+    setIsSaving(true);
     
     try {
       const activeMonth = await dataService.getActiveMonth(user.messId);
@@ -172,6 +175,8 @@ export default function OtherCosts() {
         description: 'Failed to save cost',
         variant: 'destructive',
       });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -188,6 +193,8 @@ export default function OtherCosts() {
   };
 
   const handleDelete = async (costId: string) => {
+    if (deletingId) return;
+    setDeletingId(costId);
     try {
       await dataService.deleteOtherCost(costId);
       loadData();
@@ -198,6 +205,8 @@ export default function OtherCosts() {
         description: 'Failed to delete cost',
         variant: 'destructive',
       });
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -316,8 +325,8 @@ export default function OtherCosts() {
                 </div>
 
                 <DialogFooter>
-                  <Button type="submit" className="gradient-primary">
-                    {editingCost ? 'Update Cost' : 'Add Cost'}
+                  <Button type="submit" className="gradient-primary" disabled={isSaving}>
+                    {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : (editingCost ? 'Update Cost' : 'Add Cost')}
                   </Button>
                 </DialogFooter>
               </form>
@@ -412,8 +421,9 @@ export default function OtherCosts() {
                                 variant="ghost" 
                                 className="text-destructive"
                                 onClick={() => handleDelete(cost.id)}
+                                disabled={deletingId === cost.id}
                               >
-                                <Trash2 className="h-4 w-4" />
+                                {deletingId === cost.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                               </Button>
                             </div>
                           </TableCell>
