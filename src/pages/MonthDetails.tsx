@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback, useTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -91,78 +91,83 @@ export default function MonthDetails() {
 
   const isManager = user?.role === 'manager';
 
-  useEffect(() => {
-    if (!authLoading && user) {
-      loadData();
-    }
-  }, [user, authLoading]);
+  const [isPending, startTransition] = useTransition();
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     if (!user) return;
     
     setIsLoading(true);
     try {
-      const month = await dataService.getActiveMonth(user.messId);
+      // Load active month and members in parallel first
+      const [month, messMembers] = await Promise.all([
+        dataService.getActiveMonth(user.messId),
+        dataService.getMessMembers(user.messId),
+      ]);
+      
       setActiveMonth(month || null);
+      setMembers(messMembers);
       
       if (month) {
-        const summary = await calculateMonthSummary(month.id, user.messId);
-        setMonthSummary(summary);
+        // Load all month data in a single parallel batch
+        const [summary, memSummary, meals, deposits, mealCosts, otherCosts] = await Promise.all([
+          calculateMonthSummary(month.id, user.messId),
+          getAllMembersSummary(month.id, user.messId),
+          dataService.getMealsByMonthId(month.id),
+          dataService.getDepositsByMonthId(month.id),
+          dataService.getMealCostsByMonthId(month.id),
+          dataService.getOtherCostsByMonthId(month.id),
+        ]);
         
-        const memSummary = await getAllMembersSummary(month.id, user.messId);
-        setMembersSummary(memSummary);
-        
-        // Load daily records
-        const messMembers = await dataService.getMessMembers(user.messId);
-        setMembers(messMembers);
-        
-        const meals = await dataService.getMealsByMonthId(month.id);
-        const deposits = await dataService.getDepositsByMonthId(month.id);
-        const mealCosts = await dataService.getMealCostsByMonthId(month.id);
-        const otherCosts = await dataService.getOtherCostsByMonthId(month.id);
-        
-        // Get all unique dates
-        const allDates = new Set<string>();
-        meals.forEach(m => allDates.add(m.date));
-        deposits.forEach(d => allDates.add(d.date));
-        mealCosts.forEach(c => allDates.add(c.date));
-        otherCosts.forEach(c => allDates.add(c.date));
-        
-        // Create daily records for each member and date
-        const records: DailyRecord[] = [];
-        
-        Array.from(allDates).sort((a, b) => new Date(b).getTime() - new Date(a).getTime()).forEach(date => {
-          messMembers.forEach(member => {
-            const memberMeals = meals.filter(m => m.date === date && m.userId === member.id);
-            const memberDeposits = deposits.filter(d => d.date === date && d.userId === member.id);
-            const memberMealCosts = mealCosts.filter(c => c.date === date && c.userId === member.id);
-            const memberOtherCosts = otherCosts.filter(c => c.date === date && c.userId === member.id);
-            
-            const totalMeals = memberMeals.reduce((sum, m) => sum + m.breakfast + m.lunch + m.dinner, 0);
-            const totalDeposit = memberDeposits.reduce((sum, d) => sum + d.amount, 0);
-            const totalMealCost = memberMealCosts.reduce((sum, c) => sum + c.amount, 0);
-            const totalOtherCost = memberOtherCosts.reduce((sum, c) => sum + c.amount, 0);
-            
-            // Only add if there's any activity
-            if (totalMeals > 0 || totalDeposit > 0 || totalMealCost > 0 || totalOtherCost > 0) {
-              records.push({
-                date,
-                memberId: member.id,
-                memberName: member.fullName,
-                meals: totalMeals,
-                deposit: totalDeposit,
-                mealCost: totalMealCost,
-                otherCost: totalOtherCost,
-              });
-            }
-          });
+        // Set summary data immediately
+        startTransition(() => {
+          setMonthSummary(summary);
+          setMembersSummary(memSummary);
         });
         
-        setDailyRecords(records);
+        // Process daily records in background
+        startTransition(() => {
+          // Get all unique dates
+          const allDates = new Set<string>();
+          meals.forEach(m => allDates.add(m.date));
+          deposits.forEach(d => allDates.add(d.date));
+          mealCosts.forEach(c => allDates.add(c.date));
+          otherCosts.forEach(c => allDates.add(c.date));
+          
+          // Create daily records for each member and date
+          const records: DailyRecord[] = [];
+          
+          Array.from(allDates).sort((a, b) => new Date(b).getTime() - new Date(a).getTime()).forEach(date => {
+            messMembers.forEach(member => {
+              const memberMeals = meals.filter(m => m.date === date && m.userId === member.id);
+              const memberDeposits = deposits.filter(d => d.date === date && d.userId === member.id);
+              const memberMealCosts = mealCosts.filter(c => c.date === date && c.userId === member.id);
+              const memberOtherCosts = otherCosts.filter(c => c.date === date && c.userId === member.id);
+              
+              const totalMeals = memberMeals.reduce((sum, m) => sum + m.breakfast + m.lunch + m.dinner, 0);
+              const totalDeposit = memberDeposits.reduce((sum, d) => sum + d.amount, 0);
+              const totalMealCost = memberMealCosts.reduce((sum, c) => sum + c.amount, 0);
+              const totalOtherCost = memberOtherCosts.reduce((sum, c) => sum + c.amount, 0);
+              
+              if (totalMeals > 0 || totalDeposit > 0 || totalMealCost > 0 || totalOtherCost > 0) {
+                records.push({
+                  date,
+                  memberId: member.id,
+                  memberName: member.fullName,
+                  meals: totalMeals,
+                  deposit: totalDeposit,
+                  mealCost: totalMealCost,
+                  otherCost: totalOtherCost,
+                });
+              }
+            });
+          });
+          
+          setDailyRecords(records);
+        });
       }
       
-      // Load previous months
-      await loadPreviousMonths();
+      // Load previous months in background
+      loadPreviousMonths();
     } catch (error) {
       console.error('Error loading month details:', error);
       toast({
@@ -173,7 +178,13 @@ export default function MonthDetails() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user, toast]);
+
+  useEffect(() => {
+    if (!authLoading && user) {
+      loadData();
+    }
+  }, [user, authLoading, loadData]);
 
   const loadPreviousMonths = async () => {
     if (!user) return;

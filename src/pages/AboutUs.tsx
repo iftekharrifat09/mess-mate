@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
+import { API_BASE_URL } from '@/lib/config';
 import { 
   Utensils, 
   ArrowRight, 
@@ -23,7 +24,8 @@ import {
   Target,
   Users,
   Sparkles,
-  Loader2
+  Loader2,
+  CheckCircle2
 } from 'lucide-react';
 
 interface DeveloperCardProps {
@@ -174,23 +176,29 @@ export default function AboutUs() {
     setIsSubmitting(true);
     
     try {
-      // Create mailto link with form data
-      const mailtoLink = `mailto:messmanager.support@gmail.com?subject=${encodeURIComponent(formData.subject)}&body=${encodeURIComponent(
-        `From: ${formData.name}\nEmail: ${formData.email}\n\n${formData.message}`
-      )}`;
-      
-      window.location.href = mailtoLink;
-      
-      toast({
-        title: 'Email Client Opened',
-        description: 'Please send the email from your email client.',
+      const response = await fetch(`${API_BASE_URL}/contact`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(formData),
       });
-      
-      setFormData({ name: '', email: '', subject: '', message: '' });
-    } catch (error) {
+
+      const data = await response.json();
+
+      if (data.success) {
+        toast({
+          title: 'Message Sent!',
+          description: 'Thank you for your feedback. We\'ll get back to you soon.',
+        });
+        setFormData({ name: '', email: '', subject: '', message: '' });
+      } else {
+        throw new Error(data.message || 'Failed to send message');
+      }
+    } catch (error: any) {
       toast({
         title: 'Error',
-        description: 'Failed to open email client. Please try again.',
+        description: error.message || 'Failed to send message. Please try again.',
         variant: 'destructive'
       });
     } finally {

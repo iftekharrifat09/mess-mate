@@ -2004,6 +2004,100 @@ app.get("/api/health", (req, res) => {
   });
 });
 
+// ===========================
+// CONTACT FORM / SUBMIT REPORT EMAIL
+// ===========================
+app.post("/api/contact", async (req, res) => {
+  try {
+    const { name, email, subject, message } = req.body;
+
+    if (!name || !email || !subject || !message) {
+      return res.status(400).json({
+        success: false,
+        message: "All fields are required",
+      });
+    }
+
+    // Email to the admin/support
+    const mailOptions = {
+      from: process.env.EMAIL_USER,
+      to: process.env.EMAIL_USER,
+      subject: `[Mess Manager Report] ${subject}`,
+      html: `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8f9fa; border-radius: 12px;">
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px; border-radius: 10px 10px 0 0; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">📩 New Report Received</h1>
+          </div>
+          <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <div style="margin-bottom: 20px; padding: 15px; background: #f0f4ff; border-radius: 8px; border-left: 4px solid #667eea;">
+              <p style="margin: 0; color: #4a5568; font-size: 14px;"><strong>From:</strong> ${name}</p>
+              <p style="margin: 5px 0 0 0; color: #4a5568; font-size: 14px;"><strong>Email:</strong> ${email}</p>
+            </div>
+            <div style="margin-bottom: 20px;">
+              <p style="margin: 0; color: #2d3748; font-size: 16px;"><strong>Subject:</strong></p>
+              <p style="margin: 5px 0 0 0; color: #4a5568; font-size: 15px;">${subject}</p>
+            </div>
+            <div style="margin-bottom: 20px;">
+              <p style="margin: 0; color: #2d3748; font-size: 16px;"><strong>Message:</strong></p>
+              <div style="margin-top: 10px; padding: 15px; background: #fafafa; border-radius: 8px; border: 1px solid #e2e8f0;">
+                <p style="margin: 0; color: #4a5568; font-size: 15px; white-space: pre-wrap; line-height: 1.6;">${message}</p>
+              </div>
+            </div>
+            <div style="text-align: center; padding-top: 20px; border-top: 1px solid #e2e8f0;">
+              <p style="margin: 0; color: #a0aec0; font-size: 12px;">Sent from Mess Manager Contact Form</p>
+            </div>
+          </div>
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(mailOptions);
+
+    // Send confirmation email to the sender
+    const confirmationMailOptions = {
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: `Thank you for contacting Mess Manager`,
+      html: `
+        <div style="font-family: 'Segoe UI', Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8f9fa; border-radius: 12px;">
+          <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 25px; border-radius: 10px 10px 0 0; text-align: center;">
+            <h1 style="color: white; margin: 0; font-size: 24px;">✅ Message Received!</h1>
+          </div>
+          <div style="background: white; padding: 30px; border-radius: 0 0 10px 10px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+            <p style="color: #2d3748; font-size: 16px; line-height: 1.6;">Hi ${name},</p>
+            <p style="color: #4a5568; font-size: 15px; line-height: 1.6;">
+              Thank you for reaching out to us! We have received your message and will get back to you as soon as possible.
+            </p>
+            <div style="margin: 20px 0; padding: 15px; background: #f0f4ff; border-radius: 8px; border-left: 4px solid #667eea;">
+              <p style="margin: 0; color: #4a5568; font-size: 14px;"><strong>Your Subject:</strong> ${subject}</p>
+            </div>
+            <p style="color: #4a5568; font-size: 15px; line-height: 1.6;">
+              Best regards,<br>
+              <strong>The Mess Manager Team</strong>
+            </p>
+            <div style="text-align: center; padding-top: 20px; border-top: 1px solid #e2e8f0; margin-top: 20px;">
+              <p style="margin: 0; color: #a0aec0; font-size: 12px;">This is an automated confirmation email.</p>
+            </div>
+          </div>
+        </div>
+      `,
+    };
+
+    await transporter.sendMail(confirmationMailOptions);
+
+    res.json({
+      success: true,
+      message: "Your message has been sent successfully!",
+    });
+  } catch (error) {
+    console.error("Contact form error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Failed to send message. Please try again later.",
+    });
+  }
+});
+
 // ============================================
 // START SERVER
 // ============================================
