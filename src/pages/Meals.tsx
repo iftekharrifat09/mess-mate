@@ -192,10 +192,10 @@ export default function Meals() {
         }
       }
 
-      await dataService.notifyMessMembers(user.messId, user.id, {
-        type: 'meal',
-        title: isEditing ? 'Meals Updated' : 'Meals Added',
-        message: `Meals for ${format(new Date(selectedDate), 'MMM d')} have been ${isEditing ? 'updated' : 'recorded'}`,
+      await dataService.notifyBulkMeals({
+        date: selectedDate,
+        memberMeals,
+        isEditing,
       });
 
       toast({ 

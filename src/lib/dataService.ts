@@ -1027,6 +1027,27 @@ export async function notifyMessMembers(messId: string, excludeUserId: string, n
   storage.notifyMessMembers(messId, excludeUserId, notification);
 }
 
+export async function notifyBulkMeals(data: {
+  date: string;
+  memberMeals: Record<string, { breakfast: number; lunch: number; dinner: number }>;
+  isEditing: boolean;
+}): Promise<void> {
+  if (shouldUseBackend()) {
+    try {
+      await api.notifyBulkMealsAPI(data);
+      return;
+    } catch (error) {
+      console.error('Failed to send bulk meal notifications via backend:', error);
+    }
+  }
+  // Fallback to localStorage notification (without email)
+  storage.notifyMessMembers('', '', {
+    type: 'meal',
+    title: data.isEditing ? 'Meals Updated' : 'Meals Added',
+    message: `Meals for ${data.date} have been ${data.isEditing ? 'updated' : 'recorded'}`,
+  });
+}
+
 export async function notifyManager(messId: string, notification: { type: Notification['type']; title: string; message: string }): Promise<void> {
   storage.notifyManager(messId, notification);
 }
