@@ -175,7 +175,45 @@ const authMiddleware = async (req, res, next) => {
   }
 };
 
-// Notify Members Helper
+// Send Email Notification Helper
+async function sendNotificationEmail(user, notification) {
+  if (!user || !user.email || !user.emailVerified) {
+    return; // Skip if user has no verified email
+  }
+
+  try {
+    const subject = `[Mess Manager] ${notification.title || notification.type || 'New Notification'}`;
+    const htmlContent = `
+      <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+        <div style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 20px; text-align: center;">
+          <h1 style="color: white; margin: 0;">Mess Manager</h1>
+        </div>
+        <div style="padding: 30px; background: #f9fafb;">
+          <h2 style="color: #1f2937; margin-top: 0;">${notification.title || 'New Notification'}</h2>
+          <p style="color: #4b5563; font-size: 16px; line-height: 1.6;">${notification.message || ''}</p>
+          <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 20px 0;">
+          <p style="color: #6b7280; font-size: 14px;">You received this email because you have email notifications enabled for your Mess Manager account.</p>
+        </div>
+        <div style="background: #1f2937; padding: 20px; text-align: center;">
+          <p style="color: #9ca3af; margin: 0; font-size: 12px;">© ${new Date().getFullYear()} Mess Manager. All rights reserved.</p>
+        </div>
+      </div>
+    `;
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: user.email,
+      subject,
+      html: htmlContent,
+    });
+    console.log(`✅ Email notification sent to ${user.email}`);
+  } catch (error) {
+    console.error(`❌ Failed to send email to ${user.email}:`, error.message);
+    // Don't throw - email failure shouldn't break the notification flow
+  }
+}
+
+// Notify Members Helper (with email for verified users)
 async function notifyMembers(messId, excludeUserId, notification) {
   const members = await collections.users
     .find({
@@ -194,10 +232,17 @@ async function notifyMembers(messId, excludeUserId, notification) {
 
   if (notifications.length > 0) {
     await collections.notifications.insertMany(notifications);
+
+    // Send email notifications to verified members
+    for (const member of members) {
+      if (member.emailVerified) {
+        await sendNotificationEmail(member, notification);
+      }
+    }
   }
 }
 
-// Notify Manager Helper
+// Notify Manager Helper (with email for verified managers)
 async function notifyManager(messId, notification) {
   const mess = await collections.messes.findOne({ _id: new ObjectId(messId) });
   if (mess) {
@@ -208,6 +253,12 @@ async function notifyManager(messId, notification) {
       seen: false,
       createdAt: new Date(),
     });
+
+    // Send email to manager if verified
+    const manager = await collections.users.findOne({ _id: new ObjectId(mess.managerId) });
+    if (manager && manager.emailVerified) {
+      await sendNotificationEmail(manager, notification);
+    }
   }
 }
 
