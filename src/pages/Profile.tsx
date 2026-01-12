@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { PasswordInput } from '@/components/ui/password-input';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import {
   Dialog,
   DialogContent,
@@ -18,6 +19,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { updateUser, getUserByEmail } from '@/lib/storage';
+import { getNotificationSoundEnabled, setNotificationSoundEnabled } from '@/lib/preferences';
 import {
   updateProfileAPI,
   sendOtpAPI,
@@ -26,12 +28,26 @@ import {
   requestEmailChangeAPI,
   confirmEmailChangeAPI,
 } from '@/lib/api';
-import { User, Phone, Mail, Check, X, Edit2, Shield, Lock, KeyRound } from 'lucide-react';
+import { User, Phone, Mail, Check, X, Edit2, Shield, Lock, KeyRound, Volume2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Profile() {
   const { user, refreshUser } = useAuth();
   const { toast } = useToast();
+
+  const [notificationSoundEnabled, setNotificationSoundEnabledState] = useState(true);
+
+  useEffect(() => {
+    if (!user) return;
+    setNotificationSoundEnabledState(getNotificationSoundEnabled(user.id));
+  }, [user]);
+
+  const handleToggleNotificationSound = (checked: boolean) => {
+    if (!user) return;
+    setNotificationSoundEnabledState(checked);
+    setNotificationSoundEnabled(user.id, checked);
+    toast({ title: checked ? 'Notification sound enabled' : 'Notification sound disabled' });
+  };
   
   const [isEditingName, setIsEditingName] = useState(false);
   const [isEditingPhone, setIsEditingPhone] = useState(false);
@@ -51,6 +67,7 @@ export default function Profile() {
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
+
 
   const handleUpdateName = async () => {
     if (!user || !fullName.trim()) return;
@@ -423,6 +440,28 @@ export default function Profile() {
                 <Button variant="outline" className="w-full" onClick={() => setIsChangingPassword(true)}>
                   Change Password
                 </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Preferences Card */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Volume2 className="h-5 w-5 text-primary" />
+                Preferences
+              </CardTitle>
+              <CardDescription>Customize your experience</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-1">
+                  <p className="font-medium">Notification sound</p>
+                  <p className="text-sm text-muted-foreground">
+                    Play a sound when new notifications arrive
+                  </p>
+                </div>
+                <Switch checked={notificationSoundEnabled} onCheckedChange={handleToggleNotificationSound} />
               </div>
             </CardContent>
           </Card>
