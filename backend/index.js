@@ -2155,6 +2155,78 @@ app.post("/api/contact", async (req, res) => {
 });
 
 // ============================================
+// BULK MEAL NOTIFICATIONS (with selective email)
+// ============================================
+
+app.post("/api/notify-bulk-meals", authMiddleware, async (req, res) => {
+  try {
+    const { date, memberMeals, isEditing } = req.body;
+    // memberMeals: { [userId]: { breakfast, lunch, dinner } }
+
+    if (!date || !memberMeals) {
+      return res.status(400).json({ success: false, error: "Missing date or memberMeals" });
+    }
+
+    const messId = req.user.messId;
+    const excludeUserId = req.userId;
+
+    // Get all members in the mess (except the manager who added meals)
+    const members = await collections.users
+      .find({
+        messId,
+        _id: { $ne: new ObjectId(excludeUserId) },
+      })
+      .toArray();
+
+    // Format date for display
+    const dateObj = new Date(date);
+    const formattedDate = dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
+    // Create notifications for all members
+    const notifications = members.map((member) => ({
+      userId: member._id.toString(),
+      messId,
+      title: isEditing ? "Meals Updated" : "Meals Added",
+      message: `Meals for ${formattedDate} have been ${isEditing ? 'updated' : 'recorded'}`,
+      type: "meal",
+      seen: false,
+      createdAt: new Date(),
+    }));
+
+    if (notifications.length > 0) {
+      await collections.notifications.insertMany(notifications);
+    }
+
+    // Send emails only to members whose meals > 0
+    for (const member of members) {
+      if (!member.emailVerified) continue;
+
+      const memberId = member._id.toString();
+      const mealData = memberMeals[memberId];
+      
+      if (!mealData) continue;
+
+      const totalMeals = (mealData.breakfast || 0) + (mealData.lunch || 0) + (mealData.dinner || 0);
+      
+      if (totalMeals > 0) {
+        // Create personalized email with meal details
+        const emailNotification = {
+          title: isEditing ? "Your Meals Updated" : "Your Meals Added",
+          message: `Your meals for ${formattedDate}: Breakfast: ${mealData.breakfast || 0}, Lunch: ${mealData.lunch || 0}, Dinner: ${mealData.dinner || 0} (Total: ${totalMeals})`,
+          type: "meal",
+        };
+        await sendNotificationEmail(member, emailNotification);
+      }
+    }
+
+    res.json({ success: true, message: "Notifications sent" });
+  } catch (error) {
+    console.error("Bulk meal notification error:", error);
+    res.status(500).json({ success: false, error: "Failed to send notifications" });
+  }
+});
+
+// ============================================
 // START SERVER
 // ============================================
 

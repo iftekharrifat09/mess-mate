@@ -743,3 +743,18 @@ export async function getMemberSummaryAPI(userId: string, monthId: string) {
 export async function getAllMembersSummaryAPI(monthId: string) {
   return apiRequest(`/summary/members?monthId=${monthId}`, { method: 'GET' });
 }
+
+// ============================================
+// BULK MEAL NOTIFICATION API
+// ============================================
+
+export async function notifyBulkMealsAPI(data: {
+  date: string;
+  memberMeals: Record<string, { breakfast: number; lunch: number; dinner: number }>;
+  isEditing: boolean;
+}) {
+  return apiRequest('/notify-bulk-meals', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
