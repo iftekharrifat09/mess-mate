@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo, useCallback } from 'react';
 import { motion } from 'framer-motion';
 import gsap from 'gsap';
 import { useAuth } from '@/contexts/AuthContext';
@@ -8,6 +8,7 @@ import PersonalInfoCard from '@/components/dashboard/PersonalInfoCard';
 import MemberSummaryCard from '@/components/dashboard/MemberSummaryCard';
 import BazarDateCard from '@/components/dashboard/BazarDateCard';
 import NoticePopup from '@/components/notices/NoticePopup';
+import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import { MonthSummary, MemberSummary, BazarDate, User } from '@/types';
 import { 
   calculateMonthSummary, 
@@ -117,9 +118,7 @@ export default function Dashboard() {
   if (authLoading || loading) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center h-64">
-          <p className="text-muted-foreground">Loading dashboard...</p>
-        </div>
+        <LoadingSkeleton type="dashboard" />
       </DashboardLayout>
     );
   }
