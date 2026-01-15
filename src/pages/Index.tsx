@@ -1,9 +1,13 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
-import { Utensils, ArrowRight, Users, Wallet, Shield, ClipboardList, Info } from 'lucide-react';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
+import { Utensils, ArrowRight, Users, Wallet, Shield, ClipboardList, Info, Menu } from 'lucide-react';
 
 export default function Index() {
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
@@ -15,7 +19,9 @@ export default function Index() {
             </div>
             <span className="font-bold text-xl text-foreground">Mess Manager</span>
           </div>
-          <div className="flex items-center gap-3">
+          
+          {/* Desktop Navigation */}
+          <div className="hidden md:flex items-center gap-3">
             <Link to="/about">
               <Button variant="ghost" className="gap-2">
                 <Info className="h-4 w-4" />
@@ -32,6 +38,34 @@ export default function Index() {
               </Button>
             </Link>
           </div>
+
+          {/* Mobile Navigation */}
+          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+            <SheetTrigger asChild className="md:hidden">
+              <Button variant="ghost" size="icon">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-[280px]">
+              <div className="flex flex-col gap-4 mt-8">
+                <Link to="/about" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="ghost" className="w-full justify-start gap-2">
+                    <Info className="h-4 w-4" />
+                    About Us
+                  </Button>
+                </Link>
+                <Link to="/auth" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="ghost" className="w-full justify-start">Login</Button>
+                </Link>
+                <Link to="/auth" onClick={() => setMobileMenuOpen(false)}>
+                  <Button className="w-full gradient-primary">
+                    Get Started
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
+            </SheetContent>
+          </Sheet>
         </div>
       </header>
 
@@ -143,14 +177,14 @@ export default function Index() {
 
       {/* Footer */}
       <footer className="border-t border-border py-8 px-4">
-        <div className="container mx-auto flex items-center justify-between">
+        <div className="container mx-auto flex flex-col sm:flex-row items-center justify-between gap-4">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
               <Utensils className="w-4 h-4 text-primary-foreground" />
             </div>
             <span className="font-semibold text-foreground">Mess Manager</span>
           </div>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-muted-foreground text-center">
             © {new Date().getFullYear()} Mess Manager. All rights reserved.
           </p>
         </div>
