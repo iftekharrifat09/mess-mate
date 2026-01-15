@@ -19,6 +19,7 @@ export default function JoinMess() {
   const [isPartOfMess, setIsPartOfMess] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSearching, setIsSearching] = useState(false);
+  const [joiningMessId, setJoiningMessId] = useState<string | null>(null);
   
   const navigate = useNavigate();
   const location = useLocation();
@@ -125,6 +126,10 @@ export default function JoinMess() {
       return;
     }
 
+    // Prevent double-clicking
+    if (joiningMessId) return;
+
+    setJoiningMessId(mess.id);
     try {
       // Check if already requested (use per-user endpoint; backend-safe)
       const pendingRequests = await dataService.getPendingJoinRequestsForUser(currentUser.id);
@@ -170,6 +175,8 @@ export default function JoinMess() {
         description: 'Failed to send join request',
         variant: 'destructive',
       });
+    } finally {
+      setJoiningMessId(null);
     }
   };
 
@@ -277,8 +284,16 @@ export default function JoinMess() {
                           size="sm"
                           className="gradient-primary"
                           onClick={() => handleJoinRequest(mess)}
+                          disabled={joiningMessId === mess.id}
                         >
-                          Join Request
+                          {joiningMessId === mess.id ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                              Sending...
+                            </>
+                          ) : (
+                            'Join Request'
+                          )}
                         </Button>
                       )}
                     </div>
