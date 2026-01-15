@@ -170,23 +170,24 @@ export default function JoinRequests() {
                 {pendingRequests.map(request => (
                   <div 
                     key={request.id} 
-                    className="flex items-center justify-between p-4 bg-muted/30 rounded-lg border"
+                    className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-4 bg-muted/30 rounded-lg border"
                   >
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
-                        <span className="text-primary font-semibold text-lg">
+                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                        <span className="text-primary font-semibold text-base sm:text-lg">
                           {request.user.fullName.charAt(0).toUpperCase()}
                         </span>
                       </div>
-                      <div>
-                        <p className="font-medium text-foreground">{request.user.fullName}</p>
-                        <div className="flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Mail className="h-3 w-3" /> {request.user.email}
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-foreground truncate">{request.user.fullName}</p>
+                        <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-1 sm:gap-4 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1 truncate">
+                            <Mail className="h-3 w-3 flex-shrink-0" /> 
+                            <span className="truncate">{request.user.email}</span>
                           </span>
                           {request.user.phone && (
                             <span className="flex items-center gap-1">
-                              <Phone className="h-3 w-3" /> {request.user.phone}
+                              <Phone className="h-3 w-3 flex-shrink-0" /> {request.user.phone}
                             </span>
                           )}
                         </div>
@@ -195,22 +196,22 @@ export default function JoinRequests() {
                         </p>
                       </div>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 self-end sm:self-center flex-shrink-0">
                       <Button 
                         size="sm" 
                         className="gradient-accent"
                         onClick={() => handleApprove(request)}
                       >
-                        <Check className="h-4 w-4 mr-1" />
-                        Approve
+                        <Check className="h-4 w-4 sm:mr-1" />
+                        <span className="hidden sm:inline">Approve</span>
                       </Button>
                       <Button 
                         size="sm" 
                         variant="destructive"
                         onClick={() => handleReject(request)}
                       >
-                        <X className="h-4 w-4 mr-1" />
-                        Reject
+                        <X className="h-4 w-4 sm:mr-1" />
+                        <span className="hidden sm:inline">Reject</span>
                       </Button>
                     </div>
                   </div>
