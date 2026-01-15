@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Sheet, SheetContent, SheetTrigger } from '@/components/ui/sheet';
 import { useToast } from '@/hooks/use-toast';
 import { API_BASE_URL } from '@/lib/config';
 import { 
@@ -25,7 +26,8 @@ import {
   Users,
   Sparkles,
   Loader2,
-  CheckCircle2
+  CheckCircle2,
+  Menu
 } from 'lucide-react';
 
 interface DeveloperCardProps {
@@ -154,6 +156,7 @@ function DeveloperCard({ name, role, image, description, socials, delay = 0 }: D
 export default function AboutUs() {
   const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     email: '',
@@ -244,7 +247,9 @@ export default function AboutUs() {
             </div>
             <span className="font-bold text-xl text-foreground">Mess Manager</span>
           </Link>
-          <div className="flex items-center gap-3">
+          
+          {/* Desktop Navigation */}
+          <div className="hidden md:flex items-center gap-3">
             <Link to="/">
               <Button variant="ghost" className="gap-2">
                 <ArrowLeft className="h-4 w-4" />
@@ -258,6 +263,31 @@ export default function AboutUs() {
               </Button>
             </Link>
           </div>
+
+          {/* Mobile Navigation */}
+          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+            <SheetTrigger asChild className="md:hidden">
+              <Button variant="ghost" size="icon">
+                <Menu className="h-5 w-5" />
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="right" className="w-[280px]">
+              <div className="flex flex-col gap-4 mt-8">
+                <Link to="/" onClick={() => setMobileMenuOpen(false)}>
+                  <Button variant="ghost" className="w-full justify-start gap-2">
+                    <ArrowLeft className="h-4 w-4" />
+                    Back to Home
+                  </Button>
+                </Link>
+                <Link to="/auth" onClick={() => setMobileMenuOpen(false)}>
+                  <Button className="w-full gradient-primary">
+                    Get Started
+                    <ArrowRight className="ml-2 h-4 w-4" />
+                  </Button>
+                </Link>
+              </div>
+            </SheetContent>
+          </Sheet>
         </div>
       </header>
 

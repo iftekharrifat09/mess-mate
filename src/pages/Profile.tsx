@@ -28,7 +28,7 @@ import {
   requestEmailChangeAPI,
   confirmEmailChangeAPI,
 } from '@/lib/api';
-import { User, Phone, Mail, Check, X, Edit2, Shield, Lock, KeyRound, Volume2 } from 'lucide-react';
+import { User, Phone, Mail, Check, X, Edit2, Shield, Lock, KeyRound, Volume2, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Profile() {
@@ -68,75 +68,95 @@ export default function Profile() {
   const [newPassword, setNewPassword] = useState('');
   const [confirmNewPassword, setConfirmNewPassword] = useState('');
 
+  // Loading states for buttons
+  const [isSavingName, setIsSavingName] = useState(false);
+  const [isSavingPhone, setIsSavingPhone] = useState(false);
+  const [isVerifyingPassword, setIsVerifyingPassword] = useState(false);
+  const [isVerifyingOTP, setIsVerifyingOTP] = useState(false);
+  const [isResendingOTP, setIsResendingOTP] = useState(false);
+  const [isVerifyingCurrentEmail, setIsVerifyingCurrentEmail] = useState(false);
+  const [isVerifyingCurrentEmailOTP, setIsVerifyingCurrentEmailOTP] = useState(false);
+  const [isChangingPasswordLoading, setIsChangingPasswordLoading] = useState(false);
+
 
   const handleUpdateName = async () => {
-    if (!user || !fullName.trim()) return;
+    if (!user || !fullName.trim() || isSavingName) return;
 
-    // Try backend profile update first (falls back to localStorage if backend unavailable)
-    const result = await updateProfileAPI({
-      name: fullName.trim(),
-      phone: (phone || user.phone || '').trim(),
-    });
+    setIsSavingName(true);
+    try {
+      // Try backend profile update first (falls back to localStorage if backend unavailable)
+      const result = await updateProfileAPI({
+        name: fullName.trim(),
+        phone: (phone || user.phone || '').trim(),
+      });
 
-    if (result.success) {
-      await refreshUser();
-      setIsEditingName(false);
-      toast({ title: 'Name updated successfully' });
-      return;
+      if (result.success) {
+        await refreshUser();
+        setIsEditingName(false);
+        toast({ title: 'Name updated successfully' });
+        return;
+      }
+
+      // Fallback to localStorage
+      if ((result as any).usingLocalStorage) {
+        updateUser(user.id, { fullName: fullName.trim() });
+        await refreshUser();
+        setIsEditingName(false);
+        toast({ title: 'Name updated successfully' });
+        return;
+      }
+
+      toast({
+        title: 'Failed to update name',
+        description: (result as any).error || 'Please try again',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingName(false);
     }
-
-    // Fallback to localStorage
-    if ((result as any).usingLocalStorage) {
-      updateUser(user.id, { fullName: fullName.trim() });
-      await refreshUser();
-      setIsEditingName(false);
-      toast({ title: 'Name updated successfully' });
-      return;
-    }
-
-    toast({
-      title: 'Failed to update name',
-      description: (result as any).error || 'Please try again',
-      variant: 'destructive',
-    });
   };
 
   const handleUpdatePhone = async () => {
-    if (!user || !phone.trim()) return;
+    if (!user || !phone.trim() || isSavingPhone) return;
 
-    const nextPhone = phone.trim();
+    setIsSavingPhone(true);
+    try {
+      const nextPhone = phone.trim();
 
-    // Try backend profile update first (falls back to localStorage if backend unavailable)
-    const result = await updateProfileAPI({
-      name: (fullName || user.fullName || '').trim(),
-      phone: nextPhone,
-    });
+      // Try backend profile update first (falls back to localStorage if backend unavailable)
+      const result = await updateProfileAPI({
+        name: (fullName || user.fullName || '').trim(),
+        phone: nextPhone,
+      });
 
-    if (result.success) {
-      await refreshUser();
-      setIsEditingPhone(false);
-      toast({ title: 'Phone updated successfully' });
-      return;
+      if (result.success) {
+        await refreshUser();
+        setIsEditingPhone(false);
+        toast({ title: 'Phone updated successfully' });
+        return;
+      }
+
+      // Fallback to localStorage
+      if ((result as any).usingLocalStorage) {
+        updateUser(user.id, { phone: nextPhone });
+        await refreshUser();
+        setIsEditingPhone(false);
+        toast({ title: 'Phone updated successfully' });
+        return;
+      }
+
+      toast({
+        title: 'Failed to update phone',
+        description: (result as any).error || 'Please try again',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingPhone(false);
     }
-
-    // Fallback to localStorage
-    if ((result as any).usingLocalStorage) {
-      updateUser(user.id, { phone: nextPhone });
-      await refreshUser();
-      setIsEditingPhone(false);
-      toast({ title: 'Phone updated successfully' });
-      return;
-    }
-
-    toast({
-      title: 'Failed to update phone',
-      description: (result as any).error || 'Please try again',
-      variant: 'destructive',
-    });
   };
 
   const handlePasswordVerify = async () => {
-    if (!user) return;
+    if (!user || isVerifyingPassword) return;
 
     if (!newEmail || !currentPassword) return;
 
@@ -146,120 +166,146 @@ export default function Profile() {
       return;
     }
 
-    const result = await requestEmailChangeAPI({
-      newEmail,
-      currentPassword,
-    });
-
-    if (result.success) {
-      toast({
-        title: 'OTP sent',
-        description: 'Please check your email for the verification code.',
+    setIsVerifyingPassword(true);
+    try {
+      const result = await requestEmailChangeAPI({
+        newEmail,
+        currentPassword,
       });
-      setEmailStep('otp');
-      setLastOtpSent(new Date());
-      return;
-    }
 
-    toast({
-      title: (result as any).error === 'Current password is incorrect' ? 'Incorrect password' : 'Mail sending Unsuccessful',
-      description: (result as any).error || 'Failed to send OTP. Please try again.',
-      variant: 'destructive',
-    });
+      if (result.success) {
+        toast({
+          title: 'OTP sent',
+          description: 'Please check your email for the verification code.',
+        });
+        setEmailStep('otp');
+        setLastOtpSent(new Date());
+        return;
+      }
+
+      toast({
+        title: (result as any).error === 'Current password is incorrect' ? 'Incorrect password' : 'Mail sending Unsuccessful',
+        description: (result as any).error || 'Failed to send OTP. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsVerifyingPassword(false);
+    }
   };
 
   const handleVerifyOTP = async () => {
-    if (!user) return;
+    if (!user || isVerifyingOTP) return;
 
-    const result = await confirmEmailChangeAPI({ newEmail, otp });
+    setIsVerifyingOTP(true);
+    try {
+      const result = await confirmEmailChangeAPI({ newEmail, otp });
 
-    if (!result.success) {
-      toast({
-        title: 'Invalid OTP',
-        description: (result as any).error || 'Invalid or expired OTP.',
-        variant: 'destructive',
-      });
-      return;
+      if (!result.success) {
+        toast({
+          title: 'Invalid OTP',
+          description: (result as any).error || 'Invalid or expired OTP.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      await refreshUser();
+
+      setIsEditingEmail(false);
+      setEmailStep('password');
+      setNewEmail('');
+      setCurrentPassword('');
+      setOtp('');
+
+      toast({ title: 'Email updated and verified' });
+    } finally {
+      setIsVerifyingOTP(false);
     }
-
-    await refreshUser();
-
-    setIsEditingEmail(false);
-    setEmailStep('password');
-    setNewEmail('');
-    setCurrentPassword('');
-    setOtp('');
-
-    toast({ title: 'Email updated and verified' });
   };
 
   const handleResendOTP = async () => {
+    if (isResendingOTP) return;
     if (lastOtpSent && new Date().getTime() - lastOtpSent.getTime() < 60000) {
       toast({ title: 'Please wait before requesting a new OTP', variant: 'destructive' });
       return;
     }
     
-    const result = await sendOtpAPI('email-change', newEmail);
-    
-    if (result.success) {
-      setLastOtpSent(new Date());
-      toast({
-        title: 'OTP sent',
-        description: 'Please check your email for the verification code.',
-      });
-    } else {
-      toast({
-        title: 'Mail sending Unsuccessful',
-        description: result.error || 'Failed to send OTP. Please try again.',
-        variant: 'destructive',
-      });
+    setIsResendingOTP(true);
+    try {
+      const result = await sendOtpAPI('email-change', newEmail);
+      
+      if (result.success) {
+        setLastOtpSent(new Date());
+        toast({
+          title: 'OTP sent',
+          description: 'Please check your email for the verification code.',
+        });
+      } else {
+        toast({
+          title: 'Mail sending Unsuccessful',
+          description: result.error || 'Failed to send OTP. Please try again.',
+          variant: 'destructive',
+        });
+      }
+    } finally {
+      setIsResendingOTP(false);
     }
   };
 
   const handleVerifyCurrentEmail = async () => {
-    if (!user) return;
+    if (!user || isVerifyingCurrentEmail) return;
     
-    const result = await sendOtpAPI('email-verification', user.email);
-    
-    if (result.success) {
-      toast({
-        title: 'Verification OTP sent',
-        description: 'Please check your email for the verification code.',
-      });
-      setIsVerifyingEmail(true);
-      setLastOtpSent(new Date());
-    } else {
-      toast({
-        title: 'Mail sending Unsuccessful',
-        description: result.error || 'Failed to send OTP. Please try again.',
-        variant: 'destructive',
-      });
+    setIsVerifyingCurrentEmail(true);
+    try {
+      const result = await sendOtpAPI('email-verification', user.email);
+      
+      if (result.success) {
+        toast({
+          title: 'Verification OTP sent',
+          description: 'Please check your email for the verification code.',
+        });
+        setIsVerifyingEmail(true);
+        setLastOtpSent(new Date());
+      } else {
+        toast({
+          title: 'Mail sending Unsuccessful',
+          description: result.error || 'Failed to send OTP. Please try again.',
+          variant: 'destructive',
+        });
+      }
+    } finally {
+      setIsVerifyingCurrentEmail(false);
     }
   };
 
   const handleVerifyCurrentEmailOTP = async () => {
-    if (!user) return;
+    if (!user || isVerifyingCurrentEmailOTP) return;
 
-    const result = await verifyOtpAPI('email-verification', user.email, otp);
+    setIsVerifyingCurrentEmailOTP(true);
+    try {
+      const result = await verifyOtpAPI('email-verification', user.email, otp);
 
-    if (!result.success) {
-      toast({
-        title: 'Invalid OTP',
-        description: (result as any).error || 'Invalid or expired OTP.',
-        variant: 'destructive',
-      });
-      return;
+      if (!result.success) {
+        toast({
+          title: 'Invalid OTP',
+          description: (result as any).error || 'Invalid or expired OTP.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      await refreshUser();
+      setIsVerifyingEmail(false);
+      setOtp('');
+
+      toast({ title: 'Email verified successfully' });
+    } finally {
+      setIsVerifyingCurrentEmailOTP(false);
     }
-
-    await refreshUser();
-    setIsVerifyingEmail(false);
-    setOtp('');
-
-    toast({ title: 'Email verified successfully' });
   };
 
   const handleChangePassword = async () => {
-    if (!user) return;
+    if (!user || isChangingPasswordLoading) return;
 
     // Validate new password
     if (newPassword.length < 6) {
@@ -272,26 +318,31 @@ export default function Profile() {
       return;
     }
 
-    const result = await changePasswordAPI({
-      currentPassword: oldPassword,
-      newPassword,
-    });
-
-    if (!result.success) {
-      toast({
-        title: 'Password change failed',
-        description: (result as any).error || 'Please try again.',
-        variant: 'destructive',
+    setIsChangingPasswordLoading(true);
+    try {
+      const result = await changePasswordAPI({
+        currentPassword: oldPassword,
+        newPassword,
       });
-      return;
+
+      if (!result.success) {
+        toast({
+          title: 'Password change failed',
+          description: (result as any).error || 'Please try again.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      setIsChangingPassword(false);
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmNewPassword('');
+
+      toast({ title: 'Password changed successfully' });
+    } finally {
+      setIsChangingPasswordLoading(false);
     }
-
-    setIsChangingPassword(false);
-    setOldPassword('');
-    setNewPassword('');
-    setConfirmNewPassword('');
-
-    toast({ title: 'Password changed successfully' });
   };
 
   if (!user) return null;
@@ -329,10 +380,10 @@ export default function Profile() {
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder="Enter your name"
                     />
-                    <Button size="icon" onClick={handleUpdateName}>
-                      <Check className="h-4 w-4" />
+                    <Button size="icon" onClick={handleUpdateName} disabled={isSavingName}>
+                      {isSavingName ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                     </Button>
-                    <Button size="icon" variant="outline" onClick={() => { setIsEditingName(false); setFullName(user.fullName); }}>
+                    <Button size="icon" variant="outline" onClick={() => { setIsEditingName(false); setFullName(user.fullName); }} disabled={isSavingName}>
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
@@ -356,10 +407,10 @@ export default function Profile() {
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="Enter your phone"
                     />
-                    <Button size="icon" onClick={handleUpdatePhone}>
-                      <Check className="h-4 w-4" />
+                    <Button size="icon" onClick={handleUpdatePhone} disabled={isSavingPhone}>
+                      {isSavingPhone ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                     </Button>
-                    <Button size="icon" variant="outline" onClick={() => { setIsEditingPhone(false); setPhone(user.phone); }}>
+                    <Button size="icon" variant="outline" onClick={() => { setIsEditingPhone(false); setPhone(user.phone); }} disabled={isSavingPhone}>
                       <X className="h-4 w-4" />
                     </Button>
                   </div>
@@ -426,8 +477,8 @@ export default function Profile() {
               </div>
 
               {!user.emailVerified && (
-                <Button variant="outline" className="w-full" onClick={handleVerifyCurrentEmail}>
-                  Verify Current Email
+                <Button variant="outline" className="w-full" onClick={handleVerifyCurrentEmail} disabled={isVerifyingCurrentEmail}>
+                  {isVerifyingCurrentEmail ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Sending...</> : 'Verify Current Email'}
                 </Button>
               )}
 
@@ -506,8 +557,8 @@ export default function Profile() {
                   />
                 </div>
                 <DialogFooter>
-                  <Button onClick={handlePasswordVerify} className="gradient-primary" disabled={!newEmail || !currentPassword}>
-                    Continue
+                  <Button onClick={handlePasswordVerify} className="gradient-primary" disabled={!newEmail || !currentPassword || isVerifyingPassword}>
+                    {isVerifyingPassword ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Verifying...</> : 'Continue'}
                   </Button>
                 </DialogFooter>
               </div>
@@ -533,15 +584,15 @@ export default function Profile() {
                     maxLength={6}
                   />
                 </div>
-                <Button variant="ghost" className="w-full" onClick={handleResendOTP}>
-                  Resend OTP
+                <Button variant="ghost" className="w-full" onClick={handleResendOTP} disabled={isResendingOTP}>
+                  {isResendingOTP ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Sending...</> : 'Resend OTP'}
                 </Button>
                 <DialogFooter>
-                  <Button variant="outline" onClick={() => setEmailStep('password')}>
+                  <Button variant="outline" onClick={() => setEmailStep('password')} disabled={isVerifyingOTP}>
                     Back
                   </Button>
-                  <Button onClick={handleVerifyOTP} className="gradient-primary" disabled={otp.length !== 6}>
-                    Verify & Update
+                  <Button onClick={handleVerifyOTP} className="gradient-primary" disabled={otp.length !== 6 || isVerifyingOTP}>
+                    {isVerifyingOTP ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Verifying...</> : 'Verify & Update'}
                   </Button>
                 </DialogFooter>
               </div>
@@ -600,8 +651,8 @@ export default function Profile() {
                 Resend OTP
               </Button>
               <DialogFooter>
-                <Button onClick={handleVerifyCurrentEmailOTP} className="gradient-primary" disabled={otp.length !== 6}>
-                  Verify Email
+                <Button onClick={handleVerifyCurrentEmailOTP} className="gradient-primary" disabled={otp.length !== 6 || isVerifyingCurrentEmailOTP}>
+                  {isVerifyingCurrentEmailOTP ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Verifying...</> : 'Verify Email'}
                 </Button>
               </DialogFooter>
             </div>
@@ -650,15 +701,15 @@ export default function Profile() {
                 />
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsChangingPassword(false)}>
+                <Button variant="outline" onClick={() => setIsChangingPassword(false)} disabled={isChangingPasswordLoading}>
                   Cancel
                 </Button>
                 <Button 
                   onClick={handleChangePassword} 
                   className="gradient-primary" 
-                  disabled={!oldPassword || !newPassword || !confirmNewPassword}
+                  disabled={!oldPassword || !newPassword || !confirmNewPassword || isChangingPasswordLoading}
                 >
-                  Change Password
+                  {isChangingPasswordLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Changing...</> : 'Change Password'}
                 </Button>
               </DialogFooter>
             </div>

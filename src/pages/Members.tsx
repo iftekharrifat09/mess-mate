@@ -151,23 +151,23 @@ export default function Members() {
             <CardContent>
               <div className="space-y-3">
                 {pendingMembers.map(member => (
-                  <div key={member.id} className="flex items-center justify-between p-4 bg-card rounded-lg border">
-                    <div>
-                      <p className="font-medium">{member.fullName}</p>
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <span className="flex items-center gap-1">
-                          <Mail className="h-3 w-3" /> {member.email}
+                  <div key={member.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-card rounded-lg border">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium truncate">{member.fullName}</p>
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-sm text-muted-foreground">
+                        <span className="flex items-center gap-1 truncate">
+                          <Mail className="h-3 w-3 flex-shrink-0" /> <span className="truncate">{member.email}</span>
                         </span>
                         <span className="flex items-center gap-1">
-                          <Phone className="h-3 w-3" /> {member.phone}
+                          <Phone className="h-3 w-3 flex-shrink-0" /> {member.phone}
                         </span>
                       </div>
                     </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" onClick={() => handleApprove(member.id)} disabled={approvingId === member.id}>
+                    <div className="flex gap-2 flex-shrink-0">
+                      <Button size="sm" onClick={() => handleApprove(member.id)} disabled={approvingId === member.id} className="flex-1 sm:flex-initial">
                         {approvingId === member.id ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Approve'}
                       </Button>
-                      <Button size="sm" variant="destructive" onClick={() => handleReject(member.id)} disabled={rejectingId === member.id}>
+                      <Button size="sm" variant="destructive" onClick={() => handleReject(member.id)} disabled={rejectingId === member.id} className="flex-1 sm:flex-initial">
                         {rejectingId === member.id ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Reject'}
                       </Button>
                     </div>
@@ -195,43 +195,48 @@ export default function Members() {
             ) : (
               <div className="space-y-3">
                 {members.map(member => (
-                  <div key={member.id} className="flex items-center justify-between p-4 bg-muted/30 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                  <div key={member.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-muted/30 rounded-lg">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
                         <span className="text-primary font-semibold">
                           {member.fullName.charAt(0).toUpperCase()}
                         </span>
                       </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium">{member.fullName}</p>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="font-medium truncate">{member.fullName}</p>
                           {member.role === 'manager' && (
-                            <Badge variant="default" className="text-xs">
+                            <Badge variant="default" className="text-xs flex-shrink-0">
                               <Crown className="h-3 w-3 mr-1" /> Manager
                             </Badge>
                           )}
                           {member.id === user?.id && (
-                            <Badge variant="secondary" className="text-xs">You</Badge>
+                            <Badge variant="secondary" className="text-xs flex-shrink-0">You</Badge>
                           )}
                         </div>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Mail className="h-3 w-3" /> {member.email}
+                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1 truncate">
+                            <Mail className="h-3 w-3 flex-shrink-0" /> <span className="truncate">{member.email}</span>
                           </span>
                           <span className="flex items-center gap-1">
-                            <Phone className="h-3 w-3" /> {member.phone}
+                            <Phone className="h-3 w-3 flex-shrink-0" /> {member.phone}
                           </span>
                         </div>
                       </div>
                     </div>
                     
                     {isManager && member.id !== user?.id && member.role !== 'manager' && (
-                      <div className="flex gap-2">
+                      <div className="flex gap-2 flex-shrink-0">
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button size="sm" variant="outline">
+                            <Button size="sm" variant="outline" className="hidden sm:flex">
                               <Shield className="h-4 w-4 mr-1" />
                               Make Manager
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogTrigger asChild>
+                            <Button size="sm" variant="outline" className="sm:hidden">
+                              <Shield className="h-4 w-4" />
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogContent>
