@@ -7,6 +7,7 @@ import MonthSummaryCard from '@/components/dashboard/MonthSummaryCard';
 import PersonalInfoCard from '@/components/dashboard/PersonalInfoCard';
 import MemberSummaryCard from '@/components/dashboard/MemberSummaryCard';
 import BazarDateCard from '@/components/dashboard/BazarDateCard';
+import DescoElectricityCard from '@/components/dashboard/DescoElectricityCard';
 import NoticePopup from '@/components/notices/NoticePopup';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import { MonthSummary, MemberSummary, BazarDate, User } from '@/types';
@@ -165,11 +166,22 @@ export default function Dashboard() {
           </motion.div>
         </div>
 
+        {/* DESCO Electricity */}
+        {user?.messId && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.3 }}
+          >
+            <DescoElectricityCard messId={user.messId} />
+          </motion.div>
+        )}
+
         {/* Bazar Dates */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.3 }}
+          transition={{ delay: 0.4 }}
         >
           <BazarDateCard bazarDates={bazarDates} members={members} />
         </motion.div>

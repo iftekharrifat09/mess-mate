@@ -28,8 +28,9 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import * as dataService from '@/lib/dataService';
 import { Mess } from '@/types';
-import { Building, Copy, Check, Edit2, Settings, RefreshCw, Trash2, AlertTriangle } from 'lucide-react';
+import { Building, Copy, Check, Edit2, Settings, RefreshCw, Trash2, AlertTriangle, Zap, Loader2 } from 'lucide-react';
 import { Navigate } from 'react-router-dom';
+import { getDescoSettings, saveDescoSettings, removeDescoSettings, fetchAllDescoData, DescoSettings } from '@/lib/descoService';
 
 export default function ManageMess() {
   const { user, logout } = useAuth();
@@ -45,6 +46,11 @@ export default function ManageMess() {
   const [codeError, setCodeError] = useState('');
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [loading, setLoading] = useState(true);
+  const [descoAccountNo, setDescoAccountNo] = useState('');
+  const [descoMeterNo, setDescoMeterNo] = useState('');
+  const [descoApiType, setDescoApiType] = useState<'tkdes' | 'unified'>('tkdes');
+  const [isSavingDesco, setIsSavingDesco] = useState(false);
+  const [descoSaved, setDescoSaved] = useState(false);
 
   const isManager = user?.role === 'manager';
 
@@ -66,6 +72,14 @@ export default function ManageMess() {
       if (messData) {
         setNewMessName(messData.name);
         setNewMessCode(messData.messCode || '');
+        // Load DESCO settings
+        const desco = getDescoSettings(messData.id);
+        if (desco) {
+          setDescoAccountNo(desco.accountNo);
+          setDescoMeterNo(desco.meterNo);
+          setDescoApiType(desco.apiType);
+          setDescoSaved(true);
+        }
       }
     } catch (error) {
       console.error('Error loading mess data:', error);
@@ -387,6 +401,133 @@ export default function ManageMess() {
             </CardContent>
           </Card>
         </div>
+
+        {/* DESCO Electricity Settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="h-5 w-5 text-yellow-500" />
+              DESCO Electricity
+            </CardTitle>
+            <CardDescription>
+              Set your DESCO prepaid meter details to track electricity usage on the dashboard
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Account Number</Label>
+                <Input
+                  value={descoAccountNo}
+                  onChange={(e) => setDescoAccountNo(e.target.value.replace(/\D/g, ''))}
+                  placeholder="e.g., 26036446"
+                  maxLength={20}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Meter Number</Label>
+                <Input
+                  value={descoMeterNo}
+                  onChange={(e) => setDescoMeterNo(e.target.value.replace(/[^0-9]/g, ''))}
+                  placeholder="e.g., 661120190982"
+                  maxLength={20}
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>API Type</Label>
+              <div className="flex gap-3">
+                <Button
+                  type="button"
+                  variant={descoApiType === 'tkdes' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setDescoApiType('tkdes')}
+                >
+                  TKDES
+                </Button>
+                <Button
+                  type="button"
+                  variant={descoApiType === 'unified' ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setDescoApiType('unified')}
+                >
+                  Unified
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Select TKDES for Tongi/Kaliakair area, Unified for others
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <Button
+                className="gradient-primary"
+                disabled={!descoAccountNo || !descoMeterNo || isSavingDesco}
+                onClick={async () => {
+                  if (!mess || isSavingDesco) return;
+                  setIsSavingDesco(true);
+                  try {
+                    const settings: DescoSettings = {
+                      accountNo: descoAccountNo,
+                      meterNo: descoMeterNo,
+                      apiType: descoApiType,
+                    };
+                    saveDescoSettings(mess.id, settings);
+                    // Verify by fetching balance
+                    const result = await fetchAllDescoData(mess.id, settings, true);
+                    if (result) {
+                      setDescoSaved(true);
+                      toast({
+                        title: 'DESCO Settings Saved',
+                        description: 'Electricity data will now show on the dashboard.',
+                      });
+                    } else {
+                      toast({
+                        title: 'No Data Found',
+                        description: 'Could not fetch data for this account. Please check the account number and meter number.',
+                        variant: 'destructive',
+                      });
+                    }
+                  } catch {
+                    toast({
+                      title: 'Error',
+                      description: 'Failed to verify DESCO account. Please try again.',
+                      variant: 'destructive',
+                    });
+                  } finally {
+                    setIsSavingDesco(false);
+                  }
+                }}
+              >
+                {isSavingDesco ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Verifying...
+                  </>
+                ) : (
+                  'Save & Verify'
+                )}
+              </Button>
+              {descoSaved && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    if (!mess) return;
+                    removeDescoSettings(mess.id);
+                    setDescoAccountNo('');
+                    setDescoMeterNo('');
+                    setDescoSaved(false);
+                    toast({
+                      title: 'DESCO Settings Removed',
+                      description: 'Electricity data will no longer show on the dashboard.',
+                    });
+                  }}
+                >
+                  Remove
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Danger Zone */}
         <Card className="border-destructive/50">
