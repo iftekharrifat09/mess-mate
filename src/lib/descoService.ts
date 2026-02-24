@@ -5,13 +5,11 @@
 
 export interface DescoSettings {
   accountNo: string;
-  meterNo: string;
   apiType: 'tkdes' | 'unified';
 }
 
 export interface DescoBalance {
   accountNo: string;
-  meterNo: string;
   balance: number;
   currentMonthConsumption: number;
   readingTime: string;
@@ -105,7 +103,7 @@ async function fetchDescoAPI(url: string): Promise<any> {
 export async function fetchDescoBalance(settings: DescoSettings): Promise<DescoBalance | null> {
   try {
     const data = await fetchDescoAPI(
-      `${DESCO_BASE}/${settings.apiType}/customer/getBalance?accountNo=${settings.accountNo}&meterNo=${settings.meterNo}`
+      `${DESCO_BASE}/${settings.apiType}/customer/getBalance?accountNo=${settings.accountNo}`
     );
     return data;
   } catch (error) {
@@ -121,7 +119,7 @@ export async function fetchDailyConsumption(settings: DescoSettings): Promise<De
     dateFrom.setDate(dateFrom.getDate() - 30);
     
     const data = await fetchDescoAPI(
-      `${DESCO_BASE}/${settings.apiType}/customer/getCustomerDailyConsumption?accountNo=${settings.accountNo}&meterNo=${settings.meterNo}&dateFrom=${formatDate(dateFrom)}&dateTo=${formatDate(today)}`
+      `${DESCO_BASE}/${settings.apiType}/customer/getCustomerDailyConsumption?accountNo=${settings.accountNo}&dateFrom=${formatDate(dateFrom)}&dateTo=${formatDate(today)}`
     );
     return Array.isArray(data) ? data : [];
   } catch (error) {
@@ -137,7 +135,7 @@ export async function fetchMonthlyConsumption(settings: DescoSettings): Promise<
     monthFrom.setMonth(monthFrom.getMonth() - 12);
     
     const data = await fetchDescoAPI(
-      `${DESCO_BASE}/${settings.apiType}/customer/getCustomerMonthlyConsumption?accountNo=${settings.accountNo}&meterNo=${settings.meterNo}&monthFrom=${formatMonth(monthFrom)}&monthTo=${formatMonth(today)}`
+      `${DESCO_BASE}/${settings.apiType}/customer/getCustomerDailyConsumption?accountNo=${settings.accountNo}&dateFrom=${formatDate(monthFrom)}&dateTo=${formatDate(today)}`
     );
     return Array.isArray(data) ? data : [];
   } catch (error) {
@@ -153,7 +151,7 @@ export async function fetchRechargeHistory(settings: DescoSettings): Promise<Des
     dateFrom.setMonth(dateFrom.getMonth() - 3);
     
     const data = await fetchDescoAPI(
-      `${DESCO_BASE}/${settings.apiType}/customer/getRechargeHistory?accountNo=${settings.accountNo}&meterNo=${settings.meterNo}&dateFrom=${formatDate(dateFrom)}&dateTo=${formatDate(today)}`
+      `${DESCO_BASE}/${settings.apiType}/customer/getRechargeHistory?accountNo=${settings.accountNo}&dateFrom=${formatDate(dateFrom)}&dateTo=${formatDate(today)}`
     );
     return Array.isArray(data) ? data : [];
   } catch (error) {

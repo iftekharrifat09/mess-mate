@@ -47,7 +47,6 @@ export default function ManageMess() {
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [loading, setLoading] = useState(true);
   const [descoAccountNo, setDescoAccountNo] = useState('');
-  const [descoMeterNo, setDescoMeterNo] = useState('');
   const [descoApiType, setDescoApiType] = useState<'tkdes' | 'unified'>('tkdes');
   const [isSavingDesco, setIsSavingDesco] = useState(false);
   const [descoSaved, setDescoSaved] = useState(false);
@@ -76,7 +75,6 @@ export default function ManageMess() {
         const desco = getDescoSettings(messData.id);
         if (desco) {
           setDescoAccountNo(desco.accountNo);
-          setDescoMeterNo(desco.meterNo);
           setDescoApiType(desco.apiType);
           setDescoSaved(true);
         }
@@ -414,22 +412,13 @@ export default function ManageMess() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Account Number</Label>
                 <Input
                   value={descoAccountNo}
                   onChange={(e) => setDescoAccountNo(e.target.value.replace(/\D/g, ''))}
                   placeholder="e.g., 26036446"
-                  maxLength={20}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Meter Number</Label>
-                <Input
-                  value={descoMeterNo}
-                  onChange={(e) => setDescoMeterNo(e.target.value.replace(/[^0-9]/g, ''))}
-                  placeholder="e.g., 661120190982"
                   maxLength={20}
                 />
               </div>
@@ -461,14 +450,13 @@ export default function ManageMess() {
             <div className="flex flex-col sm:flex-row gap-2">
               <Button
                 className="gradient-primary"
-                disabled={!descoAccountNo || !descoMeterNo || isSavingDesco}
+                disabled={!descoAccountNo || isSavingDesco}
                 onClick={async () => {
                   if (!mess || isSavingDesco) return;
                   setIsSavingDesco(true);
                   try {
                     const settings: DescoSettings = {
                       accountNo: descoAccountNo,
-                      meterNo: descoMeterNo,
                       apiType: descoApiType,
                     };
                     saveDescoSettings(mess.id, settings);
@@ -514,7 +502,6 @@ export default function ManageMess() {
                     if (!mess) return;
                     removeDescoSettings(mess.id);
                     setDescoAccountNo('');
-                    setDescoMeterNo('');
                     setDescoSaved(false);
                     toast({
                       title: 'DESCO Settings Removed',
