@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { useEffect, useState, useCallback, useMemo } from 'react';
+import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -9,12 +9,22 @@ import {
   Loader2, AlertCircle, Clock, BatteryCharging, Receipt
 } from 'lucide-react';
 import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
+} from 'recharts';
+import {
   getDescoSettings, fetchAllDescoData,
   DescoData, DescoSettings
 } from '@/lib/descoService';
 
 interface DescoElectricityCardProps {
   messId: string;
+}
+
+interface DailyDiff {
+  date: string;
+  label: string;
+  taka: number;
+  kwh: number;
 }
 
 export default function DescoElectricityCard({ messId }: DescoElectricityCardProps) {
@@ -43,13 +53,44 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // Calculate daily differences for current month only
+  const dailyDiffs = useMemo((): DailyDiff[] => {
+    if (!data?.dailyConsumption?.length) return [];
+
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+
+    // Sort by date ascending
+    const sorted = [...data.dailyConsumption].sort(
+      (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
+    );
+
+    const diffs: DailyDiff[] = [];
+    for (let i = 1; i < sorted.length; i++) {
+      const d = new Date(sorted[i].date);
+      if (d.getMonth() !== currentMonth || d.getFullYear() !== currentYear) continue;
+
+      const taka = (sorted[i].consumedTaka ?? 0) - (sorted[i - 1].consumedTaka ?? 0);
+      const kwh = (sorted[i].consumedUnit ?? 0) - (sorted[i - 1].consumedUnit ?? 0);
+
+      diffs.push({
+        date: sorted[i].date,
+        label: d.toLocaleDateString('en-BD', { day: 'numeric', month: 'short' }),
+        taka: Math.max(0, parseFloat(taka.toFixed(2))),
+        kwh: Math.max(0, parseFloat(kwh.toFixed(2))),
+      });
+    }
+    return diffs;
+  }, [data]);
+
   if (!settings) return null;
 
   if (loading) {
     return (
-      <Card className="border-yellow-500/20 bg-gradient-to-br from-yellow-500/5 to-amber-500/5">
+      <Card>
         <CardContent className="flex items-center justify-center py-12">
-          <Loader2 className="h-6 w-6 animate-spin text-yellow-500 mr-2" />
+          <Loader2 className="h-6 w-6 animate-spin text-primary mr-2" />
           <span className="text-muted-foreground">Loading electricity data...</span>
         </CardContent>
       </Card>
@@ -58,7 +99,7 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
 
   if (error || !data) {
     return (
-      <Card className="border-destructive/30 bg-gradient-to-br from-destructive/5 to-destructive/10">
+      <Card className="border-destructive/30">
         <CardContent className="flex flex-col items-center justify-center py-8 gap-3">
           <AlertCircle className="h-8 w-8 text-destructive" />
           <p className="text-muted-foreground text-center text-sm">
@@ -78,25 +119,24 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
   });
 
   return (
-    <Card className="overflow-hidden border-yellow-500/20 bg-gradient-to-br from-yellow-500/5 via-amber-500/5 to-orange-500/5">
-      {/* Glowing top accent */}
-      <div className="h-1 bg-gradient-to-r from-yellow-400 via-amber-500 to-orange-500" />
+    <Card className="overflow-hidden">
+      <div className="h-1 bg-gradient-to-r from-primary/60 via-accent to-primary/60" />
 
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <CardTitle className="flex items-center gap-2 text-lg">
-            <div className="p-1.5 rounded-lg bg-gradient-to-br from-yellow-400 to-amber-500 text-white">
+            <div className="p-1.5 rounded-lg bg-primary text-primary-foreground">
               <Zap className="h-4 w-4" />
             </div>
             DESCO Electricity
           </CardTitle>
           <div className="flex items-center gap-2">
-            <Badge variant="outline" className="text-[10px] border-yellow-500/30 text-yellow-600 dark:text-yellow-400">
+            <Badge variant="secondary" className="text-[10px]">
               <Clock className="h-2.5 w-2.5 mr-1" />
               {lastUpdated}
             </Badge>
             <Button
-              variant="ghost" size="icon" className="h-7 w-7 hover:bg-yellow-500/10"
+              variant="ghost" size="icon" className="h-7 w-7"
               onClick={() => loadData(true)} disabled={refreshing}
             >
               {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
@@ -106,43 +146,43 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Balance Overview Cards */}
+        {/* Balance Overview */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
           <motion.div
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-            className="bg-gradient-to-br from-emerald-500/15 to-emerald-600/5 border border-emerald-500/20 rounded-xl p-3.5 text-center shadow-sm"
+            className="bg-accent/10 border border-accent/20 rounded-xl p-3.5 text-center"
           >
-            <div className="inline-flex p-2 rounded-full bg-emerald-500/10 mb-1.5">
-              <Wallet className="h-4 w-4 text-emerald-500" />
+            <div className="inline-flex p-2 rounded-full bg-accent/10 mb-1.5">
+              <Wallet className="h-4 w-4 text-accent" />
             </div>
             <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">Balance</p>
-            <p className="text-xl font-bold text-emerald-600 dark:text-emerald-400 mt-0.5">
+            <p className="text-xl font-bold text-accent mt-0.5">
               ৳{data.balance?.balance?.toFixed(2) ?? '0.00'}
             </p>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-            className="bg-gradient-to-br from-rose-500/15 to-rose-600/5 border border-rose-500/20 rounded-xl p-3.5 text-center shadow-sm"
+            className="bg-destructive/10 border border-destructive/20 rounded-xl p-3.5 text-center"
           >
-            <div className="inline-flex p-2 rounded-full bg-rose-500/10 mb-1.5">
-              <TrendingDown className="h-4 w-4 text-rose-500" />
+            <div className="inline-flex p-2 rounded-full bg-destructive/10 mb-1.5">
+              <TrendingDown className="h-4 w-4 text-destructive" />
             </div>
             <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">This Month</p>
-            <p className="text-xl font-bold text-rose-600 dark:text-rose-400 mt-0.5">
+            <p className="text-xl font-bold text-destructive mt-0.5">
               ৳{data.balance?.currentMonthConsumption?.toFixed(2) ?? '0.00'}
             </p>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-            className="col-span-2 sm:col-span-1 bg-gradient-to-br from-violet-500/15 to-violet-600/5 border border-violet-500/20 rounded-xl p-3.5 text-center shadow-sm"
+            className="col-span-2 sm:col-span-1 bg-secondary border border-border rounded-xl p-3.5 text-center"
           >
-            <div className="inline-flex p-2 rounded-full bg-violet-500/10 mb-1.5">
-              <BatteryCharging className="h-4 w-4 text-violet-500" />
+            <div className="inline-flex p-2 rounded-full bg-muted mb-1.5">
+              <BatteryCharging className="h-4 w-4 text-muted-foreground" />
             </div>
             <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">Account</p>
-            <p className="text-base font-mono font-bold text-violet-600 dark:text-violet-400 mt-0.5">
+            <p className="text-base font-mono font-bold text-foreground mt-0.5">
               {data.balance?.accountNo}
             </p>
           </motion.div>
@@ -150,45 +190,74 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
 
         {/* Tabs */}
         <Tabs defaultValue="daily" className="w-full">
-          <TabsList className="grid w-full grid-cols-2 bg-yellow-500/10">
-            <TabsTrigger value="daily" className="text-xs sm:text-sm data-[state=active]:bg-yellow-500 data-[state=active]:text-white">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="daily" className="text-xs sm:text-sm">
               <Calendar className="h-3.5 w-3.5 mr-1.5" />
               Daily Usage
             </TabsTrigger>
-            <TabsTrigger value="recharge" className="text-xs sm:text-sm data-[state=active]:bg-yellow-500 data-[state=active]:text-white">
+            <TabsTrigger value="recharge" className="text-xs sm:text-sm">
               <Receipt className="h-3.5 w-3.5 mr-1.5" />
               Recharge
             </TabsTrigger>
           </TabsList>
 
           <TabsContent value="daily" className="mt-3">
-            {data.dailyConsumption.length === 0 ? (
-              <p className="text-center text-muted-foreground py-4 text-sm">No daily consumption data available</p>
+            {dailyDiffs.length === 0 ? (
+              <p className="text-center text-muted-foreground py-4 text-sm">No daily consumption data for this month</p>
             ) : (
-              <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin">
-                {data.dailyConsumption.map((item, i) => (
-                  <motion.div
-                    key={i}
-                    initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.03 }}
-                    className="flex items-center justify-between p-2.5 bg-muted/40 hover:bg-muted/70 rounded-lg text-sm transition-colors"
-                  >
-                    <div className="flex items-center gap-2">
-                      <div className="p-1 rounded bg-amber-500/10">
-                        <Calendar className="h-3 w-3 text-amber-500" />
+              <div className="space-y-4">
+                {/* Chart */}
+                <div className="h-56 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={dailyDiffs} margin={{ top: 5, right: 5, left: -15, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                      <XAxis
+                        dataKey="label"
+                        tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                        tickLine={false}
+                        axisLine={{ stroke: 'hsl(var(--border))' }}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                        tickLine={false}
+                        axisLine={{ stroke: 'hsl(var(--border))' }}
+                      />
+                      <Tooltip content={<CustomTooltip />} />
+                      <Bar dataKey="taka" radius={[4, 4, 0, 0]} maxBarSize={32}>
+                        {dailyDiffs.map((_, i) => (
+                          <Cell key={i} fill="hsl(var(--accent))" opacity={0.85} />
+                        ))}
+                      </Bar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+
+                {/* Data list */}
+                <div className="max-h-48 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
+                  {[...dailyDiffs].reverse().map((item, i) => (
+                    <motion.div
+                      key={i}
+                      initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: i * 0.02 }}
+                      className="flex items-center justify-between p-2.5 bg-muted/40 hover:bg-muted/70 rounded-lg text-sm transition-colors"
+                    >
+                      <div className="flex items-center gap-2">
+                        <div className="p-1 rounded bg-muted">
+                          <Calendar className="h-3 w-3 text-muted-foreground" />
+                        </div>
+                        <span className="text-xs sm:text-sm">{item.label}</span>
                       </div>
-                      <span className="text-xs sm:text-sm">{formatDateStr(item.date)}</span>
-                    </div>
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <Badge variant="outline" className="text-[10px] sm:text-xs border-cyan-500/30 text-cyan-600 dark:text-cyan-400">
-                        {item.consumedUnit?.toFixed(2) ?? '0'} kWh
-                      </Badge>
-                      <span className="font-bold text-xs sm:text-sm text-amber-600 dark:text-amber-400">
-                        ৳{item.consumedTaka?.toFixed(2) ?? '0'}
-                      </span>
-                    </div>
-                  </motion.div>
-                ))}
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <Badge variant="secondary" className="text-[10px] sm:text-xs">
+                          {item.kwh} kWh
+                        </Badge>
+                        <span className="font-bold text-xs sm:text-sm text-foreground">
+                          ৳{item.taka}
+                        </span>
+                      </div>
+                    </motion.div>
+                  ))}
+                </div>
               </div>
             )}
           </TabsContent>
@@ -206,8 +275,8 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
                     className="flex items-center justify-between p-2.5 bg-muted/40 hover:bg-muted/70 rounded-lg text-sm transition-colors"
                   >
                     <div className="flex items-center gap-2">
-                      <div className="p-1 rounded bg-emerald-500/10">
-                        <CreditCard className="h-3 w-3 text-emerald-500" />
+                      <div className="p-1 rounded bg-accent/10">
+                        <CreditCard className="h-3 w-3 text-accent" />
                       </div>
                       <span className="text-xs sm:text-sm">{formatDateStr(item.rechargeDate)}</span>
                     </div>
@@ -215,7 +284,7 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
                       <span className="text-[10px] sm:text-xs text-muted-foreground">
                         VAT ৳{item.VAT?.toFixed(0) ?? '0'}
                       </span>
-                      <span className="font-bold text-xs sm:text-sm text-emerald-600 dark:text-emerald-400">
+                      <span className="font-bold text-xs sm:text-sm text-accent">
                         +৳{item.totalAmount?.toFixed(2) ?? '0'}
                       </span>
                     </div>
@@ -227,6 +296,20 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
         </Tabs>
       </CardContent>
     </Card>
+  );
+}
+
+function CustomTooltip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  const item = payload[0]?.payload as DailyDiff | undefined;
+  if (!item) return null;
+
+  return (
+    <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs shadow-lg">
+      <p className="font-medium text-foreground mb-1">{label}</p>
+      <p className="text-muted-foreground">৳{item.taka} spent</p>
+      <p className="text-muted-foreground">{item.kwh} kWh used</p>
+    </div>
   );
 }
 
