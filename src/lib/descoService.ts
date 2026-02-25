@@ -17,28 +17,20 @@ export interface DescoBalance {
 
 export interface DescoDailyConsumption {
   date: string;
-  consumption: number;
-  amount: number;
-}
-
-export interface DescoMonthlyConsumption {
-  month: string;
-  consumption: number;
-  amount: number;
+  consumedUnit: number;
+  consumedTaka: number;
 }
 
 export interface DescoRechargeHistory {
-  date: string;
-  amount: number;
-  fees: number;
+  rechargeDate: string;
   totalAmount: number;
-  transactionId: string;
+  VAT: number;
+  energyAmount: number;
 }
 
 export interface DescoData {
   balance: DescoBalance | null;
   dailyConsumption: DescoDailyConsumption[];
-  monthlyConsumption: DescoMonthlyConsumption[];
   rechargeHistory: DescoRechargeHistory[];
   lastUpdated: string;
 }
@@ -74,13 +66,12 @@ export function getCachedDescoData(messId: string): DescoData | null {
     const stored = localStorage.getItem(DATA_CACHE_KEY + messId);
     if (!stored) return null;
     const data: DescoData = JSON.parse(stored);
-    // Check if cache is from today
     const lastUpdated = new Date(data.lastUpdated);
     const today = new Date();
     if (lastUpdated.toDateString() === today.toDateString()) {
       return data;
     }
-    return null; // Stale cache, need refresh
+    return null;
   } catch {
     return null;
   }
@@ -96,16 +87,15 @@ async function fetchDescoAPI(url: string): Promise<any> {
   const response = await fetch(url);
   if (!response.ok) throw new Error(`HTTP ${response.status}`);
   const json = await response.json();
-  if (json.code !== 200) throw new Error(json.desc || 'API Error');
+  if (json.code !== 200) throw new Error(json.message || 'API Error');
   return json.data;
 }
 
 export async function fetchDescoBalance(settings: DescoSettings): Promise<DescoBalance | null> {
   try {
-    const data = await fetchDescoAPI(
+    return await fetchDescoAPI(
       `${DESCO_BASE}/${settings.apiType}/customer/getBalance?accountNo=${settings.accountNo}`
     );
-    return data;
   } catch (error) {
     console.error('DESCO Balance fetch error:', error);
     return null;
@@ -117,29 +107,11 @@ export async function fetchDailyConsumption(settings: DescoSettings): Promise<De
     const today = new Date();
     const dateFrom = new Date(today);
     dateFrom.setDate(dateFrom.getDate() - 30);
-    
-    const data = await fetchDescoAPI(
+    return await fetchDescoAPI(
       `${DESCO_BASE}/${settings.apiType}/customer/getCustomerDailyConsumption?accountNo=${settings.accountNo}&dateFrom=${formatDate(dateFrom)}&dateTo=${formatDate(today)}`
-    );
-    return Array.isArray(data) ? data : [];
+    ) || [];
   } catch (error) {
     console.error('DESCO Daily consumption fetch error:', error);
-    return [];
-  }
-}
-
-export async function fetchMonthlyConsumption(settings: DescoSettings): Promise<DescoMonthlyConsumption[]> {
-  try {
-    const today = new Date();
-    const monthFrom = new Date(today);
-    monthFrom.setMonth(monthFrom.getMonth() - 12);
-    
-    const data = await fetchDescoAPI(
-      `${DESCO_BASE}/${settings.apiType}/customer/getCustomerDailyConsumption?accountNo=${settings.accountNo}&dateFrom=${formatDate(monthFrom)}&dateTo=${formatDate(today)}`
-    );
-    return Array.isArray(data) ? data : [];
-  } catch (error) {
-    console.error('DESCO Monthly consumption fetch error:', error);
     return [];
   }
 }
@@ -149,11 +121,9 @@ export async function fetchRechargeHistory(settings: DescoSettings): Promise<Des
     const today = new Date();
     const dateFrom = new Date(today);
     dateFrom.setMonth(dateFrom.getMonth() - 3);
-    
-    const data = await fetchDescoAPI(
+    return await fetchDescoAPI(
       `${DESCO_BASE}/${settings.apiType}/customer/getRechargeHistory?accountNo=${settings.accountNo}&dateFrom=${formatDate(dateFrom)}&dateTo=${formatDate(today)}`
-    );
-    return Array.isArray(data) ? data : [];
+    ) || [];
   } catch (error) {
     console.error('DESCO Recharge history fetch error:', error);
     return [];
@@ -161,28 +131,24 @@ export async function fetchRechargeHistory(settings: DescoSettings): Promise<Des
 }
 
 export async function fetchAllDescoData(messId: string, settings: DescoSettings, forceRefresh = false): Promise<DescoData | null> {
-  // Check cache first
   if (!forceRefresh) {
     const cached = getCachedDescoData(messId);
     if (cached) return cached;
   }
 
   try {
-    const [balance, daily, monthly, recharge] = await Promise.all([
+    const [balance, daily, recharge] = await Promise.all([
       fetchDescoBalance(settings),
       fetchDailyConsumption(settings),
-      fetchMonthlyConsumption(settings),
       fetchRechargeHistory(settings),
     ]);
 
-    // If balance fails, the account is likely invalid
     if (!balance) return null;
 
     const data: DescoData = {
       balance,
-      dailyConsumption: daily,
-      monthlyConsumption: monthly,
-      rechargeHistory: recharge,
+      dailyConsumption: Array.isArray(daily) ? daily : [],
+      rechargeHistory: Array.isArray(recharge) ? recharge : [],
       lastUpdated: new Date().toISOString(),
     };
 
@@ -198,8 +164,4 @@ export async function fetchAllDescoData(messId: string, settings: DescoSettings,
 
 function formatDate(date: Date): string {
   return date.toISOString().split('T')[0];
-}
-
-function formatMonth(date: Date): string {
-  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`;
 }
