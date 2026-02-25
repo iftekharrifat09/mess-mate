@@ -61,7 +61,6 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
     const currentMonth = now.getMonth();
     const currentYear = now.getFullYear();
 
-    // Sort by date ascending
     const sorted = [...data.dailyConsumption].sort(
       (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
     );
@@ -83,6 +82,15 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
     }
     return diffs;
   }, [data]);
+
+  // Determine color thresholds based on average usage
+  const getBarColor = useCallback((taka: number) => {
+    if (dailyDiffs.length === 0) return '#22c55e';
+    const avg = dailyDiffs.reduce((sum, d) => sum + d.taka, 0) / dailyDiffs.length;
+    if (taka <= avg * 0.7) return '#22c55e'; // green - low
+    if (taka <= avg * 1.3) return '#f97316'; // orange - average
+    return '#ef4444'; // red - excessive
+  }, [dailyDiffs]);
 
   if (!settings) return null;
 
@@ -120,9 +128,7 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
 
   return (
     <Card className="overflow-hidden">
-      <div className="h-1 bg-gradient-to-r from-primary/60 via-accent to-primary/60" />
-
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-3 px-4 sm:px-6">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <CardTitle className="flex items-center gap-2 text-lg">
             <div className="p-1.5 rounded-lg bg-primary text-primary-foreground">
@@ -145,38 +151,38 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 px-4 sm:px-6">
         {/* Balance Overview */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2 sm:gap-3">
           <motion.div
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-            className="bg-accent/10 border border-accent/20 rounded-xl p-3.5 text-center"
+            className="bg-accent/10 border border-accent/20 rounded-xl p-2.5 sm:p-3.5 text-center"
           >
             <div className="inline-flex p-2 rounded-full bg-accent/10 mb-1.5">
               <Wallet className="h-4 w-4 text-accent" />
             </div>
             <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">Balance</p>
-            <p className="text-xl font-bold text-accent mt-0.5">
+            <p className="text-base sm:text-xl font-bold text-accent mt-0.5">
               ৳{data.balance?.balance?.toFixed(2) ?? '0.00'}
             </p>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
-            className="bg-destructive/10 border border-destructive/20 rounded-xl p-3.5 text-center"
+            className="bg-destructive/10 border border-destructive/20 rounded-xl p-2.5 sm:p-3.5 text-center"
           >
             <div className="inline-flex p-2 rounded-full bg-destructive/10 mb-1.5">
               <TrendingDown className="h-4 w-4 text-destructive" />
             </div>
             <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">This Month</p>
-            <p className="text-xl font-bold text-destructive mt-0.5">
+            <p className="text-base sm:text-xl font-bold text-destructive mt-0.5">
               ৳{data.balance?.currentMonthConsumption?.toFixed(2) ?? '0.00'}
             </p>
           </motion.div>
 
           <motion.div
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}
-            className="col-span-2 sm:col-span-1 bg-secondary border border-border rounded-xl p-3.5 text-center"
+            className="bg-secondary border border-border rounded-xl p-2.5 sm:p-3.5 text-center"
           >
             <div className="inline-flex p-2 rounded-full bg-muted mb-1.5">
               <BatteryCharging className="h-4 w-4 text-muted-foreground" />
@@ -207,25 +213,35 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
             ) : (
               <div className="space-y-4">
                 {/* Chart */}
-                <div className="h-56 w-full">
+                {/* Legend */}
+                <div className="flex items-center justify-center gap-3 sm:gap-4 text-[10px] sm:text-xs text-muted-foreground">
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-[#22c55e]" /> Low</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-[#f97316]" /> Average</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-[#ef4444]" /> High</span>
+                </div>
+
+                {/* Chart */}
+                <div className="h-48 sm:h-56 w-full -ml-2 sm:ml-0">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={dailyDiffs} margin={{ top: 5, right: 5, left: -15, bottom: 5 }}>
+                    <BarChart data={dailyDiffs} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis
                         dataKey="label"
-                        tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                        tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }}
                         tickLine={false}
                         axisLine={{ stroke: 'hsl(var(--border))' }}
+                        interval="preserveStartEnd"
                       />
                       <YAxis
-                        tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                        tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }}
                         tickLine={false}
                         axisLine={{ stroke: 'hsl(var(--border))' }}
+                        width={35}
                       />
                       <Tooltip content={<CustomTooltip />} />
-                      <Bar dataKey="taka" radius={[4, 4, 0, 0]} maxBarSize={32}>
-                        {dailyDiffs.map((_, i) => (
-                          <Cell key={i} fill="hsl(var(--accent))" opacity={0.85} />
+                      <Bar dataKey="taka" radius={[4, 4, 0, 0]} maxBarSize={28}>
+                        {dailyDiffs.map((entry, i) => (
+                          <Cell key={i} fill={getBarColor(entry.taka)} />
                         ))}
                       </Bar>
                     </BarChart>
