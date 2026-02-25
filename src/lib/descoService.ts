@@ -105,8 +105,8 @@ export async function fetchDescoBalance(settings: DescoSettings): Promise<DescoB
 export async function fetchDailyConsumption(settings: DescoSettings): Promise<DescoDailyConsumption[]> {
   try {
     const today = new Date();
-    const dateFrom = new Date(today);
-    dateFrom.setDate(dateFrom.getDate() - 30);
+    // Fetch from last day of previous month so we can calculate day 1 diff
+    const dateFrom = new Date(today.getFullYear(), today.getMonth(), 0); // last day of prev month
     return await fetchDescoAPI(
       `${DESCO_BASE}/${settings.apiType}/customer/getCustomerDailyConsumption?accountNo=${settings.accountNo}&dateFrom=${formatDate(dateFrom)}&dateTo=${formatDate(today)}`
     ) || [];
