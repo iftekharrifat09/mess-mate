@@ -3,7 +3,6 @@ import { MonthSummary } from '@/types';
 import { formatCurrency, formatNumber } from '@/lib/calculations';
 import { 
   Wallet, 
-  TrendingUp, 
   Utensils, 
   Receipt, 
   DollarSign,
@@ -12,6 +11,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import MealRateAnalysisDialog from './MealRateAnalysisDialog';
 
 interface MonthSummaryCardProps {
   summary: MonthSummary;
@@ -69,7 +69,10 @@ export default function MonthSummaryCard({ summary }: MonthSummaryCardProps) {
         <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Meal Rate</span>
-            <span className="text-lg font-bold text-primary">{formatCurrency(summary.mealRate)}/meal</span>
+            <div className="flex items-center gap-1.5">
+              <span className="text-lg font-bold text-primary">{formatCurrency(summary.mealRate)}/meal</span>
+              <MealRateAnalysisDialog monthId={summary.monthId} />
+            </div>
           </div>
         </div>
 
