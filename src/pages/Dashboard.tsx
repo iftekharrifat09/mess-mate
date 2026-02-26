@@ -153,7 +153,7 @@ export default function Dashboard() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.1 }}
           >
-            {monthSummary && <MonthSummaryCard summary={monthSummary} />}
+            {monthSummary && <MonthSummaryCard summary={monthSummary} messId={user?.messId || ''} />}
           </motion.div>
 
           {/* Right Column - Personal Info */}

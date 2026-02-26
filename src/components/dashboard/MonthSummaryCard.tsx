@@ -15,9 +15,10 @@ import MealRateAnalysisDialog from './MealRateAnalysisDialog';
 
 interface MonthSummaryCardProps {
   summary: MonthSummary;
+  messId: string;
 }
 
-export default function MonthSummaryCard({ summary }: MonthSummaryCardProps) {
+export default function MonthSummaryCard({ summary, messId }: MonthSummaryCardProps) {
   return (
     <Card className="shadow-card">
       <CardHeader className="pb-4">
@@ -71,7 +72,7 @@ export default function MonthSummaryCard({ summary }: MonthSummaryCardProps) {
             <span className="text-sm text-muted-foreground">Meal Rate</span>
             <div className="flex items-center gap-1.5">
               <span className="text-lg font-bold text-primary">{formatCurrency(summary.mealRate)}/meal</span>
-              <MealRateAnalysisDialog monthId={summary.monthId} />
+              <MealRateAnalysisDialog monthId={summary.monthId} messId={messId} />
             </div>
           </div>
         </div>
