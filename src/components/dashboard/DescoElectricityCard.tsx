@@ -248,32 +248,6 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
                   </ResponsiveContainer>
                 </div>
 
-                {/* Data list */}
-                <div className="max-h-48 overflow-y-auto space-y-1 pr-1 scrollbar-thin">
-                  {[...dailyDiffs].reverse().map((item, i) => (
-                    <motion.div
-                      key={i}
-                      initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: i * 0.02 }}
-                      className="flex items-center justify-between p-2.5 bg-muted/40 hover:bg-muted/70 rounded-lg text-sm transition-colors"
-                    >
-                      <div className="flex items-center gap-2">
-                        <div className="p-1 rounded bg-muted">
-                          <Calendar className="h-3 w-3 text-muted-foreground" />
-                        </div>
-                        <span className="text-xs sm:text-sm">{item.label}</span>
-                      </div>
-                      <div className="flex items-center gap-2 sm:gap-3">
-                        <Badge variant="secondary" className="text-[10px] sm:text-xs">
-                          {item.kwh} kWh
-                        </Badge>
-                        <span className="font-bold text-xs sm:text-sm text-foreground">
-                          ৳{item.taka}
-                        </span>
-                      </div>
-                    </motion.div>
-                  ))}
-                </div>
               </div>
             )}
           </TabsContent>
