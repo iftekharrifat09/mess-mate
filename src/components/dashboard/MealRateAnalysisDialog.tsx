@@ -163,12 +163,11 @@ export default function MealRateAnalysisDialog({ monthId, messId }: MealRateAnal
       <DialogTrigger asChild>
         <Button
           variant="outline"
-          size="sm"
-          className="h-7 px-2 gap-1 text-xs border-accent/30 bg-accent/10 text-accent hover:bg-accent/20 hover:text-accent"
+          className="gap-1.5 border-[goldenrod]/40 bg-[goldenrod]/10 text-[goldenrod] hover:bg-[goldenrod]/20 hover:text-[goldenrod]"
           title="Meal Rate Analysis"
         >
-          <TrendingUp className="h-3.5 w-3.5" />
-          <span className="hidden sm:inline">Analysis</span>
+          <TrendingUp className="h-4 w-4" />
+          Analysis
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-[95vw] sm:max-w-2xl max-h-[90vh] overflow-y-auto">
