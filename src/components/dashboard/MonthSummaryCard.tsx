@@ -70,10 +70,7 @@ export default function MonthSummaryCard({ summary, messId }: MonthSummaryCardPr
         <div className="p-3 rounded-lg bg-primary/5 border border-primary/10">
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Meal Rate</span>
-            <div className="flex items-center gap-1.5">
-              <span className="text-lg font-bold text-primary">{formatCurrency(summary.mealRate)}/meal</span>
-              <MealRateAnalysisDialog monthId={summary.monthId} messId={messId} />
-            </div>
+            <span className="text-lg font-bold text-primary">{formatCurrency(summary.mealRate)}/meal</span>
           </div>
         </div>
 
@@ -88,11 +85,14 @@ export default function MonthSummaryCard({ summary, messId }: MonthSummaryCardPr
           </div>
         </div>
 
-        <Link to="/month-details">
-          <Button variant="outline" className="w-full mt-2">
-            View Full Details
-          </Button>
-        </Link>
+        <div className="flex gap-2 mt-2">
+          <Link to="/month-details" className="flex-1">
+            <Button variant="outline" className="w-full">
+              View Full Details
+            </Button>
+          </Link>
+          <MealRateAnalysisDialog monthId={summary.monthId} messId={messId} />
+        </div>
       </CardContent>
     </Card>
   );
