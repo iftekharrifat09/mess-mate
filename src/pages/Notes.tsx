@@ -78,7 +78,7 @@ export default function Notes() {
           title: 'Note Updated',
           message: `"${formData.title}" has been updated`,
         });
-        toast({ title: 'Note updated' });
+        toast({ title: 'Note updated', variant: 'success' });
       } else {
         await dataService.createNote({ messId: user.messId, title: formData.title, description: formData.description });
         await dataService.notifyMessMembers(user.messId, user.id, {
@@ -86,7 +86,7 @@ export default function Notes() {
           title: 'New Note Added',
           message: formData.title,
         });
-        toast({ title: 'Note created' });
+        toast({ title: 'Note created', variant: 'success' });
       }
 
       setIsAddDialogOpen(false);
@@ -121,7 +121,7 @@ export default function Notes() {
         title: 'Note Deleted',
         message: `"${title}" has been removed`,
       });
-      toast({ title: 'Note deleted' });
+      toast({ title: 'Note deleted', variant: 'success' });
       loadNotes();
     } catch (error) {
       toast({

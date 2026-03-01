@@ -152,7 +152,7 @@ export default function BazarDates() {
           title: 'Bazar Date Updated',
           message: `${member?.fullName}'s bazar date changed to ${format(new Date(formData.dates[0]), 'MMM d')}`,
         });
-        toast({ title: 'Bazar date updated' });
+        toast({ title: 'Bazar date updated', variant: 'success' });
       } else {
         // Create multiple bazar dates
         if (formData.dates.length === 0) {
@@ -169,7 +169,7 @@ export default function BazarDates() {
           title: 'Bazar Dates Set',
           message: `${member?.fullName} is assigned for bazar on ${formData.dates.length} date(s)`,
         });
-        toast({ title: `${formData.dates.length} bazar date(s) added` });
+        toast({ title: `${formData.dates.length} bazar date(s) added`, variant: 'success' });
       }
 
       setIsAddDialogOpen(false);
@@ -200,7 +200,7 @@ export default function BazarDates() {
     setDeletingId(bazar.id);
     try {
       await dataService.deleteBazarDate(bazar.id);
-      toast({ title: 'Bazar date deleted' });
+      toast({ title: 'Bazar date deleted', variant: 'success' });
       loadData();
     } catch (error) {
       toast({

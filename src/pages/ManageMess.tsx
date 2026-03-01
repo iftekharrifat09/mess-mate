@@ -104,6 +104,7 @@ export default function ManageMess() {
       toast({
         title: 'Copied!',
         description: 'Mess code copied to clipboard.',
+        variant: 'success',
       });
       setTimeout(() => setCopied(false), 2000);
     }
@@ -122,6 +123,7 @@ export default function ManageMess() {
       toast({
         title: 'Mess Updated',
         description: 'Your mess name has been updated.',
+        variant: 'success',
       });
     } catch (error) {
       toast({
@@ -178,6 +180,7 @@ export default function ManageMess() {
       toast({
         title: 'Mess Code Updated',
         description: 'Your mess code has been updated. Share the new code with your members.',
+        variant: 'success',
       });
     } catch (error) {
       toast({
@@ -194,7 +197,7 @@ export default function ManageMess() {
     try {
       await dataService.deleteMess(mess.id);
       logout();
-      toast({ title: 'Mess deleted', description: 'All data has been removed.' });
+      toast({ title: 'Mess deleted', description: 'All data has been removed.', variant: 'success' });
       navigate('/auth');
     } catch (error) {
       toast({
@@ -474,6 +477,7 @@ export default function ManageMess() {
                       toast({
                         title: 'DESCO Settings Saved',
                         description: 'Electricity data will now show on the dashboard.',
+                        variant: 'success',
                       });
                     } else {
                       toast({

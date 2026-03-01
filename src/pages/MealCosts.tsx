@@ -160,7 +160,7 @@ export default function MealCosts() {
           message: `${member?.fullName}'s meal cost of ${formatCurrency(amount)} was updated`,
         });
         
-        toast({ title: 'Meal cost updated' });
+        toast({ title: 'Meal cost updated', variant: 'success' });
       } else {
         // Create meal cost
         await dataService.createMealCost({
@@ -197,6 +197,7 @@ export default function MealCosts() {
         toast({ 
           title: addAsDeposit ? 'Meal cost & deposit added' : 'Meal cost added',
           description: addAsDeposit ? `Added ${formatCurrency(amount)} as both meal cost and deposit for ${member?.fullName}` : undefined,
+          variant: 'success',
         });
       }
 
@@ -233,7 +234,7 @@ export default function MealCosts() {
     try {
       await dataService.deleteMealCost(costId);
       loadData();
-      toast({ title: 'Meal cost deleted' });
+      toast({ title: 'Meal cost deleted', variant: 'success' });
     } catch (error) {
       toast({
         title: 'Error',

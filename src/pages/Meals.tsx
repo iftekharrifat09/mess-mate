@@ -206,6 +206,7 @@ export default function Meals() {
       toast({ 
         title: isEditing ? 'Meals updated' : 'Meals added',
         description: `${mealsCreated + mealsUpdated} meal records saved`,
+        variant: 'success',
       });
 
       setIsAddDialogOpen(false);
@@ -228,7 +229,7 @@ export default function Meals() {
     if (!user) return;
     try {
       saveDefaultMeals(user.messId, defaultMeals);
-      toast({ title: 'Default meals saved' });
+      toast({ title: 'Default meals saved', variant: 'success' });
       setIsDefaultsDialogOpen(false);
     } finally {
       setIsSavingDefaults(false);
@@ -247,7 +248,7 @@ export default function Meals() {
     try {
       await dataService.deleteMeal(mealId);
       loadData();
-      toast({ title: 'Meal deleted' });
+      toast({ title: 'Meal deleted', variant: 'success' });
     } catch (error) {
       toast({
         title: 'Error',

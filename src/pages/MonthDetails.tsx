@@ -257,6 +257,7 @@ export default function MonthDetails() {
       toast({
         title: 'New month started',
         description: `"${newMonthName.trim()}" is now active.`,
+        variant: 'success',
       });
 
       setShowMonthNameDialog(false);
@@ -284,6 +285,7 @@ export default function MonthDetails() {
       toast({
         title: 'Month deleted',
         description: `"${monthName}" and all its data have been removed.`,
+        variant: 'success',
       });
       loadPreviousMonths();
     } catch (error) {
@@ -323,6 +325,7 @@ export default function MonthDetails() {
       toast({
         title: 'PDF Exported',
         description: 'Your report has been downloaded.',
+        variant: 'success',
       });
     } catch (error) {
       toast({
@@ -361,6 +364,7 @@ export default function MonthDetails() {
       toast({
         title: 'Excel Exported',
         description: 'Your report has been downloaded.',
+        variant: 'success',
       });
     } catch (error) {
       toast({

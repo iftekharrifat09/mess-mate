@@ -167,6 +167,7 @@ export default function JoinMess() {
       toast({
         title: 'Request Sent!',
         description: `Your request to join "${mess.name}" has been sent. Please wait for manager approval.`,
+        variant: 'success',
       });
     } catch (error) {
       console.error('Error sending join request:', error);

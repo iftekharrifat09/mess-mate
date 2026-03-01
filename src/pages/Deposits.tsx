@@ -131,7 +131,7 @@ export default function Deposits() {
           date: formData.date,
           note: formData.note || undefined,
         });
-        toast({ title: 'Deposit updated' });
+        toast({ title: 'Deposit updated', variant: 'success' });
       } else {
         await dataService.createDeposit({
           monthId: activeMonth.id,
@@ -140,7 +140,7 @@ export default function Deposits() {
           date: formData.date,
           note: formData.note || undefined,
         });
-        toast({ title: 'Deposit added' });
+        toast({ title: 'Deposit added', variant: 'success' });
       }
 
       setIsAddDialogOpen(false);
@@ -174,7 +174,7 @@ export default function Deposits() {
     try {
       await dataService.deleteDeposit(depositId);
       loadData();
-      toast({ title: 'Deposit deleted' });
+      toast({ title: 'Deposit deleted', variant: 'success' });
     } finally {
       setDeletingId(null);
     }
