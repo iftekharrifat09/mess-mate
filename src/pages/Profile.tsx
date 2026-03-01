@@ -46,7 +46,7 @@ export default function Profile() {
     if (!user) return;
     setNotificationSoundEnabledState(checked);
     setNotificationSoundEnabled(user.id, checked);
-    toast({ title: checked ? 'Notification sound enabled' : 'Notification sound disabled' });
+    toast({ title: checked ? 'Notification sound enabled' : 'Notification sound disabled', variant: 'success' });
   };
   
   const [isEditingName, setIsEditingName] = useState(false);
@@ -93,7 +93,7 @@ export default function Profile() {
       if (result.success) {
         await refreshUser();
         setIsEditingName(false);
-        toast({ title: 'Name updated successfully' });
+        toast({ title: 'Name updated successfully', variant: 'success' });
         return;
       }
 
@@ -102,7 +102,7 @@ export default function Profile() {
         updateUser(user.id, { fullName: fullName.trim() });
         await refreshUser();
         setIsEditingName(false);
-        toast({ title: 'Name updated successfully' });
+        toast({ title: 'Name updated successfully', variant: 'success' });
         return;
       }
 
@@ -132,7 +132,7 @@ export default function Profile() {
       if (result.success) {
         await refreshUser();
         setIsEditingPhone(false);
-        toast({ title: 'Phone updated successfully' });
+        toast({ title: 'Phone updated successfully', variant: 'success' });
         return;
       }
 
@@ -141,7 +141,7 @@ export default function Profile() {
         updateUser(user.id, { phone: nextPhone });
         await refreshUser();
         setIsEditingPhone(false);
-        toast({ title: 'Phone updated successfully' });
+        toast({ title: 'Phone updated successfully', variant: 'success' });
         return;
       }
 
@@ -217,7 +217,7 @@ export default function Profile() {
       setCurrentPassword('');
       setOtp('');
 
-      toast({ title: 'Email updated and verified' });
+      toast({ title: 'Email updated and verified', variant: 'success' });
     } finally {
       setIsVerifyingOTP(false);
     }
@@ -298,7 +298,7 @@ export default function Profile() {
       setIsVerifyingEmail(false);
       setOtp('');
 
-      toast({ title: 'Email verified successfully' });
+      toast({ title: 'Email verified successfully', variant: 'success' });
     } finally {
       setIsVerifyingCurrentEmailOTP(false);
     }
@@ -339,7 +339,7 @@ export default function Profile() {
       setNewPassword('');
       setConfirmNewPassword('');
 
-      toast({ title: 'Password changed successfully' });
+      toast({ title: 'Password changed successfully', variant: 'success' });
     } finally {
       setIsChangingPasswordLoading(false);
     }

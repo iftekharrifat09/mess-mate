@@ -78,7 +78,7 @@ export default function Notices() {
           title: 'Notice Updated',
           message: `"${formData.title}" has been updated`,
         });
-        toast({ title: 'Notice updated' });
+        toast({ title: 'Notice updated', variant: 'success' });
       } else {
         await dataService.createNotice({ messId: user.messId, title: formData.title, content: formData.content });
         await dataService.notifyMessMembers(user.messId, user.id, {
@@ -86,7 +86,7 @@ export default function Notices() {
           title: 'New Notice',
           message: formData.title,
         });
-        toast({ title: 'Notice created' });
+        toast({ title: 'Notice created', variant: 'success' });
       }
 
       setIsAddDialogOpen(false);
@@ -121,7 +121,7 @@ export default function Notices() {
         title: 'Notice Removed',
         message: `"${notice.title}" has been removed`,
       });
-      toast({ title: 'Notice deleted' });
+      toast({ title: 'Notice deleted', variant: 'success' });
       loadNotices();
     } catch (error) {
       toast({

@@ -65,7 +65,7 @@ export default function Members() {
     try {
       await dataService.updateUser(memberId, { isApproved: true });
       loadMembers();
-      toast({ title: 'Member approved', description: 'The member can now access the mess.' });
+      toast({ title: 'Member approved', description: 'The member can now access the mess.', variant: 'success' });
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to approve member', variant: 'destructive' });
     } finally {
@@ -79,7 +79,7 @@ export default function Members() {
     try {
       await dataService.deleteUser(memberId);
       loadMembers();
-      toast({ title: 'Request rejected', description: 'The join request has been rejected.' });
+      toast({ title: 'Request rejected', description: 'The join request has been rejected.', variant: 'success' });
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to reject request', variant: 'destructive' });
     } finally {
@@ -102,7 +102,7 @@ export default function Members() {
         });
       }
       loadMembers();
-      toast({ title: 'Member removed', description: 'The member has been removed from the mess.' });
+      toast({ title: 'Member removed', description: 'The member has been removed from the mess.', variant: 'success' });
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to remove member', variant: 'destructive' });
     } finally {
@@ -126,7 +126,7 @@ export default function Members() {
       }
       refreshUser();
       loadMembers();
-      toast({ title: 'Manager changed', description: 'The member is now the manager of this mess.' });
+      toast({ title: 'Manager changed', description: 'The member is now the manager of this mess.', variant: 'success' });
     } catch (error) {
       toast({ title: 'Error', description: 'Failed to change manager', variant: 'destructive' });
     } finally {

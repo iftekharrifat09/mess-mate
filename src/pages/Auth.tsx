@@ -91,6 +91,7 @@ export default function Auth() {
           toast({
             title: 'Welcome back!',
             description: 'You have successfully logged in.',
+            variant: 'success',
           });
           navigate('/dashboard');
         }
@@ -98,6 +99,7 @@ export default function Auth() {
         toast({
           title: 'Welcome back!',
           description: 'You have successfully logged in.',
+          variant: 'success',
         });
         navigate('/dashboard');
       }
@@ -151,6 +153,7 @@ export default function Auth() {
         toast({
           title: 'Account created!',
           description: 'Your mess has been created. Welcome!',
+          variant: 'success',
         });
         navigate('/dashboard');
       } else {
@@ -174,6 +177,7 @@ export default function Auth() {
         toast({
           title: 'Account created!',
           description: 'Now find and join a mess.',
+          variant: 'success',
         });
         navigate('/join-mess', { state: { userId: result.userId, email } });
       } else {
@@ -321,6 +325,7 @@ export default function Auth() {
       toast({
         title: 'Password Reset Successful',
         description: 'You can now login with your new password.',
+        variant: 'success',
       });
 
       resetForgotPasswordForm();

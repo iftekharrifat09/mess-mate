@@ -152,7 +152,7 @@ export default function OtherCosts() {
           description: formData.description,
           isShared: formData.isShared,
         });
-        toast({ title: 'Cost updated' });
+        toast({ title: 'Cost updated', variant: 'success' });
       } else {
         await dataService.createOtherCost({
           monthId: activeMonth.id,
@@ -162,7 +162,7 @@ export default function OtherCosts() {
           description: formData.description,
           isShared: formData.isShared,
         });
-        toast({ title: 'Cost added' });
+        toast({ title: 'Cost added', variant: 'success' });
       }
 
       setIsAddDialogOpen(false);
@@ -198,7 +198,7 @@ export default function OtherCosts() {
     try {
       await dataService.deleteOtherCost(costId);
       loadData();
-      toast({ title: 'Cost deleted' });
+      toast({ title: 'Cost deleted', variant: 'success' });
     } catch (error) {
       toast({
         title: 'Error',

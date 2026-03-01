@@ -104,6 +104,7 @@ export default function JoinRequests() {
       toast({
         title: 'Member approved',
         description: `${request.user.fullName} can now access the mess.`,
+        variant: 'success',
       });
     } catch (error) {
       console.error('Error approving request:', error);
@@ -123,6 +124,7 @@ export default function JoinRequests() {
       toast({
         title: 'Request rejected',
         description: 'The join request has been rejected.',
+        variant: 'success',
       });
     } catch (error) {
       console.error('Error rejecting request:', error);

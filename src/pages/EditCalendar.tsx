@@ -212,7 +212,7 @@ export default function EditCalendar() {
       
       await loadData();
       setIsEditing(false);
-      toast({ title: 'Changes saved successfully' });
+      toast({ title: 'Changes saved successfully', variant: 'success' });
     } catch (error) {
       console.error('Error saving changes:', error);
       toast({ title: 'Error saving changes', variant: 'destructive' });
@@ -252,7 +252,7 @@ export default function EditCalendar() {
     
     setEditableData(editable);
     setIsEditing(false);
-    toast({ title: 'Changes discarded' });
+    toast({ title: 'Changes discarded', variant: 'info' });
   };
 
   return (

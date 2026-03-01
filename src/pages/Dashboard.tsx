@@ -177,14 +177,16 @@ export default function Dashboard() {
           </motion.div>
         )}
 
-        {/* Bazar Dates */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-        >
-          <BazarDateCard bazarDates={bazarDates} members={members} />
-        </motion.div>
+        {/* Bazar Dates - only show when there are dates */}
+        {bazarDates.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.4 }}
+          >
+            <BazarDateCard bazarDates={bazarDates} members={members} />
+          </motion.div>
+        )}
 
         {/* All Members Section */}
         <motion.div 
