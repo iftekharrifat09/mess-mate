@@ -142,3 +142,12 @@ export interface MonthSummary {
   totalIndividualCost: number;
   totalSharedCost: number;
 }
+
+export interface MessActivityLog {
+  id: string;
+  messId: string;
+  type: 'manager_change' | 'member_removed' | 'member_joined' | 'month_created' | 'month_deleted';
+  description: string;
+  metadata?: Record<string, string>;
+  createdAt: string;
+}

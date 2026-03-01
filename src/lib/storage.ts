@@ -1,4 +1,4 @@
-import { User, Mess, Month, Meal, Deposit, MealCost, OtherCost, JoinRequest, Notice, BazarDate, Notification, Note } from '@/types';
+import { User, Mess, Month, Meal, Deposit, MealCost, OtherCost, JoinRequest, Notice, BazarDate, Notification, Note, MessActivityLog } from '@/types';
 
 const STORAGE_KEYS = {
   USERS: 'mess_manager_users',
@@ -14,6 +14,7 @@ const STORAGE_KEYS = {
   BAZAR_DATES: 'mess_manager_bazar_dates',
   NOTIFICATIONS: 'mess_manager_notifications',
   NOTES: 'mess_manager_notes',
+  ACTIVITY_LOGS: 'mess_manager_activity_logs',
 };
 
 function getFromStorage<T>(key: string, defaultValue: T[] = []): T[] {
@@ -768,6 +769,51 @@ export function deleteNote(id: string): boolean {
   return false;
 }
 
+// ============ ACTIVITY LOGS ============
+export function getActivityLogs(): MessActivityLog[] {
+  return getFromStorage<MessActivityLog>(STORAGE_KEYS.ACTIVITY_LOGS);
+}
+
+export function saveActivityLogs(logs: MessActivityLog[]): void {
+  saveToStorage(STORAGE_KEYS.ACTIVITY_LOGS, logs);
+}
+
+export function getActivityLogsByMessId(messId: string): MessActivityLog[] {
+  return getActivityLogs()
+    .filter(l => l.messId === messId)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+export function createActivityLog(logData: Omit<MessActivityLog, 'id' | 'createdAt'>): MessActivityLog {
+  const logs = getActivityLogs();
+  const newLog: MessActivityLog = {
+    ...logData,
+    id: generateId(),
+    createdAt: new Date().toISOString(),
+  };
+  logs.push(newLog);
+  saveActivityLogs(logs);
+  return newLog;
+}
+
+// ============ DELETE MONTH ============
+export function deleteMonth(monthId: string): void {
+  const months = getMonths().filter(m => m.id !== monthId);
+  saveMonths(months);
+  
+  const meals = getMeals().filter(m => m.monthId !== monthId);
+  saveMeals(meals);
+  
+  const deposits = getDeposits().filter(d => d.monthId !== monthId);
+  saveDeposits(deposits);
+  
+  const mealCosts = getMealCosts().filter(c => c.monthId !== monthId);
+  saveMealCosts(mealCosts);
+  
+  const otherCosts = getOtherCosts().filter(c => c.monthId !== monthId);
+  saveOtherCosts(otherCosts);
+}
+
 // ============ DELETE MESS ============
 export function deleteMess(messId: string): void {
   // Delete all related data
@@ -818,4 +864,7 @@ export function deleteMess(messId: string): void {
   
   const notes = getNotes().filter(n => n.messId !== messId);
   saveNotes(notes);
+  
+  const activityLogs = getActivityLogs().filter(l => l.messId !== messId);
+  saveActivityLogs(activityLogs);
 }

@@ -28,7 +28,8 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import * as dataService from '@/lib/dataService';
 import { Mess } from '@/types';
-import { Building, Copy, Check, Edit2, Settings, RefreshCw, Trash2, AlertTriangle, Zap, Loader2 } from 'lucide-react';
+import { Building, Copy, Check, Edit2, Settings, RefreshCw, Trash2, AlertTriangle, Zap, Loader2, History, Crown, UserMinus, CalendarPlus, CalendarX } from 'lucide-react';
+import { MessActivityLog } from '@/types';
 import { Navigate } from 'react-router-dom';
 import { getDescoSettings, saveDescoSettings, removeDescoSettings, fetchAllDescoData, DescoSettings } from '@/lib/descoService';
 
@@ -50,6 +51,7 @@ export default function ManageMess() {
   const [descoApiType, setDescoApiType] = useState<'tkdes' | 'unified'>('tkdes');
   const [isSavingDesco, setIsSavingDesco] = useState(false);
   const [descoSaved, setDescoSaved] = useState(false);
+  const [activityLogs, setActivityLogs] = useState<MessActivityLog[]>([]);
 
   const isManager = user?.role === 'manager';
 
@@ -78,6 +80,11 @@ export default function ManageMess() {
           setDescoApiType(desco.apiType);
           setDescoSaved(true);
         }
+        // Load activity logs (last 1 year)
+        const logs = await dataService.getActivityLogsByMessId(messData.id);
+        const oneYearAgo = new Date();
+        oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
+        setActivityLogs(logs.filter(l => new Date(l.createdAt) >= oneYearAgo));
       }
     } catch (error) {
       console.error('Error loading mess data:', error);
@@ -513,6 +520,49 @@ export default function ManageMess() {
                 </Button>
               )}
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Activity Log - Past 1 Year */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <History className="h-5 w-5 text-primary" />
+              Activity Log
+            </CardTitle>
+            <CardDescription>
+              Track manager changes, member removals, and month history from the past year
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {activityLogs.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-6">No activity recorded yet.</p>
+            ) : (
+              <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                {activityLogs.map(log => {
+                  const icon = log.type === 'manager_change' ? <Crown className="h-4 w-4 text-[goldenrod]" /> :
+                               log.type === 'member_removed' ? <UserMinus className="h-4 w-4 text-destructive" /> :
+                               log.type === 'member_joined' ? <UserMinus className="h-4 w-4 text-success" /> :
+                               log.type === 'month_created' ? <CalendarPlus className="h-4 w-4 text-success" /> :
+                               log.type === 'month_deleted' ? <CalendarX className="h-4 w-4 text-destructive" /> :
+                               <History className="h-4 w-4 text-muted-foreground" />;
+                  
+                  return (
+                    <div key={log.id} className="flex items-start gap-3 p-3 rounded-lg bg-muted/50 border border-border/50">
+                      <div className="mt-0.5">{icon}</div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground">{log.description}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(log.createdAt).toLocaleDateString('en-US', {
+                            year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                          })}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
 

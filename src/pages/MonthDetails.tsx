@@ -16,6 +16,16 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
   Table,
   TableBody,
   TableCell,
@@ -45,7 +55,7 @@ import {
 } from '@/lib/calculations';
 import { exportToPDF, exportToExcel } from '@/lib/export';
 import { Month, MonthSummary, MemberSummary, User, Meal, Deposit, MealCost, OtherCost } from '@/types';
-import { CalendarDays, Plus, TrendingUp, TrendingDown, Download, FileText, FileSpreadsheet, History, Filter, X } from 'lucide-react';
+import { CalendarDays, Plus, TrendingUp, TrendingDown, Download, FileText, FileSpreadsheet, History, Filter, X, Trash2 } from 'lucide-react';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import {
   Select,
@@ -88,6 +98,9 @@ export default function MonthDetails() {
   const [confirmNewMonth, setConfirmNewMonth] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [selectedMemberFilter, setSelectedMemberFilter] = useState<string>('all');
+  const [showMonthNameDialog, setShowMonthNameDialog] = useState(false);
+  const [newMonthName, setNewMonthName] = useState('');
+  const [deletingMonthId, setDeletingMonthId] = useState<string | null>(null);
 
   const isManager = user?.role === 'manager';
 
@@ -210,28 +223,44 @@ export default function MonthDetails() {
     }
   };
 
-  const handleStartNewMonth = async () => {
-    if (!user) return;
-
+  const handleConfirmNewMonth = () => {
+    // After typing "Sure", close this dialog and show month name dialog
+    setIsNewMonthDialogOpen(false);
+    setConfirmNewMonth('');
     const now = new Date();
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
                         'July', 'August', 'September', 'October', 'November', 'December'];
+    setNewMonthName(`${monthNames[now.getMonth()]} ${now.getFullYear()}`);
+    setShowMonthNameDialog(true);
+  };
+
+  const handleStartNewMonth = async () => {
+    if (!user || !newMonthName.trim()) return;
+
+    const now = new Date();
     
     try {
       await dataService.createMonth({
         messId: user.messId,
-        name: `${monthNames[now.getMonth()]} ${now.getFullYear()}`,
+        name: newMonthName.trim(),
         year: now.getFullYear(),
         month: now.getMonth() + 1,
         isActive: true,
       });
 
-      toast({
-        title: 'New month started',
-        description: 'A new month has been created and is now active.',
+      await dataService.createActivityLog({
+        messId: user.messId,
+        type: 'month_created',
+        description: `New month "${newMonthName.trim()}" started`,
       });
 
-      setIsNewMonthDialogOpen(false);
+      toast({
+        title: 'New month started',
+        description: `"${newMonthName.trim()}" is now active.`,
+      });
+
+      setShowMonthNameDialog(false);
+      setNewMonthName('');
       loadData();
     } catch (error) {
       toast({
@@ -239,6 +268,32 @@ export default function MonthDetails() {
         description: 'Failed to start new month',
         variant: 'destructive',
       });
+    }
+  };
+
+  const handleDeletePreviousMonth = async (monthId: string, monthName: string) => {
+    if (!user) return;
+    setDeletingMonthId(monthId);
+    try {
+      await dataService.deleteMonthAndData(monthId);
+      await dataService.createActivityLog({
+        messId: user.messId,
+        type: 'month_deleted',
+        description: `Month "${monthName}" deleted`,
+      });
+      toast({
+        title: 'Month deleted',
+        description: `"${monthName}" and all its data have been removed.`,
+      });
+      loadPreviousMonths();
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to delete month',
+        variant: 'destructive',
+      });
+    } finally {
+      setDeletingMonthId(null);
     }
   };
 
@@ -363,11 +418,42 @@ export default function MonthDetails() {
             <div className="space-y-6">
               {previousMonths.map(({ month, summary, membersSummary: mSummary }) => (
                 <Card key={month.id}>
-                  <CardHeader>
+                  <CardHeader className="flex flex-row items-center justify-between space-y-0">
                     <CardTitle className="flex items-center gap-2">
                       <CalendarDays className="h-5 w-5 text-primary" />
                       {month.name}
                     </CardTitle>
+                    {isManager && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                            disabled={deletingMonthId === month.id}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete "{month.name}"?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This will permanently delete this month and all its meals, deposits, and costs. This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              onClick={() => handleDeletePreviousMonth(month.id, month.name)}
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {/* Summary Grid */}
@@ -499,7 +585,7 @@ export default function MonthDetails() {
                   <AlertDialogFooter>
                     <AlertDialogCancel onClick={() => setConfirmNewMonth('')}>Cancel</AlertDialogCancel>
                     <AlertDialogAction 
-                      onClick={handleStartNewMonth}
+                      onClick={handleConfirmNewMonth}
                       disabled={confirmNewMonth !== 'Sure'}
                       className={confirmNewMonth !== 'Sure' ? 'opacity-50 cursor-not-allowed' : ''}
                     >
@@ -509,6 +595,32 @@ export default function MonthDetails() {
                 </AlertDialogContent>
               </AlertDialog>
             )}
+
+            {/* Month Name Dialog */}
+            <Dialog open={showMonthNameDialog} onOpenChange={setShowMonthNameDialog}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Set Month Name</DialogTitle>
+                  <DialogDescription>
+                    Enter a name for the new month. You can edit the default.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-2">
+                  <Label>Month Name</Label>
+                  <Input
+                    value={newMonthName}
+                    onChange={(e) => setNewMonthName(e.target.value)}
+                    placeholder="e.g., March 2026"
+                  />
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setShowMonthNameDialog(false)}>Cancel</Button>
+                  <Button className="gradient-primary" onClick={handleStartNewMonth} disabled={!newMonthName.trim()}>
+                    Create Month
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
         </div>
 
