@@ -8,7 +8,7 @@ import { shouldUseBackend, isBackendAvailable, isMongoDbConnected } from './conf
 import * as api from './api';
 import * as storage from './storage';
 import { apiCache, cacheKeys, invalidateMonthData } from './apiCache';
-import { User, Mess, Month, Meal, Deposit, MealCost, OtherCost, JoinRequest, Notice, BazarDate, Notification, Note } from '@/types';
+import { User, Mess, Month, Meal, Deposit, MealCost, OtherCost, JoinRequest, Notice, BazarDate, Notification, Note, MessActivityLog } from '@/types';
 import { toast } from '@/hooks/use-toast';
 
 // Helper to show localStorage fallback alert - debounced
@@ -1143,3 +1143,23 @@ export function invalidateMonthCache(monthId: string): void {
 // ============================================
 
 export { getCurrentUser, setCurrentUser } from './storage';
+
+// ============================================
+// DELETE MONTH
+// ============================================
+
+export async function deleteMonthAndData(monthId: string): Promise<void> {
+  storage.deleteMonth(monthId);
+}
+
+// ============================================
+// ACTIVITY LOGS
+// ============================================
+
+export async function getActivityLogsByMessId(messId: string): Promise<MessActivityLog[]> {
+  return storage.getActivityLogsByMessId(messId);
+}
+
+export async function createActivityLog(logData: Omit<MessActivityLog, 'id' | 'createdAt'>): Promise<MessActivityLog> {
+  return storage.createActivityLog(logData);
+}

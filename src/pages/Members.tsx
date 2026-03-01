@@ -88,10 +88,19 @@ export default function Members() {
   };
 
   const handleRemove = async (memberId: string) => {
-    if (removingId) return;
+    if (removingId || !user) return;
     setRemovingId(memberId);
     try {
+      const memberToRemove = members.find(m => m.id === memberId);
       await dataService.deleteUser(memberId);
+      if (memberToRemove) {
+        await dataService.createActivityLog({
+          messId: user.messId,
+          type: 'member_removed',
+          description: `${memberToRemove.fullName} was removed from the mess`,
+          metadata: { removedDate: new Date().toISOString() },
+        });
+      }
       loadMembers();
       toast({ title: 'Member removed', description: 'The member has been removed from the mess.' });
     } catch (error) {
@@ -105,8 +114,16 @@ export default function Members() {
     if (!user || promotingId) return;
     setPromotingId(memberId);
     try {
+      const newManager = members.find(m => m.id === memberId);
       const result = await api.makeManagerAPI(memberId);
       if (!result.success) throw new Error(result.error || 'Failed to change manager');
+      if (newManager) {
+        await dataService.createActivityLog({
+          messId: user.messId,
+          type: 'manager_change',
+          description: `Manager changed from ${user.fullName} to ${newManager.fullName}`,
+        });
+      }
       refreshUser();
       loadMembers();
       toast({ title: 'Manager changed', description: 'The member is now the manager of this mess.' });
