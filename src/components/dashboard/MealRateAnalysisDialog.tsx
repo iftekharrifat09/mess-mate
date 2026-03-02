@@ -3,7 +3,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, Loader2, BarChart3 } from 'lucide-react';
+import { TrendingUp, Loader2, BarChart3, Target } from 'lucide-react';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, ReferenceLine,
@@ -13,6 +13,7 @@ import { Meal, MealCost, Month } from '@/types';
 import * as dataService from '@/lib/dataService';
 import { calculateMonthSummary } from '@/lib/calculations';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import MealRateControl from './MealRateControl';
 
 interface MealRateAnalysisDialogProps {
   monthId: string;
@@ -43,6 +44,9 @@ export default function MealRateAnalysisDialog({ monthId, messId }: MealRateAnal
   const [loading, setLoading] = useState(false);
   const [monthlyData, setMonthlyData] = useState<MonthlyComparison[]>([]);
   const [monthlyLoading, setMonthlyLoading] = useState(false);
+  const [totalDeposit, setTotalDeposit] = useState(0);
+  const [memberCount, setMemberCount] = useState(0);
+  const [currentMonth, setCurrentMonth] = useState<{ month: number; year: number }>({ month: new Date().getMonth(), year: new Date().getFullYear() });
 
   useEffect(() => {
     if (!open || !monthId) return;
@@ -50,18 +54,27 @@ export default function MealRateAnalysisDialog({ monthId, messId }: MealRateAnal
     Promise.all([
       dataService.getMealsByMonthId(monthId),
       dataService.getMealCostsByMonthId(monthId),
-    ]).then(([m, c]) => {
+      dataService.getDepositsByMonthId(monthId),
+      dataService.getMessMembers(messId),
+      dataService.getMonthsByMessId(messId),
+    ]).then(([m, c, deposits, members, months]) => {
       setMeals(m);
       setMealCosts(c);
+      setTotalDeposit(deposits.reduce((s: number, d: any) => s + d.amount, 0));
+      setMemberCount(members.length);
+      // Find current month info
+      const activeMonth = months.find((mo: Month) => mo.id === monthId);
+      if (activeMonth) {
+        setCurrentMonth({ month: activeMonth.month - 1, year: activeMonth.year }); // 0-indexed
+      }
     }).finally(() => setLoading(false));
-  }, [open, monthId]);
+  }, [open, monthId, messId]);
 
   // Load monthly comparison data
   useEffect(() => {
     if (!open || !messId) return;
     setMonthlyLoading(true);
     dataService.getMonthsByMessId(messId).then(async (months: Month[]) => {
-      // Sort by year/month descending, take last 6
       const sorted = [...months].sort((a, b) => {
         if (a.year !== b.year) return b.year - a.year;
         return b.month - a.month;
@@ -146,7 +159,6 @@ export default function MealRateAnalysisDialog({ monthId, messId }: MealRateAnal
     );
   }, [getRateDotColor]);
 
-  // Monthly comparison color logic
   const monthlyAvgRate = useMemo(() => {
     if (!monthlyData.length) return 0;
     return parseFloat((monthlyData.reduce((s, d) => s + d.mealRate, 0) / monthlyData.length).toFixed(2));
@@ -179,14 +191,18 @@ export default function MealRateAnalysisDialog({ monthId, messId }: MealRateAnal
         </DialogHeader>
 
         <Tabs defaultValue="daily" className="w-full">
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="daily" className="text-xs sm:text-sm gap-1">
               <TrendingUp className="h-3.5 w-3.5" />
               Daily Trend
             </TabsTrigger>
             <TabsTrigger value="monthly" className="text-xs sm:text-sm gap-1">
               <BarChart3 className="h-3.5 w-3.5" />
-              Monthly Comparison
+              Monthly
+            </TabsTrigger>
+            <TabsTrigger value="control" className="text-xs sm:text-sm gap-1">
+              <Target className="h-3.5 w-3.5" />
+              Rate Control
             </TabsTrigger>
           </TabsList>
 
@@ -292,7 +308,6 @@ export default function MealRateAnalysisDialog({ monthId, messId }: MealRateAnal
               </p>
             ) : (
               <div className="space-y-4">
-                {/* Monthly summary stats */}
                 <div className="grid grid-cols-3 gap-2 sm:gap-3">
                   <div className="p-2.5 sm:p-3 rounded-lg bg-muted/50 border border-border text-center">
                     <p className="text-[10px] sm:text-[11px] text-muted-foreground uppercase tracking-wider">Avg Rate</p>
@@ -312,14 +327,12 @@ export default function MealRateAnalysisDialog({ monthId, messId }: MealRateAnal
                   </div>
                 </div>
 
-                {/* Legend */}
                 <div className="flex items-center justify-center gap-3 sm:gap-4 text-[10px] sm:text-xs text-muted-foreground">
                   <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-[#22c55e]" /> Below Avg</span>
                   <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-[#f97316]" /> Average</span>
                   <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-[#ef4444]" /> Above Avg</span>
                 </div>
 
-                {/* Bar chart for monthly rates */}
                 <div className="h-56 sm:h-72 w-full">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={monthlyData} margin={{ top: 10, right: 10, left: -10, bottom: 5 }}>
@@ -353,7 +366,6 @@ export default function MealRateAnalysisDialog({ monthId, messId }: MealRateAnal
                   </ResponsiveContainer>
                 </div>
 
-                {/* Monthly details list */}
                 <div className="space-y-1.5">
                   {[...monthlyData].reverse().map((month, i) => (
                     <div
@@ -379,6 +391,24 @@ export default function MealRateAnalysisDialog({ monthId, messId }: MealRateAnal
                   ))}
                 </div>
               </div>
+            )}
+          </TabsContent>
+
+          {/* Meal Rate Control Tab */}
+          <TabsContent value="control" className="mt-4">
+            {loading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-5 w-5 animate-spin text-primary mr-2" />
+                <span className="text-sm text-muted-foreground">Loading data...</span>
+              </div>
+            ) : (
+              <MealRateControl
+                meals={meals}
+                mealCosts={mealCosts}
+                totalDeposit={totalDeposit}
+                memberCount={memberCount}
+                monthYear={currentMonth}
+              />
             )}
           </TabsContent>
         </Tabs>
