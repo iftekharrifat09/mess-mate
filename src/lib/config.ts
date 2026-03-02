@@ -87,6 +87,6 @@ export const CONFIG = {
   // API endpoints
   api: {
     baseUrl: API_BASE_URL,
-    timeout: 5000, // 5 seconds (reduced from 15s for faster feedback)
+    timeout: 8000, // 8 seconds
   },
 };

@@ -40,6 +40,14 @@ const toastVariants = cva(
   },
 );
 
+const progressColors: Record<string, string> = {
+  default: "hsl(217,91%,60%)",
+  success: "hsl(142,71%,45%)",
+  destructive: "hsl(0,84%,60%)",
+  warning: "hsl(45,93%,47%)",
+  info: "hsl(217,91%,60%)",
+};
+
 const variantIcons: Record<string, React.ReactNode> = {
   default: null,
   success: <CheckCircle2 className="h-5 w-5 text-[hsl(142,71%,45%)] shrink-0" />,
@@ -48,15 +56,35 @@ const variantIcons: Record<string, React.ReactNode> = {
   info: <Info className="h-5 w-5 text-[hsl(217,91%,60%)] shrink-0" />,
 };
 
+const TOAST_DURATION = 5000;
+
 const Toast = React.forwardRef<
   React.ElementRef<typeof ToastPrimitives.Root>,
-  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> & VariantProps<typeof toastVariants>
->(({ className, variant, children, ...props }, ref) => {
+  React.ComponentPropsWithoutRef<typeof ToastPrimitives.Root> & VariantProps<typeof toastVariants> & { duration?: number }
+>(({ className, variant, children, duration, ...props }, ref) => {
   const icon = variantIcons[variant || "default"];
+  const progressColor = progressColors[variant || "default"];
+  const dur = duration || TOAST_DURATION;
+
   return (
-    <ToastPrimitives.Root ref={ref} className={cn(toastVariants({ variant }), className)} {...props}>
+    <ToastPrimitives.Root
+      ref={ref}
+      className={cn(toastVariants({ variant }), className)}
+      duration={dur}
+      {...props}
+    >
       {icon && <div className="flex items-start pt-0.5">{icon}</div>}
       {children}
+      {/* Progress bar */}
+      <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-muted/30">
+        <div
+          className="h-full toast-progress-bar"
+          style={{
+            backgroundColor: progressColor,
+            animation: `toast-shrink ${dur}ms linear forwards`,
+          }}
+        />
+      </div>
     </ToastPrimitives.Root>
   );
 });

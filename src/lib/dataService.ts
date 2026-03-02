@@ -1149,6 +1149,21 @@ export { getCurrentUser, setCurrentUser } from './storage';
 // ============================================
 
 export async function deleteMonthAndData(monthId: string): Promise<void> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.apiRequest(`/months/${monthId}`, { method: 'DELETE' });
+      if (result.success) {
+        // Invalidate caches
+        apiCache.invalidate(cacheKeys.meals(monthId));
+        apiCache.invalidate(cacheKeys.deposits(monthId));
+        apiCache.invalidate(cacheKeys.mealCosts(monthId));
+        apiCache.invalidate(cacheKeys.otherCosts(monthId));
+        return;
+      }
+    } catch (error) {
+      console.error('Error deleting month from backend:', error);
+    }
+  }
   storage.deleteMonth(monthId);
 }
 
