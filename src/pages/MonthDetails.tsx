@@ -209,13 +209,16 @@ export default function MonthDetails() {
         .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         .slice(0, 6); // Last 6 months
       
-      const summaries: PreviousMonthSummary[] = [];
-      
-      for (const month of inactiveMonths) {
-        const summary = await calculateMonthSummary(month.id, user.messId);
-        const membersSummary = await getAllMembersSummary(month.id, user.messId);
-        summaries.push({ month, summary, membersSummary });
-      }
+      // Load all summaries in parallel for speed
+      const summaries = await Promise.all(
+        inactiveMonths.map(async (month) => {
+          const [summary, mSummary] = await Promise.all([
+            calculateMonthSummary(month.id, user.messId),
+            getAllMembersSummary(month.id, user.messId),
+          ]);
+          return { month, summary, membersSummary: mSummary };
+        })
+      );
       
       setPreviousMonths(summaries);
     } catch (error) {

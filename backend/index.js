@@ -2227,6 +2227,32 @@ app.post("/api/notify-bulk-meals", authMiddleware, async (req, res) => {
 });
 
 // ============================================
+// DELETE MONTH (and all associated data)
+// ============================================
+
+app.delete("/api/months/:id", authMiddleware, async (req, res) => {
+  try {
+    const monthId = req.params.id;
+    
+    // Delete all associated data in parallel
+    await Promise.all([
+      collections.meals.deleteMany({ monthId }),
+      collections.deposits.deleteMany({ monthId }),
+      collections.mealCosts.deleteMany({ monthId }),
+      collections.otherCosts.deleteMany({ monthId }),
+    ]);
+    
+    // Delete the month itself
+    await collections.months.deleteOne({ _id: new ObjectId(monthId) });
+    
+    res.json({ success: true, message: "Month and all associated data deleted" });
+  } catch (error) {
+    console.error("Delete month error:", error);
+    res.status(500).json({ success: false, error: "Failed to delete month" });
+  }
+});
+
+// ============================================
 // START SERVER
 // ============================================
 
