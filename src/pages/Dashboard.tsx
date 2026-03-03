@@ -218,25 +218,13 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {(() => {
-                // Find highest meal member
-                const maxMeals = Math.max(...membersSummary.map(m => m.totalMeals));
-                const highestMembers = membersSummary.filter(m => m.totalMeals === maxMeals && maxMeals > 0);
-                // Tie-break by highest meal cost
-                const highestMember = highestMembers.length > 1
-                  ? highestMembers.reduce((a, b) => a.mealCost >= b.mealCost ? a : b)
-                  : highestMembers[0];
-                const highestUserId = highestMember?.userId;
-
-                return membersSummary.map((member) => (
-                  <MemberSummaryCard
-                    key={member.userId}
-                    summary={member}
-                    isCurrentUser={member.userId === user?.id}
-                    isHighestMeals={member.userId === highestUserId}
-                  />
-                ));
-              })()}
+              {membersSummary.map((member) => (
+                <MemberSummaryCard
+                  key={member.userId}
+                  summary={member}
+                  isCurrentUser={member.userId === user?.id}
+                />
+              ))}
             </div>
           )}
         </motion.div>
