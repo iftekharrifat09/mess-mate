@@ -177,8 +177,13 @@ export default function Dashboard() {
           </motion.div>
         )}
 
-        {/* Bazar Dates - only show when there are dates */}
-        {bazarDates.length > 0 && (
+        {/* Bazar Dates - only show when there are upcoming/current dates */}
+        {bazarDates.length > 0 && bazarDates.some(d => {
+          const dateObj = new Date(d.date);
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          return dateObj >= today;
+        }) && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -213,13 +218,25 @@ export default function Dashboard() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {membersSummary.map((member, index) => (
-                <MemberSummaryCard
-                  key={member.userId}
-                  summary={member}
-                  isCurrentUser={member.userId === user?.id}
-                />
-              ))}
+              {(() => {
+                // Find highest meal member
+                const maxMeals = Math.max(...membersSummary.map(m => m.totalMeals));
+                const highestMembers = membersSummary.filter(m => m.totalMeals === maxMeals && maxMeals > 0);
+                // Tie-break by highest meal cost
+                const highestMember = highestMembers.length > 1
+                  ? highestMembers.reduce((a, b) => a.mealCost >= b.mealCost ? a : b)
+                  : highestMembers[0];
+                const highestUserId = highestMember?.userId;
+
+                return membersSummary.map((member) => (
+                  <MemberSummaryCard
+                    key={member.userId}
+                    summary={member}
+                    isCurrentUser={member.userId === user?.id}
+                    isHighestMeals={member.userId === highestUserId}
+                  />
+                ));
+              })()}
             </div>
           )}
         </motion.div>
