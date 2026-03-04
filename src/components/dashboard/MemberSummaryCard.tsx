@@ -1,12 +1,15 @@
 import { motion } from 'framer-motion';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { MemberSummary } from '@/types';
 import { formatCurrency, formatNumber } from '@/lib/calculations';
-import { Utensils, Wallet, Receipt, TrendingUp, TrendingDown } from 'lucide-react';
+import { Utensils, Wallet, Receipt, TrendingUp, TrendingDown, CheckCircle } from 'lucide-react';
 
 interface MemberSummaryCardProps {
   summary: MemberSummary;
   isCurrentUser?: boolean;
+  shouldPay?: number;
+  totalPaid?: number;
 }
 
 const getBalanceStatus = (balance: number) => {
@@ -15,9 +18,10 @@ const getBalanceStatus = (balance: number) => {
   return { status: 'success', color: 'border-success/50 bg-success/5', icon: 'text-success' };
 };
 
-export default function MemberSummaryCard({ summary, isCurrentUser = false }: MemberSummaryCardProps) {
+export default function MemberSummaryCard({ summary, isCurrentUser = false, shouldPay, totalPaid }: MemberSummaryCardProps) {
   const totalCost = summary.mealCost + summary.individualCost + summary.sharedCost;
   const balanceStatus = getBalanceStatus(summary.balance);
+  const isFullyPaid = shouldPay !== undefined && totalPaid !== undefined && totalPaid >= shouldPay && shouldPay > 0;
 
   return (
     <motion.div
@@ -34,23 +38,30 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false }: Me
                 <span className="ml-2 text-xs font-normal text-primary">(You)</span>
               )}
             </CardTitle>
-            <motion.div
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-            >
-              {summary.balance >= 0 ? (
-                <div className={`flex items-center gap-1 ${balanceStatus.icon} text-sm font-semibold`}>
-                  <TrendingUp className="h-4 w-4" />
-                  <span>+{formatCurrency(summary.balance)}</span>
-                </div>
-              ) : (
-                <div className={`flex items-center gap-1 ${balanceStatus.icon} text-sm font-semibold`}>
-                  <TrendingDown className="h-4 w-4" />
-                  <span>{formatCurrency(summary.balance)}</span>
-                </div>
+            <div className="flex items-center gap-2">
+              {isFullyPaid && (
+                <Badge className="bg-success text-success-foreground text-xs flex items-center gap-1">
+                  <CheckCircle className="h-3 w-3" /> Paid
+                </Badge>
               )}
-            </motion.div>
+              <motion.div
+                initial={{ scale: 0 }}
+                animate={{ scale: 1 }}
+                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              >
+                {summary.balance >= 0 ? (
+                  <div className={`flex items-center gap-1 ${balanceStatus.icon} text-sm font-semibold`}>
+                    <TrendingUp className="h-4 w-4" />
+                    <span>+{formatCurrency(summary.balance)}</span>
+                  </div>
+                ) : (
+                  <div className={`flex items-center gap-1 ${balanceStatus.icon} text-sm font-semibold`}>
+                    <TrendingDown className="h-4 w-4" />
+                    <span>{formatCurrency(summary.balance)}</span>
+                  </div>
+                )}
+              </motion.div>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -92,6 +103,18 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false }: Me
               </div>
             </div>
           </div>
+
+          {/* Calculator dues section */}
+          {shouldPay !== undefined && shouldPay > 0 && (
+            <div className="mt-3 pt-3 border-t border-border">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Should Pay: <span className="font-semibold text-foreground">{formatCurrency(shouldPay)}</span></span>
+                {!isFullyPaid && totalPaid !== undefined && (
+                  <span className="text-destructive font-semibold">Due: {formatCurrency(Math.max(0, shouldPay - totalPaid))}</span>
+                )}
+              </div>
+            </div>
+          )}
 
           <div className="mt-3 pt-3 border-t border-border">
             <div className="flex justify-between text-xs">
