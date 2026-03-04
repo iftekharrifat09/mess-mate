@@ -66,12 +66,22 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
     );
 
     const diffs: DailyDiff[] = [];
-    for (let i = 1; i < sorted.length; i++) {
+    for (let i = 0; i < sorted.length; i++) {
       const d = new Date(sorted[i].date);
       if (d.getMonth() !== currentMonth || d.getFullYear() !== currentYear) continue;
 
-      const taka = (sorted[i].consumedTaka ?? 0) - (sorted[i - 1].consumedTaka ?? 0);
-      const kwh = (sorted[i].consumedUnit ?? 0) - (sorted[i - 1].consumedUnit ?? 0);
+      let taka: number;
+      let kwh: number;
+
+      if (d.getDate() === 1 || i === 0) {
+        // First day of month: use raw value directly
+        taka = sorted[i].consumedTaka ?? 0;
+        kwh = sorted[i].consumedUnit ?? 0;
+      } else {
+        // Subsequent days: diff from previous entry
+        taka = (sorted[i].consumedTaka ?? 0) - (sorted[i - 1].consumedTaka ?? 0);
+        kwh = (sorted[i].consumedUnit ?? 0) - (sorted[i - 1].consumedUnit ?? 0);
+      }
 
       diffs.push({
         date: sorted[i].date,
