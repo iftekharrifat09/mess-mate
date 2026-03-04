@@ -1,27 +1,13 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useSidebarState } from '@/contexts/SidebarContext';
 import { cn } from '@/lib/utils';
 import {
-  LayoutDashboard,
-  Users,
-  Utensils,
-  Wallet,
-  ShoppingCart,
-  Receipt,
-  CalendarDays,
-  UserPlus,
-  LogOut,
-  ChevronLeft,
-  ChevronRight,
-  Menu,
-  Building,
-  Megaphone,
-  Calendar,
-  StickyNote,
-  User,
+  LayoutDashboard, Users, Utensils, Wallet, ShoppingCart, Receipt,
+  CalendarDays, UserPlus, LogOut, ChevronLeft, ChevronRight, Menu,
+  Building, Megaphone, Calendar, StickyNote, User, Calculator,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { useState } from 'react';
 import NotificationBell from '@/components/notifications/NotificationBell';
 import { ThemeToggle } from '@/components/ThemeToggle';
 
@@ -32,7 +18,6 @@ interface NavItem {
   managerOnly?: boolean;
 }
 
-// Calendar label is dynamic based on role, handled in component
 const getNavItems = (isManager: boolean): NavItem[] => [
   { label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
   { label: 'Members', href: '/members', icon: Users },
@@ -40,6 +25,7 @@ const getNavItems = (isManager: boolean): NavItem[] => [
   { label: 'Deposits', href: '/deposits', icon: Wallet, managerOnly: true },
   { label: 'Meal Costs', href: '/meal-costs', icon: ShoppingCart, managerOnly: true },
   { label: 'Other Costs', href: '/other-costs', icon: Receipt, managerOnly: true },
+  { label: 'Calculator', href: '/calculator', icon: Calculator },
   { label: 'Month Details', href: '/month-details', icon: CalendarDays },
   { label: isManager ? 'Edit Calendar' : 'Calendar View', href: '/edit-calendar', icon: Calendar },
   { label: 'Bazar Dates', href: '/bazar-dates', icon: ShoppingCart, managerOnly: true },
@@ -53,11 +39,9 @@ export default function Sidebar() {
   const { user, logout } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
-  const [isCollapsed, setIsCollapsed] = useState(false);
-  const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const { isCollapsed, setIsCollapsed, isMobileOpen, setIsMobileOpen } = useSidebarState();
 
   const isManager = user?.role === 'manager';
-
   const navItems = getNavItems(isManager);
   const filteredNavItems = navItems.filter(item => !item.managerOnly || isManager);
 
@@ -70,11 +54,7 @@ export default function Sidebar() {
     <>
       {/* Mobile menu button */}
       <div className="fixed top-4 left-4 z-50 lg:hidden flex items-center gap-2">
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={() => setIsMobileOpen(!isMobileOpen)}
-        >
+        <Button variant="ghost" size="icon" onClick={() => setIsMobileOpen(!isMobileOpen)}>
           <Menu className="h-5 w-5" />
         </Button>
       </div>
@@ -87,10 +67,7 @@ export default function Sidebar() {
 
       {/* Mobile overlay */}
       {isMobileOpen && (
-        <div
-          className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 lg:hidden"
-          onClick={() => setIsMobileOpen(false)}
-        />
+        <div className="fixed inset-0 bg-background/80 backdrop-blur-sm z-40 lg:hidden" onClick={() => setIsMobileOpen(false)} />
       )}
 
       {/* Sidebar */}
@@ -122,8 +99,7 @@ export default function Sidebar() {
               </div>
             )}
             <Button
-              variant="ghost"
-              size="icon"
+              variant="ghost" size="icon"
               className="hidden lg:flex text-sidebar-foreground hover:bg-sidebar-accent"
               onClick={() => setIsCollapsed(!isCollapsed)}
             >
@@ -137,7 +113,6 @@ export default function Sidebar() {
           {filteredNavItems.map(item => {
             const Icon = item.icon;
             const isActive = location.pathname === item.href;
-
             return (
               <Link
                 key={item.href}
@@ -145,9 +120,7 @@ export default function Sidebar() {
                 onClick={() => setIsMobileOpen(false)}
                 className={cn(
                   'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
-                  isActive
-                    ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-                    : 'text-sidebar-foreground hover:bg-sidebar-accent'
+                  isActive ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground hover:bg-sidebar-accent'
                 )}
               >
                 <Icon className={cn('h-5 w-5 flex-shrink-0', isCollapsed && 'mx-auto')} />
@@ -161,13 +134,10 @@ export default function Sidebar() {
         <div className="p-4 border-t border-sidebar-border space-y-2">
           {!isCollapsed && (
             <Link
-              to="/profile"
-              onClick={() => setIsMobileOpen(false)}
+              to="/profile" onClick={() => setIsMobileOpen(false)}
               className={cn(
                 'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-colors',
-                location.pathname === '/profile'
-                  ? 'bg-sidebar-primary text-sidebar-primary-foreground'
-                  : 'text-sidebar-foreground hover:bg-sidebar-accent'
+                location.pathname === '/profile' ? 'bg-sidebar-primary text-sidebar-primary-foreground' : 'text-sidebar-foreground hover:bg-sidebar-accent'
               )}
             >
               <User className="h-5 w-5" />
@@ -179,10 +149,7 @@ export default function Sidebar() {
           )}
           <Button
             variant="ghost"
-            className={cn(
-              'w-full text-sidebar-foreground hover:bg-sidebar-accent',
-              isCollapsed ? 'justify-center px-0' : 'justify-start'
-            )}
+            className={cn('w-full text-sidebar-foreground hover:bg-sidebar-accent', isCollapsed ? 'justify-center px-0' : 'justify-start')}
             onClick={handleLogout}
           >
             <LogOut className="h-5 w-5" />

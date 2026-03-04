@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useCallback, useTransition } from 'react';
+import { useEffect, useState, useRef, useCallback, useTransition, useMemo } from 'react';
 import { motion } from 'framer-motion';
 import gsap from 'gsap';
 import { useAuth } from '@/contexts/AuthContext';
@@ -17,6 +17,7 @@ import {
   getAllMembersSummary 
 } from '@/lib/calculations';
 import * as dataService from '@/lib/dataService';
+import * as calcStore from '@/lib/calculatorStorage';
 import { Users } from 'lucide-react';
 
 // Default empty states to show UI immediately
@@ -194,41 +195,77 @@ export default function Dashboard() {
         )}
 
         {/* All Members Section */}
-        <motion.div 
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4 }}
-          className="space-y-4"
-        >
-          <div className="flex items-center gap-2">
-            <Users className="h-5 w-5 text-primary" />
-            <h2 className="text-xl font-semibold text-foreground">All Members</h2>
-            <span className="text-sm text-muted-foreground">({membersSummary.length} members)</span>
-          </div>
-
-          {membersSummary.length === 0 ? (
-            <div className="text-center py-12 bg-card rounded-lg border border-border">
-              <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <p className="text-muted-foreground">No members in this mess yet.</p>
-              {user?.role === 'manager' && (
-                <p className="text-sm text-muted-foreground mt-2">
-                  Add members from the Members page.
-                </p>
-              )}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {membersSummary.map((member) => (
-                <MemberSummaryCard
-                  key={member.userId}
-                  summary={member}
-                  isCurrentUser={member.userId === user?.id}
-                />
-              ))}
-            </div>
-          )}
-        </motion.div>
+        <MembersSectionWithDues
+          membersSummary={membersSummary}
+          members={members}
+          messId={user?.messId || ''}
+          activeMonthId={monthSummary?.monthId || ''}
+          userId={user?.id || ''}
+          isManager={user?.role === 'manager'}
+        />
       </motion.div>
     </DashboardLayout>
+  );
+}
+
+function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId, userId, isManager }: {
+  membersSummary: MemberSummary[];
+  members: User[];
+  messId: string;
+  activeMonthId: string;
+  userId: string;
+  isManager?: boolean;
+}) {
+  const memberDues = useMemo(() => {
+    if (!messId || !activeMonthId) return {};
+    const categories = calcStore.getCategories(messId, activeMonthId);
+    const exceptions = calcStore.getAllExceptions(messId, activeMonthId);
+    const payments = calcStore.getPayments(messId, activeMonthId);
+    const totalMembers = members.length;
+
+    const dues: Record<string, { shouldPay: number; totalPaid: number }> = {};
+    for (const m of members) {
+      const shouldPay = calcStore.calculateMemberDues(categories, exceptions, totalMembers, m.id);
+      const totalPaid = payments.filter(p => p.userId === m.id).reduce((s, p) => s + p.amount, 0);
+      dues[m.id] = { shouldPay, totalPaid };
+    }
+    return dues;
+  }, [messId, activeMonthId, members]);
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.4 }}
+      className="space-y-4"
+    >
+      <div className="flex items-center gap-2">
+        <Users className="h-5 w-5 text-primary" />
+        <h2 className="text-xl font-semibold text-foreground">All Members</h2>
+        <span className="text-sm text-muted-foreground">({membersSummary.length} members)</span>
+      </div>
+
+      {membersSummary.length === 0 ? (
+        <div className="text-center py-12 bg-card rounded-lg border border-border">
+          <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground">No members in this mess yet.</p>
+          {isManager && (
+            <p className="text-sm text-muted-foreground mt-2">Add members from the Members page.</p>
+          )}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+          {membersSummary.map((member) => (
+            <MemberSummaryCard
+              key={member.userId}
+              summary={member}
+              isCurrentUser={member.userId === userId}
+              shouldPay={memberDues[member.userId]?.shouldPay}
+              totalPaid={memberDues[member.userId]?.totalPaid}
+            />
+          ))}
+        </div>
+      )}
+    </motion.div>
   );
 }
