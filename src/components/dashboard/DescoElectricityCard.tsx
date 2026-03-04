@@ -245,9 +245,9 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
                 </div>
 
                 {/* Chart */}
-                <div className="h-48 sm:h-56 w-full -ml-2 sm:ml-0">
+                <div className="h-48 sm:h-56 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={dailyDiffs} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
+                    <BarChart data={dailyDiffs} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis
                         dataKey="label"
@@ -260,7 +260,7 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
                         tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }}
                         tickLine={false}
                         axisLine={{ stroke: 'hsl(var(--border))' }}
-                        width={35}
+                        width={45}
                       />
                       <Tooltip content={<CustomTooltip />} />
                       <ReferenceLine
