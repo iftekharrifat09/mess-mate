@@ -9,7 +9,7 @@ import {
   Loader2, AlertCircle, Clock, BatteryCharging, Receipt
 } from 'lucide-react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine
 } from 'recharts';
 import {
   getDescoSettings, fetchAllDescoData,
@@ -73,8 +73,18 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
       let taka: number;
       let kwh: number;
 
-      if (d.getDate() === 1 || i === 0) {
-        // First day of month: use raw value directly
+      // Find the previous entry in sorted array (could be prev month)
+      const prevIndex = sorted.findIndex((s, idx) => idx < i && new Date(s.date).getTime() < d.getTime());
+      const hasPrev = i > 0;
+
+      if (d.getDate() === 1) {
+        // 1st of month: consumedTaka resets, so use raw value
+        taka = sorted[i].consumedTaka ?? 0;
+        // consumedUnit is cumulative and does NOT reset, so diff from previous
+        kwh = hasPrev
+          ? (sorted[i].consumedUnit ?? 0) - (sorted[i - 1].consumedUnit ?? 0)
+          : sorted[i].consumedUnit ?? 0;
+      } else if (!hasPrev) {
         taka = sorted[i].consumedTaka ?? 0;
         kwh = sorted[i].consumedUnit ?? 0;
       } else {
@@ -93,14 +103,18 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
     return diffs;
   }, [data]);
 
+  const avgTaka = useMemo(() => {
+    if (dailyDiffs.length === 0) return 0;
+    return parseFloat((dailyDiffs.reduce((sum, d) => sum + d.taka, 0) / dailyDiffs.length).toFixed(2));
+  }, [dailyDiffs]);
+
   // Determine color thresholds based on average usage
   const getBarColor = useCallback((taka: number) => {
-    if (dailyDiffs.length === 0) return '#22c55e';
-    const avg = dailyDiffs.reduce((sum, d) => sum + d.taka, 0) / dailyDiffs.length;
-    if (taka <= avg * 0.7) return '#22c55e'; // green - low
-    if (taka <= avg * 1.3) return '#f97316'; // orange - average
+    if (avgTaka === 0) return '#22c55e';
+    if (taka <= avgTaka * 0.7) return '#22c55e'; // green - low
+    if (taka <= avgTaka * 1.3) return '#f97316'; // orange - average
     return '#ef4444'; // red - excessive
-  }, [dailyDiffs]);
+  }, [avgTaka]);
 
   if (!settings) return null;
 
@@ -249,6 +263,13 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
                         width={35}
                       />
                       <Tooltip content={<CustomTooltip />} />
+                      <ReferenceLine
+                        y={avgTaka}
+                        stroke="#3b82f6"
+                        strokeDasharray="6 3"
+                        strokeWidth={1.5}
+                        label={{ value: `Avg ৳${avgTaka}`, position: 'right', fontSize: 9, fill: '#3b82f6' }}
+                      />
                       <Bar dataKey="taka" radius={[4, 4, 0, 0]} maxBarSize={28}>
                         {dailyDiffs.map((entry, i) => (
                           <Cell key={i} fill={getBarColor(entry.taka)} />
