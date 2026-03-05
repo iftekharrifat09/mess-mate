@@ -1,14 +1,18 @@
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { MemberSummary } from '@/types';
 import { formatCurrency, formatNumber } from '@/lib/calculations';
-import { Utensils, Wallet, Receipt, TrendingUp, TrendingDown, User } from 'lucide-react';
+import { Utensils, Wallet, Receipt, TrendingUp, TrendingDown, User, CheckCircle } from 'lucide-react';
 
 interface PersonalInfoCardProps {
   summary: MemberSummary;
+  utilityExpenses?: number;
+  utilityPaid?: number;
 }
 
-export default function PersonalInfoCard({ summary }: PersonalInfoCardProps) {
+export default function PersonalInfoCard({ summary, utilityExpenses, utilityPaid }: PersonalInfoCardProps) {
   const totalCost = summary.mealCost + summary.individualCost + summary.sharedCost;
+  const isFullyPaid = utilityExpenses !== undefined && utilityPaid !== undefined && (utilityExpenses > 0 ? utilityPaid >= utilityExpenses : true);
 
   return (
     <Card className="shadow-card border-primary/20 bg-gradient-to-br from-card to-primary/5">
@@ -53,6 +57,24 @@ export default function PersonalInfoCard({ summary }: PersonalInfoCardProps) {
             <span>Shared: {formatCurrency(summary.sharedCost)}</span>
           </div>
         </div>
+
+        {/* Utility Expenses */}
+        {utilityExpenses !== undefined && (
+          <div className="p-3 rounded-lg bg-background/50">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">
+                Utility Expenses: <span className="font-bold text-foreground">{formatCurrency(utilityExpenses)}</span>
+              </span>
+              {isFullyPaid ? (
+                <Badge className="bg-success text-success-foreground text-xs flex items-center gap-1">
+                  <CheckCircle className="h-3 w-3" /> Paid
+                </Badge>
+              ) : utilityPaid !== undefined && utilityExpenses > 0 ? (
+                <span className="text-xs text-destructive font-semibold">Due: {formatCurrency(Math.max(0, utilityExpenses - utilityPaid))}</span>
+              ) : null}
+            </div>
+          </div>
+        )}
 
         <div className={`p-4 rounded-lg ${summary.balance >= 0 ? 'bg-success/10 border border-success/20' : 'bg-destructive/10 border border-destructive/20'}`}>
           <div className="flex items-center justify-between">

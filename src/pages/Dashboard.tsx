@@ -163,7 +163,22 @@ export default function Dashboard() {
             animate={{ opacity: 1, x: 0 }}
             transition={{ delay: 0.2 }}
           >
-            {personalSummary && <PersonalInfoCard summary={personalSummary} />}
+            {personalSummary && (
+              <PersonalInfoCard
+                summary={personalSummary}
+                utilityExpenses={(() => {
+                  if (!user?.messId || !monthSummary?.monthId) return undefined;
+                  const cats = calcStore.getCategories(user.messId, monthSummary.monthId);
+                  const excs = calcStore.getAllExceptions(user.messId, monthSummary.monthId);
+                  return calcStore.calculateMemberDues(cats, excs, members.length, user.id);
+                })()}
+                utilityPaid={(() => {
+                  if (!user?.messId || !monthSummary?.monthId) return undefined;
+                  const payments = calcStore.getPayments(user.messId, monthSummary.monthId);
+                  return payments.filter(p => p.userId === user.id).reduce((s, p) => s + p.amount, 0);
+                })()}
+              />
+            )}
           </motion.div>
         </div>
 
