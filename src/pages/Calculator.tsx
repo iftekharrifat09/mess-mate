@@ -261,16 +261,28 @@ export default function CalculatorPage() {
                   const due = memberDues[m.id] || 0;
                   const paid = memberPayments[m.id] || 0;
                   const remaining = Math.max(0, due - paid);
-                  const isFullyPaid = due > 0 ? paid >= due : true;
+                  const isFullyPaid = due > 0 ? paid >= due : due === 0;
+                  const overpaid = isFullyPaid && paid > due ? paid - due : 0;
                   return (
                     <motion.div key={m.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                       className={`p-3 rounded-xl border transition-all ${isFullyPaid ? 'border-success/50 bg-success/5' : 'border-border bg-card'}`}>
                       <div className="flex items-center justify-between mb-1">
                         <p className="font-semibold text-sm truncate">{m.fullName}</p>
-                        {isFullyPaid && <Badge className="bg-success text-success-foreground text-xs">Paid</Badge>}
+                        {isFullyPaid && (
+                          <div className="flex items-center gap-1.5">
+                            <Badge className="bg-success text-success-foreground text-xs">Paid</Badge>
+                            {overpaid > 0 && (
+                              <span className="text-success font-semibold text-xs">+{formatCurrency(overpaid)}</span>
+                            )}
+                          </div>
+                        )}
                       </div>
-                      <p className="text-xs text-muted-foreground">Utility Expenses: <span className="font-semibold text-foreground">{formatCurrency(due)}</span></p>
-                      <p className="text-xs text-muted-foreground">Paid: <span className="font-semibold text-success">{formatCurrency(paid)}</span></p>
+                      {due > 0 && (
+                        <p className="text-xs text-muted-foreground">Utility Expenses: <span className="font-semibold text-foreground">{formatCurrency(due)}</span></p>
+                      )}
+                      {paid > 0 && (
+                        <p className="text-xs text-muted-foreground">Paid: <span className="font-semibold text-success">{formatCurrency(paid)}</span></p>
+                      )}
                       {!isFullyPaid && remaining > 0 && (
                         <p className="text-xs text-destructive font-semibold mt-0.5">Due: {formatCurrency(remaining)}</p>
                       )}

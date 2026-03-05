@@ -3,13 +3,14 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { MemberSummary } from '@/types';
 import { formatCurrency, formatNumber } from '@/lib/calculations';
-import { Utensils, Wallet, Receipt, TrendingUp, TrendingDown, CheckCircle } from 'lucide-react';
+import { Utensils, Wallet, Receipt, TrendingUp, TrendingDown, CheckCircle, Crown } from 'lucide-react';
 
 interface MemberSummaryCardProps {
   summary: MemberSummary;
   isCurrentUser?: boolean;
   shouldPay?: number;
   totalPaid?: number;
+  isMealKing?: boolean;
 }
 
 const getBalanceStatus = (balance: number) => {
@@ -18,10 +19,13 @@ const getBalanceStatus = (balance: number) => {
   return { status: 'success', color: 'border-success/50 bg-success/5', icon: 'text-success' };
 };
 
-export default function MemberSummaryCard({ summary, isCurrentUser = false, shouldPay, totalPaid }: MemberSummaryCardProps) {
+export default function MemberSummaryCard({ summary, isCurrentUser = false, shouldPay, totalPaid, isMealKing = false }: MemberSummaryCardProps) {
   const totalCost = summary.mealCost + summary.individualCost + summary.sharedCost;
   const balanceStatus = getBalanceStatus(summary.balance);
   const isFullyPaid = shouldPay !== undefined && totalPaid !== undefined && (shouldPay > 0 ? totalPaid >= shouldPay : true);
+  const overpaid = isFullyPaid && totalPaid !== undefined && shouldPay !== undefined && totalPaid > shouldPay ? totalPaid - shouldPay : 0;
+  const showUtility = shouldPay !== undefined && shouldPay > 0;
+  const showIndividualShared = summary.individualCost > 0 || summary.sharedCost > 0;
 
   return (
     <motion.div
@@ -29,19 +33,27 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
     >
-      <Card className={`shadow-card hover:shadow-card-hover transition-all ${balanceStatus.color} ${isCurrentUser ? 'ring-2 ring-primary' : ''}`}>
+      <Card className={`shadow-card hover:shadow-card-hover transition-all ${balanceStatus.color} ${isCurrentUser ? 'ring-2 ring-primary' : ''} ${isMealKing ? 'ring-2 ring-yellow-400/60' : ''}`}
+        style={isMealKing ? { boxShadow: '0 0 20px 2px rgba(234, 179, 8, 0.15)' } : undefined}
+      >
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-lg font-semibold truncate">
-              {summary.userName}
-              {isCurrentUser && (
-                <span className="ml-2 text-xs font-normal text-primary">(You)</span>
+            <div className="flex items-center gap-2 min-w-0">
+              {isMealKing && (
+                <Crown className="h-5 w-5 flex-shrink-0" style={{ color: '#eab308', filter: 'drop-shadow(0 0 4px rgba(234,179,8,0.5))' }} />
               )}
-            </CardTitle>
+              <CardTitle className="text-lg font-semibold truncate">
+                {summary.userName}
+                {isCurrentUser && (
+                  <span className="ml-2 text-xs font-normal text-primary">(You)</span>
+                )}
+              </CardTitle>
+            </div>
             <motion.div
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+              className="flex-shrink-0"
             >
               {summary.balance >= 0 ? (
                 <div className={`flex items-center gap-1 ${balanceStatus.icon} text-sm font-semibold`}>
@@ -97,30 +109,38 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
             </div>
           </div>
 
-          {/* Utility Expenses & Paid status */}
-          {shouldPay !== undefined && (
+          {/* Utility Expenses - only show when > 0 */}
+          {showUtility && (
             <div className="mt-3 pt-3 border-t border-border">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">
-                  Utility Expenses: <span className="font-semibold text-foreground">{formatCurrency(shouldPay)}</span>
+                  Utility Expenses: <span className="font-semibold text-foreground">{formatCurrency(shouldPay!)}</span>
                 </span>
                 {isFullyPaid ? (
-                  <Badge className="bg-success text-success-foreground text-xs flex items-center gap-1">
-                    <CheckCircle className="h-3 w-3" /> Paid
-                  </Badge>
-                ) : totalPaid !== undefined && shouldPay > 0 ? (
-                  <span className="text-destructive font-semibold">Due: {formatCurrency(Math.max(0, shouldPay - totalPaid))}</span>
+                  <div className="flex items-center gap-1.5">
+                    <Badge className="bg-success text-success-foreground text-xs flex items-center gap-1">
+                      <CheckCircle className="h-3 w-3" /> Paid
+                    </Badge>
+                    {overpaid > 0 && (
+                      <span className="text-success font-semibold text-xs">+{formatCurrency(overpaid)}</span>
+                    )}
+                  </div>
+                ) : totalPaid !== undefined && shouldPay! > 0 ? (
+                  <span className="text-destructive font-semibold">Due: {formatCurrency(Math.max(0, shouldPay! - totalPaid))}</span>
                 ) : null}
               </div>
             </div>
           )}
 
-          <div className="mt-3 pt-3 border-t border-border">
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">Individual: {formatCurrency(summary.individualCost)}</span>
-              <span className="text-muted-foreground">Shared: {formatCurrency(summary.sharedCost)}</span>
+          {/* Individual & Shared - only show when at least one > 0 */}
+          {showIndividualShared && (
+            <div className="mt-3 pt-3 border-t border-border">
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Individual: {formatCurrency(summary.individualCost)}</span>
+                <span className="text-muted-foreground">Shared: {formatCurrency(summary.sharedCost)}</span>
+              </div>
             </div>
-          </div>
+          )}
         </CardContent>
       </Card>
     </motion.div>
