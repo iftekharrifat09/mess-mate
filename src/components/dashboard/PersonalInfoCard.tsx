@@ -58,17 +58,22 @@ export default function PersonalInfoCard({ summary, utilityExpenses, utilityPaid
           </div>
         </div>
 
-        {/* Utility Expenses */}
-        {utilityExpenses !== undefined && (
+        {/* Utility Expenses - only show when > 0 */}
+        {utilityExpenses !== undefined && utilityExpenses > 0 && (
           <div className="p-3 rounded-lg bg-background/50">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">
                 Utility Expenses: <span className="font-bold text-foreground">{formatCurrency(utilityExpenses)}</span>
               </span>
               {isFullyPaid ? (
-                <Badge className="bg-success text-success-foreground text-xs flex items-center gap-1">
-                  <CheckCircle className="h-3 w-3" /> Paid
-                </Badge>
+                <div className="flex items-center gap-1.5">
+                  <Badge className="bg-success text-success-foreground text-xs flex items-center gap-1">
+                    <CheckCircle className="h-3 w-3" /> Paid
+                  </Badge>
+                  {utilityPaid !== undefined && utilityPaid > utilityExpenses && (
+                    <span className="text-success font-semibold text-xs">+{formatCurrency(utilityPaid - utilityExpenses)}</span>
+                  )}
+                </div>
               ) : utilityPaid !== undefined && utilityExpenses > 0 ? (
                 <span className="text-xs text-destructive font-semibold">Due: {formatCurrency(Math.max(0, utilityExpenses - utilityPaid))}</span>
               ) : null}

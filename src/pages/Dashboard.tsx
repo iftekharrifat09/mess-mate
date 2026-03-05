@@ -270,15 +270,22 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {membersSummary.map((member) => (
-            <MemberSummaryCard
-              key={member.userId}
-              summary={member}
-              isCurrentUser={member.userId === userId}
-              shouldPay={memberDues[member.userId]?.shouldPay}
-              totalPaid={memberDues[member.userId]?.totalPaid}
-            />
-          ))}
+          {membersSummary.map((member) => {
+            // Crown logic: find single highest meal member
+            const maxMeals = Math.max(...membersSummary.map(m => m.totalMeals));
+            const topMembers = membersSummary.filter(m => m.totalMeals === maxMeals);
+            const isMealKing = maxMeals > 0 && topMembers.length === 1 && member.userId === topMembers[0].userId;
+            return (
+              <MemberSummaryCard
+                key={member.userId}
+                summary={member}
+                isCurrentUser={member.userId === userId}
+                shouldPay={memberDues[member.userId]?.shouldPay}
+                totalPaid={memberDues[member.userId]?.totalPaid}
+                isMealKing={isMealKing}
+              />
+            );
+          })}
         </div>
       )}
     </motion.div>
