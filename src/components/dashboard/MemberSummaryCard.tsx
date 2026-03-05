@@ -21,7 +21,7 @@ const getBalanceStatus = (balance: number) => {
 export default function MemberSummaryCard({ summary, isCurrentUser = false, shouldPay, totalPaid }: MemberSummaryCardProps) {
   const totalCost = summary.mealCost + summary.individualCost + summary.sharedCost;
   const balanceStatus = getBalanceStatus(summary.balance);
-  const isFullyPaid = shouldPay !== undefined && totalPaid !== undefined && totalPaid >= shouldPay && shouldPay > 0;
+  const isFullyPaid = shouldPay !== undefined && totalPaid !== undefined && (shouldPay > 0 ? totalPaid >= shouldPay : true);
 
   return (
     <motion.div
@@ -32,36 +32,29 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
       <Card className={`shadow-card hover:shadow-card-hover transition-all ${balanceStatus.color} ${isCurrentUser ? 'ring-2 ring-primary' : ''}`}>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-lg font-semibold">
+            <CardTitle className="text-lg font-semibold truncate">
               {summary.userName}
               {isCurrentUser && (
                 <span className="ml-2 text-xs font-normal text-primary">(You)</span>
               )}
             </CardTitle>
-            <div className="flex items-center gap-2">
-              {isFullyPaid && (
-                <Badge className="bg-success text-success-foreground text-xs flex items-center gap-1">
-                  <CheckCircle className="h-3 w-3" /> Paid
-                </Badge>
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 30 }}
+            >
+              {summary.balance >= 0 ? (
+                <div className={`flex items-center gap-1 ${balanceStatus.icon} text-sm font-semibold`}>
+                  <TrendingUp className="h-4 w-4" />
+                  <span>+{formatCurrency(summary.balance)}</span>
+                </div>
+              ) : (
+                <div className={`flex items-center gap-1 ${balanceStatus.icon} text-sm font-semibold`}>
+                  <TrendingDown className="h-4 w-4" />
+                  <span>{formatCurrency(summary.balance)}</span>
+                </div>
               )}
-              <motion.div
-                initial={{ scale: 0 }}
-                animate={{ scale: 1 }}
-                transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-              >
-                {summary.balance >= 0 ? (
-                  <div className={`flex items-center gap-1 ${balanceStatus.icon} text-sm font-semibold`}>
-                    <TrendingUp className="h-4 w-4" />
-                    <span>+{formatCurrency(summary.balance)}</span>
-                  </div>
-                ) : (
-                  <div className={`flex items-center gap-1 ${balanceStatus.icon} text-sm font-semibold`}>
-                    <TrendingDown className="h-4 w-4" />
-                    <span>{formatCurrency(summary.balance)}</span>
-                  </div>
-                )}
-              </motion.div>
-            </div>
+            </motion.div>
           </div>
         </CardHeader>
         <CardContent>
@@ -104,14 +97,20 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
             </div>
           </div>
 
-          {/* Calculator dues section */}
-          {shouldPay !== undefined && shouldPay > 0 && (
+          {/* Utility Expenses & Paid status */}
+          {shouldPay !== undefined && (
             <div className="mt-3 pt-3 border-t border-border">
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Should Pay: <span className="font-semibold text-foreground">{formatCurrency(shouldPay)}</span></span>
-                {!isFullyPaid && totalPaid !== undefined && (
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground">
+                  Utility Expenses: <span className="font-semibold text-foreground">{formatCurrency(shouldPay)}</span>
+                </span>
+                {isFullyPaid ? (
+                  <Badge className="bg-success text-success-foreground text-xs flex items-center gap-1">
+                    <CheckCircle className="h-3 w-3" /> Paid
+                  </Badge>
+                ) : totalPaid !== undefined && shouldPay > 0 ? (
                   <span className="text-destructive font-semibold">Due: {formatCurrency(Math.max(0, shouldPay - totalPaid))}</span>
-                )}
+                ) : null}
               </div>
             </div>
           )}

@@ -18,8 +18,12 @@ import { CalcCategory, CalcException, CalcPayment } from '@/lib/calculatorStorag
 import { formatCurrency } from '@/lib/calculations';
 import {
   Plus, Edit2, Trash2, UserPlus, Calculator as CalcIcon,
-  CheckCircle, XCircle, Users, Wallet, DollarSign
+  CheckCircle, XCircle, Users, Wallet, DollarSign, Calendar
 } from 'lucide-react';
+import { format } from 'date-fns';
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
 
 export default function CalculatorPage() {
   const { user } = useAuth();
@@ -188,7 +192,7 @@ export default function CalculatorPage() {
               <CalcIcon className="h-6 w-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Calculator</h1>
+             <h1 className="text-2xl font-bold text-foreground">Mess Expenses</h1>
               <p className="text-sm text-muted-foreground">Manage monthly cost categories & payments</p>
             </div>
           </div>
@@ -257,7 +261,7 @@ export default function CalculatorPage() {
                   const due = memberDues[m.id] || 0;
                   const paid = memberPayments[m.id] || 0;
                   const remaining = Math.max(0, due - paid);
-                  const isFullyPaid = paid >= due && due > 0;
+                  const isFullyPaid = due > 0 ? paid >= due : true;
                   return (
                     <motion.div key={m.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
                       className={`p-3 rounded-xl border transition-all ${isFullyPaid ? 'border-success/50 bg-success/5' : 'border-border bg-card'}`}>
@@ -265,7 +269,7 @@ export default function CalculatorPage() {
                         <p className="font-semibold text-sm truncate">{m.fullName}</p>
                         {isFullyPaid && <Badge className="bg-success text-success-foreground text-xs">Paid</Badge>}
                       </div>
-                      <p className="text-xs text-muted-foreground">Should Pay: <span className="font-semibold text-foreground">{formatCurrency(due)}</span></p>
+                      <p className="text-xs text-muted-foreground">Utility Expenses: <span className="font-semibold text-foreground">{formatCurrency(due)}</span></p>
                       <p className="text-xs text-muted-foreground">Paid: <span className="font-semibold text-success">{formatCurrency(paid)}</span></p>
                       {!isFullyPaid && remaining > 0 && (
                         <p className="text-xs text-destructive font-semibold mt-0.5">Due: {formatCurrency(remaining)}</p>
@@ -381,34 +385,52 @@ export default function CalculatorPage() {
 
         {/* Payment Records (Manager only) */}
         {isManager && payments.length > 0 && (
-          <div className="space-y-4">
-            <h2 className="text-lg font-semibold text-foreground">Payment Records</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-              {payments.map(p => (
-                <motion.div key={p.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-                  <Card className="shadow-card">
-                    <CardContent className="pt-4 pb-3">
-                      <div className="flex items-center justify-between mb-2">
-                        <p className="font-semibold text-sm">{p.userName}</p>
-                        <p className="font-bold text-success">{formatCurrency(p.amount)}</p>
-                      </div>
-                      {p.description && <p className="text-xs text-muted-foreground mb-2">{p.description}</p>}
-                      <div className="flex gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => {
-                          setEditPayment(p); setPayUserId(p.userId); setPayAmount(String(p.amount)); setPayDesc(p.description); setPayStep(2); setPayModal(true);
-                        }}>
-                          <Edit2 className="h-3 w-3 mr-1" /> Edit
-                        </Button>
-                        <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDeletePayment(p.id)}>
-                          <Trash2 className="h-3 w-3 mr-1" /> Delete
-                        </Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-            </div>
-          </div>
+          <Card className="shadow-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-lg">
+                <Wallet className="h-5 w-5 text-primary" /> Payment Records
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Date</TableHead>
+                      <TableHead>Member</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead>Note</TableHead>
+                      <TableHead className="text-right">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {payments.map(p => (
+                      <TableRow key={p.id}>
+                        <TableCell className="text-muted-foreground whitespace-nowrap">
+                          {format(new Date(p.createdAt), 'MMM dd, yyyy hh:mm a')}
+                        </TableCell>
+                        <TableCell className="font-medium">{p.userName}</TableCell>
+                        <TableCell className="font-bold text-success">{formatCurrency(p.amount)}</TableCell>
+                        <TableCell className="text-muted-foreground">{p.description || '-'}</TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
+                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+                              setEditPayment(p); setPayUserId(p.userId); setPayAmount(String(p.amount)); setPayDesc(p.description); setPayStep(2); setPayModal(true);
+                            }}>
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeletePayment(p.id)}>
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            </CardContent>
+          </Card>
         )}
       </motion.div>
 

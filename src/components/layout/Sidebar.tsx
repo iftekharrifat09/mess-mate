@@ -25,7 +25,7 @@ const getNavItems = (isManager: boolean): NavItem[] => [
   { label: 'Deposits', href: '/deposits', icon: Wallet, managerOnly: true },
   { label: 'Meal Costs', href: '/meal-costs', icon: ShoppingCart, managerOnly: true },
   { label: 'Other Costs', href: '/other-costs', icon: Receipt, managerOnly: true },
-  { label: 'Calculator', href: '/calculator', icon: Calculator },
+  { label: 'Mess Expenses', href: '/calculator', icon: Calculator },
   { label: 'Month Details', href: '/month-details', icon: CalendarDays },
   { label: isManager ? 'Edit Calendar' : 'Calendar View', href: '/edit-calendar', icon: Calendar },
   { label: 'Bazar Dates', href: '/bazar-dates', icon: ShoppingCart, managerOnly: true },
