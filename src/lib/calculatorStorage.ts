@@ -1,3 +1,7 @@
+import { shouldUseBackend } from './config';
+import * as api from './api';
+import { toast } from '@/hooks/use-toast';
+
 export interface CalcCategory {
   id: string;
   messId: string;
@@ -33,84 +37,213 @@ const KEYS = {
   PAYMENTS: 'mess_calc_payments',
 };
 
-function get<T>(key: string): T[] {
+// Helper to show localStorage fallback alert - debounced
+let lastFallbackToast = 0;
+function showFallbackAlert() {
+  const now = Date.now();
+  if (now - lastFallbackToast < 5000) return;
+  lastFallbackToast = now;
+  toast({
+    title: "MongoDB not connected",
+    description: "Saving data to Local Storage",
+    variant: "default",
+  });
+}
+
+function getLocal<T>(key: string): T[] {
   const d = localStorage.getItem(key);
   return d ? JSON.parse(d) : [];
 }
-function save<T>(key: string, data: T[]) {
+function saveLocal<T>(key: string, data: T[]) {
   localStorage.setItem(key, JSON.stringify(data));
 }
 function genId() { return crypto.randomUUID(); }
 
-// Categories
-export function getCategories(messId: string, monthId: string): CalcCategory[] {
-  return get<CalcCategory>(KEYS.CATEGORIES).filter(c => c.messId === messId && c.monthId === monthId);
+// ============= Categories =============
+
+export async function getCategories(messId: string, monthId: string): Promise<CalcCategory[]> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.getCalcCategoriesAPI(messId, monthId);
+      if (result.success && result.data) {
+        return (result.data as any).categories || [];
+      }
+      if (result.usingLocalStorage) {
+        showFallbackAlert();
+      }
+    } catch (e) { console.error('Error fetching categories:', e); }
+  }
+  return getLocal<CalcCategory>(KEYS.CATEGORIES).filter(c => c.messId === messId && c.monthId === monthId);
 }
-export function createCategory(data: Omit<CalcCategory, 'id' | 'createdAt'>): CalcCategory {
-  const all = get<CalcCategory>(KEYS.CATEGORIES);
+
+export async function createCategory(data: Omit<CalcCategory, 'id' | 'createdAt'>): Promise<CalcCategory> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.createCalcCategoryAPI(data);
+      if (result.success && result.data) {
+        return (result.data as any).category || result.data;
+      }
+      if (result.usingLocalStorage) showFallbackAlert();
+    } catch (e) { console.error('Error creating category:', e); }
+  }
+  const all = getLocal<CalcCategory>(KEYS.CATEGORIES);
   const item: CalcCategory = { ...data, id: genId(), createdAt: new Date().toISOString() };
   all.push(item);
-  save(KEYS.CATEGORIES, all);
+  saveLocal(KEYS.CATEGORIES, all);
   return item;
 }
-export function updateCategory(id: string, updates: Partial<CalcCategory>): CalcCategory | undefined {
-  const all = get<CalcCategory>(KEYS.CATEGORIES);
+
+export async function updateCategory(id: string, updates: Partial<CalcCategory>): Promise<CalcCategory | undefined> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.updateCalcCategoryAPI(id, updates);
+      if (result.success && result.data) {
+        return (result.data as any).category || result.data;
+      }
+      if (result.usingLocalStorage) showFallbackAlert();
+    } catch (e) { console.error('Error updating category:', e); }
+  }
+  const all = getLocal<CalcCategory>(KEYS.CATEGORIES);
   const idx = all.findIndex(c => c.id === id);
   if (idx === -1) return undefined;
   all[idx] = { ...all[idx], ...updates };
-  save(KEYS.CATEGORIES, all);
+  saveLocal(KEYS.CATEGORIES, all);
   return all[idx];
 }
-export function deleteCategory(id: string) {
-  save(KEYS.CATEGORIES, get<CalcCategory>(KEYS.CATEGORIES).filter(c => c.id !== id));
-  // Also delete related exceptions
-  save(KEYS.EXCEPTIONS, get<CalcException>(KEYS.EXCEPTIONS).filter(e => e.categoryId !== id));
+
+export async function deleteCategory(id: string): Promise<void> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.deleteCalcCategoryAPI(id);
+      if (result.success) return;
+      if (result.usingLocalStorage) showFallbackAlert();
+    } catch (e) { console.error('Error deleting category:', e); }
+  }
+  saveLocal(KEYS.CATEGORIES, getLocal<CalcCategory>(KEYS.CATEGORIES).filter(c => c.id !== id));
+  saveLocal(KEYS.EXCEPTIONS, getLocal<CalcException>(KEYS.EXCEPTIONS).filter(e => e.categoryId !== id));
 }
 
-// Exceptions
-export function getExceptions(categoryId: string): CalcException[] {
-  return get<CalcException>(KEYS.EXCEPTIONS).filter(e => e.categoryId === categoryId);
+// ============= Exceptions =============
+
+export async function getExceptions(categoryId: string): Promise<CalcException[]> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.getCalcExceptionsAPI({ categoryId });
+      if (result.success && result.data) {
+        return (result.data as any).exceptions || [];
+      }
+      if (result.usingLocalStorage) showFallbackAlert();
+    } catch (e) { console.error('Error fetching exceptions:', e); }
+  }
+  return getLocal<CalcException>(KEYS.EXCEPTIONS).filter(e => e.categoryId === categoryId);
 }
-export function getAllExceptions(messId: string, monthId: string): CalcException[] {
-  const cats = getCategories(messId, monthId);
+
+export async function getAllExceptions(messId: string, monthId: string): Promise<CalcException[]> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.getCalcExceptionsAPI({ messId, monthId });
+      if (result.success && result.data) {
+        return (result.data as any).exceptions || [];
+      }
+      if (result.usingLocalStorage) showFallbackAlert();
+    } catch (e) { console.error('Error fetching all exceptions:', e); }
+  }
+  const cats = getLocal<CalcCategory>(KEYS.CATEGORIES).filter(c => c.messId === messId && c.monthId === monthId);
   const catIds = new Set(cats.map(c => c.id));
-  return get<CalcException>(KEYS.EXCEPTIONS).filter(e => catIds.has(e.categoryId));
+  return getLocal<CalcException>(KEYS.EXCEPTIONS).filter(e => catIds.has(e.categoryId));
 }
-export function createException(data: Omit<CalcException, 'id'>): CalcException {
-  const all = get<CalcException>(KEYS.EXCEPTIONS);
+
+export async function createException(data: Omit<CalcException, 'id'>): Promise<CalcException> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.createCalcExceptionAPI(data);
+      if (result.success && result.data) {
+        return (result.data as any).exception || result.data;
+      }
+      if (result.usingLocalStorage) showFallbackAlert();
+    } catch (e) { console.error('Error creating exception:', e); }
+  }
+  const all = getLocal<CalcException>(KEYS.EXCEPTIONS);
   const item: CalcException = { ...data, id: genId() };
   all.push(item);
-  save(KEYS.EXCEPTIONS, all);
+  saveLocal(KEYS.EXCEPTIONS, all);
   return item;
-}
-export function deleteException(id: string) {
-  save(KEYS.EXCEPTIONS, get<CalcException>(KEYS.EXCEPTIONS).filter(e => e.id !== id));
 }
 
-// Payments
-export function getPayments(messId: string, monthId: string): CalcPayment[] {
-  return get<CalcPayment>(KEYS.PAYMENTS).filter(p => p.messId === messId && p.monthId === monthId);
+export async function deleteException(id: string): Promise<void> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.deleteCalcExceptionAPI(id);
+      if (result.success) return;
+      if (result.usingLocalStorage) showFallbackAlert();
+    } catch (e) { console.error('Error deleting exception:', e); }
+  }
+  saveLocal(KEYS.EXCEPTIONS, getLocal<CalcException>(KEYS.EXCEPTIONS).filter(e => e.id !== id));
 }
-export function createPayment(data: Omit<CalcPayment, 'id' | 'createdAt'>): CalcPayment {
-  const all = get<CalcPayment>(KEYS.PAYMENTS);
+
+// ============= Payments =============
+
+export async function getPayments(messId: string, monthId: string): Promise<CalcPayment[]> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.getCalcPaymentsAPI(messId, monthId);
+      if (result.success && result.data) {
+        return (result.data as any).payments || [];
+      }
+      if (result.usingLocalStorage) showFallbackAlert();
+    } catch (e) { console.error('Error fetching payments:', e); }
+  }
+  return getLocal<CalcPayment>(KEYS.PAYMENTS).filter(p => p.messId === messId && p.monthId === monthId);
+}
+
+export async function createPayment(data: Omit<CalcPayment, 'id' | 'createdAt'>): Promise<CalcPayment> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.createCalcPaymentAPI(data);
+      if (result.success && result.data) {
+        return (result.data as any).payment || result.data;
+      }
+      if (result.usingLocalStorage) showFallbackAlert();
+    } catch (e) { console.error('Error creating payment:', e); }
+  }
+  const all = getLocal<CalcPayment>(KEYS.PAYMENTS);
   const item: CalcPayment = { ...data, id: genId(), createdAt: new Date().toISOString() };
   all.push(item);
-  save(KEYS.PAYMENTS, all);
+  saveLocal(KEYS.PAYMENTS, all);
   return item;
 }
-export function updatePayment(id: string, updates: Partial<CalcPayment>): CalcPayment | undefined {
-  const all = get<CalcPayment>(KEYS.PAYMENTS);
+
+export async function updatePayment(id: string, updates: Partial<CalcPayment>): Promise<CalcPayment | undefined> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.updateCalcPaymentAPI(id, updates);
+      if (result.success && result.data) {
+        return (result.data as any).payment || result.data;
+      }
+      if (result.usingLocalStorage) showFallbackAlert();
+    } catch (e) { console.error('Error updating payment:', e); }
+  }
+  const all = getLocal<CalcPayment>(KEYS.PAYMENTS);
   const idx = all.findIndex(p => p.id === id);
   if (idx === -1) return undefined;
   all[idx] = { ...all[idx], ...updates };
-  save(KEYS.PAYMENTS, all);
+  saveLocal(KEYS.PAYMENTS, all);
   return all[idx];
 }
-export function deletePayment(id: string) {
-  save(KEYS.PAYMENTS, get<CalcPayment>(KEYS.PAYMENTS).filter(p => p.id !== id));
+
+export async function deletePayment(id: string): Promise<void> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.deleteCalcPaymentAPI(id);
+      if (result.success) return;
+      if (result.usingLocalStorage) showFallbackAlert();
+    } catch (e) { console.error('Error deleting payment:', e); }
+  }
+  saveLocal(KEYS.PAYMENTS, getLocal<CalcPayment>(KEYS.PAYMENTS).filter(p => p.id !== id));
 }
 
-// Calculation helpers
+// ============= Calculation helpers =============
+
 export function calculateMemberDues(
   categories: CalcCategory[],
   exceptions: CalcException[],

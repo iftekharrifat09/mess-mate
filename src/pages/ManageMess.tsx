@@ -74,7 +74,7 @@ export default function ManageMess() {
         setNewMessName(messData.name);
         setNewMessCode(messData.messCode || '');
         // Load DESCO settings
-        const desco = getDescoSettings(messData.id);
+        const desco = await getDescoSettings(messData.id);
         if (desco) {
           setDescoAccountNo(desco.accountNo);
           setDescoApiType(desco.apiType);
@@ -469,7 +469,7 @@ export default function ManageMess() {
                       accountNo: descoAccountNo,
                       apiType: descoApiType,
                     };
-                    saveDescoSettings(mess.id, settings);
+                    await saveDescoSettings(mess.id, settings);
                     // Verify by fetching balance
                     const result = await fetchAllDescoData(mess.id, settings, true);
                     if (result) {
@@ -509,9 +509,9 @@ export default function ManageMess() {
               {descoSaved && (
                 <Button
                   variant="outline"
-                  onClick={() => {
+                  onClick={async () => {
                     if (!mess) return;
-                    removeDescoSettings(mess.id);
+                    await removeDescoSettings(mess.id);
                     setDescoAccountNo('');
                     setDescoSaved(false);
                     toast({

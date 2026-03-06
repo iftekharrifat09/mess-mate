@@ -35,7 +35,7 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
   const [error, setError] = useState(false);
 
   const loadData = useCallback(async (force = false) => {
-    const s = getDescoSettings(messId);
+    const s = await getDescoSettings(messId);
     setSettings(s);
     if (!s) { setLoading(false); return; }
     try {

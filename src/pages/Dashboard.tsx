@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useCallback, useTransition, useMemo } from 'react';
+import { CalcCategory, CalcException, CalcPayment } from '@/lib/calculatorStorage';
 import { motion } from 'framer-motion';
 import gsap from 'gsap';
 import { useAuth } from '@/contexts/AuthContext';
@@ -42,6 +43,9 @@ export default function Dashboard() {
   const [bazarDates, setBazarDates] = useState<BazarDate[]>([]);
   const [members, setMembers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [calcCategories, setCalcCategories] = useState<CalcCategory[]>([]);
+  const [calcExceptions, setCalcExceptions] = useState<CalcException[]>([]);
+  const [calcPayments, setCalcPayments] = useState<CalcPayment[]>([]);
   const [isPending, startTransition] = useTransition();
   const headerRef = useRef<HTMLDivElement>(null);
   const dataLoadedRef = useRef(false);
@@ -78,6 +82,18 @@ export default function Dashboard() {
           setPersonalSummary(pSummary);
           setMembersSummary(allMembers);
         });
+
+        // Load calc data for utility expenses
+        if (user.messId && activeMonth.id) {
+          const [cats, excs, pays] = await Promise.all([
+            calcStore.getCategories(user.messId, activeMonth.id),
+            calcStore.getAllExceptions(user.messId, activeMonth.id),
+            calcStore.getPayments(user.messId, activeMonth.id),
+          ]);
+          setCalcCategories(cats);
+          setCalcExceptions(excs);
+          setCalcPayments(pays);
+        }
       } else {
         startTransition(() => {
           setMonthSummary(EMPTY_MONTH_SUMMARY);
@@ -168,14 +184,11 @@ export default function Dashboard() {
                 summary={personalSummary}
                 utilityExpenses={(() => {
                   if (!user?.messId || !monthSummary?.monthId) return undefined;
-                  const cats = calcStore.getCategories(user.messId, monthSummary.monthId);
-                  const excs = calcStore.getAllExceptions(user.messId, monthSummary.monthId);
-                  return calcStore.calculateMemberDues(cats, excs, members.length, user.id);
+                  return calcStore.calculateMemberDues(calcCategories, calcExceptions, members.length, user.id);
                 })()}
                 utilityPaid={(() => {
                   if (!user?.messId || !monthSummary?.monthId) return undefined;
-                  const payments = calcStore.getPayments(user.messId, monthSummary.monthId);
-                  return payments.filter(p => p.userId === user.id).reduce((s, p) => s + p.amount, 0);
+                  return calcPayments.filter(p => p.userId === user.id).reduce((s, p) => s + p.amount, 0);
                 })()}
               />
             )}
@@ -217,35 +230,38 @@ export default function Dashboard() {
           activeMonthId={monthSummary?.monthId || ''}
           userId={user?.id || ''}
           isManager={user?.role === 'manager'}
+          calcCategories={calcCategories}
+          calcExceptions={calcExceptions}
+          calcPayments={calcPayments}
         />
       </motion.div>
     </DashboardLayout>
   );
 }
 
-function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId, userId, isManager }: {
+function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId, userId, isManager, calcCategories, calcExceptions, calcPayments }: {
   membersSummary: MemberSummary[];
   members: User[];
   messId: string;
   activeMonthId: string;
   userId: string;
   isManager?: boolean;
+  calcCategories: CalcCategory[];
+  calcExceptions: CalcException[];
+  calcPayments: CalcPayment[];
 }) {
   const memberDues = useMemo(() => {
     if (!messId || !activeMonthId) return {};
-    const categories = calcStore.getCategories(messId, activeMonthId);
-    const exceptions = calcStore.getAllExceptions(messId, activeMonthId);
-    const payments = calcStore.getPayments(messId, activeMonthId);
     const totalMembers = members.length;
 
     const dues: Record<string, { shouldPay: number; totalPaid: number }> = {};
     for (const m of members) {
-      const shouldPay = calcStore.calculateMemberDues(categories, exceptions, totalMembers, m.id);
-      const totalPaid = payments.filter(p => p.userId === m.id).reduce((s, p) => s + p.amount, 0);
+      const shouldPay = calcStore.calculateMemberDues(calcCategories, calcExceptions, totalMembers, m.id);
+      const totalPaid = calcPayments.filter(p => p.userId === m.id).reduce((s, p) => s + p.amount, 0);
       dues[m.id] = { shouldPay, totalPaid };
     }
     return dues;
-  }, [messId, activeMonthId, members]);
+  }, [messId, activeMonthId, members, calcCategories, calcExceptions, calcPayments]);
 
   return (
     <motion.div

@@ -54,6 +54,8 @@ function transformMessDoc(doc) {
     id: _id.toString(), 
     messCode: code,  // Frontend expects messCode instead of code
     code,  // Keep original code for backward compatibility
+    descoAccountNo: doc.descoAccountNo || '',
+    descoApiType: doc.descoApiType || 'tkdes',
     ...rest 
   };
 }
@@ -87,6 +89,9 @@ async function connectToDatabase() {
       notifications: db.collection("notifications"),
       notes: db.collection("notes"),
       otps: db.collection("otps"),
+      calcCategories: db.collection("calcCategories"),
+      calcExceptions: db.collection("calcExceptions"),
+      calcPayments: db.collection("calcPayments"),
     };
 
     // Create indexes
@@ -111,6 +116,9 @@ async function connectToDatabase() {
       collections.notes.createIndex({ messId: 1 }),
       collections.otps.createIndex({ email: 1 }),
       collections.otps.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+      collections.calcCategories.createIndex({ messId: 1, monthId: 1 }),
+      collections.calcExceptions.createIndex({ categoryId: 1 }),
+      collections.calcPayments.createIndex({ messId: 1, monthId: 1 }),
     ]);
   } catch (error) {
     console.error("❌ MongoDB Connection Error:", error);
@@ -955,10 +963,12 @@ app.get("/api/mess/search/:query", async (req, res) => {
 
 app.put("/api/mess", authMiddleware, async (req, res) => {
   try {
-    const { name, code } = req.body;
+    const { name, code, descoAccountNo, descoApiType } = req.body;
     const updateData = {};
     if (name) updateData.name = name;
     if (code) updateData.code = code.toUpperCase();
+    if (descoAccountNo !== undefined) updateData.descoAccountNo = descoAccountNo;
+    if (descoApiType !== undefined) updateData.descoApiType = descoApiType;
 
     await collections.messes.updateOne(
       { _id: new ObjectId(req.user.messId) },
@@ -969,11 +979,14 @@ app.put("/api/mess", authMiddleware, async (req, res) => {
       _id: new ObjectId(req.user.messId),
     });
 
-    await notifyMembers(req.user.messId, req.userId, {
-      title: "Mess Updated",
-      message: name ? `Mess name changed to "${name}"` : "Mess code has been updated",
-      type: "mess_update",
-    });
+    // Only notify members for name/code changes, not DESCO settings
+    if (name || code) {
+      await notifyMembers(req.user.messId, req.userId, {
+        title: "Mess Updated",
+        message: name ? `Mess name changed to "${name}"` : "Mess code has been updated",
+        type: "mess_update",
+      });
+    }
 
     res.json({ success: true, mess: transformMessDoc(mess) });
   } catch (error) {
@@ -998,6 +1011,9 @@ app.delete("/api/mess", authMiddleware, async (req, res) => {
       collections.bazarDates.deleteMany({ messId }),
       collections.notifications.deleteMany({ messId }),
       collections.notes.deleteMany({ messId }),
+      collections.calcCategories.deleteMany({ messId }),
+      collections.calcExceptions.deleteMany({ messId }),
+      collections.calcPayments.deleteMany({ messId }),
       collections.messes.deleteOne({ _id: messObjectId }),
     ]);
 
@@ -2249,6 +2265,149 @@ app.delete("/api/months/:id", authMiddleware, async (req, res) => {
   } catch (error) {
     console.error("Delete month error:", error);
     res.status(500).json({ success: false, error: "Failed to delete month" });
+  }
+});
+
+// ============================================
+// MESS EXPENSE (CALCULATOR) ROUTES
+// ============================================
+
+// --- Categories ---
+app.get("/api/calc-categories", authMiddleware, async (req, res) => {
+  try {
+    const messId = req.query.messId || req.user.messId;
+    const monthId = req.query.monthId;
+    if (!monthId) return res.status(400).json({ success: false, error: "monthId required" });
+    const categories = await collections.calcCategories.find({ messId, monthId }).sort({ createdAt: -1 }).toArray();
+    res.json({ success: true, categories: transformDocs(categories) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to get categories" });
+  }
+});
+
+app.post("/api/calc-categories", authMiddleware, async (req, res) => {
+  try {
+    const { title, totalCost, status, messId, monthId } = req.body;
+    const doc = { title, totalCost, status: status || "unpaid", messId: messId || req.user.messId, monthId, createdAt: new Date() };
+    const result = await collections.calcCategories.insertOne(doc);
+    res.json({ success: true, category: { id: result.insertedId.toString(), ...doc } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to create category" });
+  }
+});
+
+app.put("/api/calc-categories/:id", authMiddleware, async (req, res) => {
+  try {
+    const { title, totalCost, status } = req.body;
+    const updateData = {};
+    if (title !== undefined) updateData.title = title;
+    if (totalCost !== undefined) updateData.totalCost = totalCost;
+    if (status !== undefined) updateData.status = status;
+    await collections.calcCategories.updateOne({ _id: new ObjectId(req.params.id) }, { $set: updateData });
+    const doc = await collections.calcCategories.findOne({ _id: new ObjectId(req.params.id) });
+    res.json({ success: true, category: transformDoc(doc) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to update category" });
+  }
+});
+
+app.delete("/api/calc-categories/:id", authMiddleware, async (req, res) => {
+  try {
+    const catId = req.params.id;
+    await Promise.all([
+      collections.calcCategories.deleteOne({ _id: new ObjectId(catId) }),
+      collections.calcExceptions.deleteMany({ categoryId: catId }),
+    ]);
+    res.json({ success: true, message: "Category deleted" });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to delete category" });
+  }
+});
+
+// --- Exceptions ---
+app.get("/api/calc-exceptions", authMiddleware, async (req, res) => {
+  try {
+    const { categoryId, messId, monthId } = req.query;
+    let filter = {};
+    if (categoryId) {
+      filter.categoryId = categoryId;
+    } else if (messId && monthId) {
+      // Get all exceptions for all categories in this mess/month
+      const cats = await collections.calcCategories.find({ messId, monthId }).toArray();
+      const catIds = cats.map(c => c._id.toString());
+      filter.categoryId = { $in: catIds };
+    }
+    const exceptions = await collections.calcExceptions.find(filter).toArray();
+    res.json({ success: true, exceptions: transformDocs(exceptions) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to get exceptions" });
+  }
+});
+
+app.post("/api/calc-exceptions", authMiddleware, async (req, res) => {
+  try {
+    const { categoryId, userId, userName, amount } = req.body;
+    const doc = { categoryId, userId, userName, amount };
+    const result = await collections.calcExceptions.insertOne(doc);
+    res.json({ success: true, exception: { id: result.insertedId.toString(), ...doc } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to create exception" });
+  }
+});
+
+app.delete("/api/calc-exceptions/:id", authMiddleware, async (req, res) => {
+  try {
+    await collections.calcExceptions.deleteOne({ _id: new ObjectId(req.params.id) });
+    res.json({ success: true, message: "Exception deleted" });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to delete exception" });
+  }
+});
+
+// --- Payments ---
+app.get("/api/calc-payments", authMiddleware, async (req, res) => {
+  try {
+    const messId = req.query.messId || req.user.messId;
+    const monthId = req.query.monthId;
+    if (!monthId) return res.status(400).json({ success: false, error: "monthId required" });
+    const payments = await collections.calcPayments.find({ messId, monthId }).sort({ createdAt: -1 }).toArray();
+    res.json({ success: true, payments: transformDocs(payments) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to get payments" });
+  }
+});
+
+app.post("/api/calc-payments", authMiddleware, async (req, res) => {
+  try {
+    const { userId, userName, amount, description, messId, monthId } = req.body;
+    const doc = { userId, userName, amount, description, messId: messId || req.user.messId, monthId, createdAt: new Date() };
+    const result = await collections.calcPayments.insertOne(doc);
+    res.json({ success: true, payment: { id: result.insertedId.toString(), ...doc } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to create payment" });
+  }
+});
+
+app.put("/api/calc-payments/:id", authMiddleware, async (req, res) => {
+  try {
+    const { amount, description } = req.body;
+    const updateData = {};
+    if (amount !== undefined) updateData.amount = amount;
+    if (description !== undefined) updateData.description = description;
+    await collections.calcPayments.updateOne({ _id: new ObjectId(req.params.id) }, { $set: updateData });
+    const doc = await collections.calcPayments.findOne({ _id: new ObjectId(req.params.id) });
+    res.json({ success: true, payment: transformDoc(doc) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to update payment" });
+  }
+});
+
+app.delete("/api/calc-payments/:id", authMiddleware, async (req, res) => {
+  try {
+    await collections.calcPayments.deleteOne({ _id: new ObjectId(req.params.id) });
+    res.json({ success: true, message: "Payment deleted" });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to delete payment" });
   }
 });
 

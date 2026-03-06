@@ -57,11 +57,16 @@ export default function CalculatorPage() {
 
   const messId = user?.messId || '';
 
-  const reload = useCallback(() => {
+  const reload = useCallback(async () => {
     if (!messId || !activeMonthId) return;
-    setCategories(calcStore.getCategories(messId, activeMonthId));
-    setAllExceptions(calcStore.getAllExceptions(messId, activeMonthId));
-    setPayments(calcStore.getPayments(messId, activeMonthId));
+    const [cats, excs, pays] = await Promise.all([
+      calcStore.getCategories(messId, activeMonthId),
+      calcStore.getAllExceptions(messId, activeMonthId),
+      calcStore.getPayments(messId, activeMonthId),
+    ]);
+    setCategories(cats);
+    setAllExceptions(excs);
+    setPayments(pays);
   }, [messId, activeMonthId]);
 
   useEffect(() => {
@@ -100,39 +105,39 @@ export default function CalculatorPage() {
   const monthlyTotal = useMemo(() => categories.reduce((s, c) => s + c.totalCost, 0), [categories]);
 
   // Handlers
-  const handleSaveCategory = () => {
+  const handleSaveCategory = async () => {
     if (!catTitle.trim() || !catCost) return;
     if (editCat) {
-      calcStore.updateCategory(editCat.id, { title: catTitle.trim(), totalCost: Number(catCost) });
+      await calcStore.updateCategory(editCat.id, { title: catTitle.trim(), totalCost: Number(catCost) });
     } else {
-      calcStore.createCategory({ messId, monthId: activeMonthId, title: catTitle.trim(), totalCost: Number(catCost), status: 'unpaid' });
+      await calcStore.createCategory({ messId, monthId: activeMonthId, title: catTitle.trim(), totalCost: Number(catCost), status: 'unpaid' });
     }
     setCatModal(false); setEditCat(null); setCatTitle(''); setCatCost('');
     reload();
     toast({ title: editCat ? 'Category updated' : 'Category added' });
   };
 
-  const handleDeleteCategory = (id: string) => {
-    calcStore.deleteCategory(id);
+  const handleDeleteCategory = async (id: string) => {
+    await calcStore.deleteCategory(id);
     reload();
     toast({ title: 'Category deleted', variant: 'destructive' });
   };
 
-  const handleStatusChange = (id: string, status: 'paid' | 'unpaid') => {
-    calcStore.updateCategory(id, { status });
+  const handleStatusChange = async (id: string, status: 'paid' | 'unpaid') => {
+    await calcStore.updateCategory(id, { status });
     reload();
   };
 
-  const handleSaveException = () => {
+  const handleSaveException = async () => {
     if (!excModal || !excUserId || !excAmount) return;
-    calcStore.createException({ categoryId: excModal, userId: excUserId, userName: members.find(m => m.id === excUserId)?.fullName || '', amount: Number(excAmount) });
+    await calcStore.createException({ categoryId: excModal, userId: excUserId, userName: members.find(m => m.id === excUserId)?.fullName || '', amount: Number(excAmount) });
     setExcModal(null); setExcUserId(''); setExcAmount(''); setExcStep(1);
     reload();
     toast({ title: 'Exception added' });
   };
 
-  const handleDeleteException = (id: string) => {
-    calcStore.deleteException(id);
+  const handleDeleteException = async (id: string) => {
+    await calcStore.deleteException(id);
     reload();
   };
 
@@ -151,21 +156,21 @@ export default function CalculatorPage() {
     setPayStep(2);
   };
 
-  const handleSavePayment = () => {
+  const handleSavePayment = async () => {
     if (!payUserId || !payAmount) return;
     if (editPayment) {
-      calcStore.updatePayment(editPayment.id, { amount: Number(payAmount), description: payDesc });
+      await calcStore.updatePayment(editPayment.id, { amount: Number(payAmount), description: payDesc });
       setEditPayment(null);
     } else {
-      calcStore.createPayment({ messId, monthId: activeMonthId, userId: payUserId, userName: members.find(m => m.id === payUserId)?.fullName || '', amount: Number(payAmount), description: payDesc });
+      await calcStore.createPayment({ messId, monthId: activeMonthId, userId: payUserId, userName: members.find(m => m.id === payUserId)?.fullName || '', amount: Number(payAmount), description: payDesc });
     }
     setPayModal(false); setPayUserId(''); setPayAmount(''); setPayDesc(''); setPayStep(1);
     reload();
     toast({ title: editPayment ? 'Payment updated' : 'Payment recorded' });
   };
 
-  const handleDeletePayment = (id: string) => {
-    calcStore.deletePayment(id);
+  const handleDeletePayment = async (id: string) => {
+    await calcStore.deletePayment(id);
     reload();
     toast({ title: 'Payment deleted', variant: 'destructive' });
   };
