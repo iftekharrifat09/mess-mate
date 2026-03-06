@@ -87,6 +87,9 @@ async function connectToDatabase() {
       notifications: db.collection("notifications"),
       notes: db.collection("notes"),
       otps: db.collection("otps"),
+      calcCategories: db.collection("calcCategories"),
+      calcExceptions: db.collection("calcExceptions"),
+      calcPayments: db.collection("calcPayments"),
     };
 
     // Create indexes
