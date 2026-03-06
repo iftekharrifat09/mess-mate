@@ -758,3 +758,52 @@ export async function notifyBulkMealsAPI(data: {
     body: JSON.stringify(data),
   });
 }
+
+// ============================================
+// MESS EXPENSE (CALCULATOR) API
+// ============================================
+
+export async function getCalcCategoriesAPI(messId: string, monthId: string) {
+  return apiRequest(`/calc-categories?messId=${messId}&monthId=${monthId}`, { method: 'GET' });
+}
+
+export async function createCalcCategoryAPI(data: any) {
+  return apiRequest('/calc-categories', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function updateCalcCategoryAPI(id: string, data: any) {
+  return apiRequest(`/calc-categories/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
+export async function deleteCalcCategoryAPI(id: string) {
+  return apiRequest(`/calc-categories/${id}`, { method: 'DELETE' });
+}
+
+export async function getCalcExceptionsAPI(params: { categoryId?: string; messId?: string; monthId?: string }) {
+  const query = new URLSearchParams(params as any).toString();
+  return apiRequest(`/calc-exceptions?${query}`, { method: 'GET' });
+}
+
+export async function createCalcExceptionAPI(data: any) {
+  return apiRequest('/calc-exceptions', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function deleteCalcExceptionAPI(id: string) {
+  return apiRequest(`/calc-exceptions/${id}`, { method: 'DELETE' });
+}
+
+export async function getCalcPaymentsAPI(messId: string, monthId: string) {
+  return apiRequest(`/calc-payments?messId=${messId}&monthId=${monthId}`, { method: 'GET' });
+}
+
+export async function createCalcPaymentAPI(data: any) {
+  return apiRequest('/calc-payments', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function updateCalcPaymentAPI(id: string, data: any) {
+  return apiRequest(`/calc-payments/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
+export async function deleteCalcPaymentAPI(id: string) {
+  return apiRequest(`/calc-payments/${id}`, { method: 'DELETE' });
+}

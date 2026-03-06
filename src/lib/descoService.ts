@@ -1,7 +1,11 @@
 /**
  * DESCO Electricity Service
- * Handles API calls to DESCO prepaid meter system and local storage of settings
+ * Handles API calls to DESCO prepaid meter system
+ * Settings stored in MongoDB (via mess document) with localStorage fallback
  */
+
+import { shouldUseBackend } from './config';
+import * as api from './api';
 
 export interface DescoSettings {
   accountNo: string;
@@ -39,9 +43,28 @@ const DESCO_BASE = 'https://prepaid.desco.org.bd/api';
 const SETTINGS_KEY = 'desco_settings_';
 const DATA_CACHE_KEY = 'desco_data_cache_';
 
-// ============= Settings Storage =============
+// ============= Settings Storage (MongoDB-backed with localStorage fallback) =============
 
-export function getDescoSettings(messId: string): DescoSettings | null {
+export async function getDescoSettings(messId: string): Promise<DescoSettings | null> {
+  // Try backend first - settings are stored on the mess document
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.getMessAPI(messId);
+      if (result.success && result.data) {
+        const mess = (result.data as any).mess || result.data;
+        if (mess?.descoAccountNo) {
+          return {
+            accountNo: mess.descoAccountNo,
+            apiType: mess.descoApiType || 'tkdes',
+          };
+        }
+        return null;
+      }
+    } catch (e) {
+      console.error('Error fetching DESCO settings from backend:', e);
+    }
+  }
+  // Fallback to localStorage
   try {
     const stored = localStorage.getItem(SETTINGS_KEY + messId);
     return stored ? JSON.parse(stored) : null;
@@ -50,11 +73,34 @@ export function getDescoSettings(messId: string): DescoSettings | null {
   }
 }
 
-export function saveDescoSettings(messId: string, settings: DescoSettings): void {
+export async function saveDescoSettings(messId: string, settings: DescoSettings): Promise<void> {
+  // Save to backend
+  if (shouldUseBackend()) {
+    try {
+      await api.updateMessAPI({
+        descoAccountNo: settings.accountNo,
+        descoApiType: settings.apiType,
+      } as any);
+    } catch (e) {
+      console.error('Error saving DESCO settings to backend:', e);
+    }
+  }
+  // Always save to localStorage as cache/fallback
   localStorage.setItem(SETTINGS_KEY + messId, JSON.stringify(settings));
 }
 
-export function removeDescoSettings(messId: string): void {
+export async function removeDescoSettings(messId: string): Promise<void> {
+  // Remove from backend
+  if (shouldUseBackend()) {
+    try {
+      await api.updateMessAPI({
+        descoAccountNo: '',
+        descoApiType: 'tkdes',
+      } as any);
+    } catch (e) {
+      console.error('Error removing DESCO settings from backend:', e);
+    }
+  }
   localStorage.removeItem(SETTINGS_KEY + messId);
   localStorage.removeItem(DATA_CACHE_KEY + messId);
 }
@@ -105,8 +151,7 @@ export async function fetchDescoBalance(settings: DescoSettings): Promise<DescoB
 export async function fetchDailyConsumption(settings: DescoSettings): Promise<DescoDailyConsumption[]> {
   try {
     const today = new Date();
-    // Fetch from last day of previous month so we can calculate day 1 diff
-    const dateFrom = new Date(today.getFullYear(), today.getMonth(), 0); // last day of prev month
+    const dateFrom = new Date(today.getFullYear(), today.getMonth(), 0);
     return await fetchDescoAPI(
       `${DESCO_BASE}/${settings.apiType}/customer/getCustomerDailyConsumption?accountNo=${settings.accountNo}&dateFrom=${formatDate(dateFrom)}&dateTo=${formatDate(today)}`
     ) || [];
