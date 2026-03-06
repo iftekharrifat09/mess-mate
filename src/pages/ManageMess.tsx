@@ -469,7 +469,7 @@ export default function ManageMess() {
                       accountNo: descoAccountNo,
                       apiType: descoApiType,
                     };
-                    saveDescoSettings(mess.id, settings);
+                    await saveDescoSettings(mess.id, settings);
                     // Verify by fetching balance
                     const result = await fetchAllDescoData(mess.id, settings, true);
                     if (result) {
