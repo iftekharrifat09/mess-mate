@@ -261,7 +261,7 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
       dues[m.id] = { shouldPay, totalPaid };
     }
     return dues;
-  }, [messId, activeMonthId, members]);
+  }, [messId, activeMonthId, members, calcCategories, calcExceptions, calcPayments]);
 
   return (
     <motion.div
