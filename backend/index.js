@@ -54,6 +54,8 @@ function transformMessDoc(doc) {
     id: _id.toString(), 
     messCode: code,  // Frontend expects messCode instead of code
     code,  // Keep original code for backward compatibility
+    descoAccountNo: doc.descoAccountNo || '',
+    descoApiType: doc.descoApiType || 'tkdes',
     ...rest 
   };
 }
