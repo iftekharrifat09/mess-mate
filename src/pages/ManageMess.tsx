@@ -74,7 +74,7 @@ export default function ManageMess() {
         setNewMessName(messData.name);
         setNewMessCode(messData.messCode || '');
         // Load DESCO settings
-        const desco = getDescoSettings(messData.id);
+        const desco = await getDescoSettings(messData.id);
         if (desco) {
           setDescoAccountNo(desco.accountNo);
           setDescoApiType(desco.apiType);

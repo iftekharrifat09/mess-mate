@@ -239,25 +239,25 @@ export default function Dashboard() {
   );
 }
 
-function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId, userId, isManager }: {
+function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId, userId, isManager, calcCategories, calcExceptions, calcPayments }: {
   membersSummary: MemberSummary[];
   members: User[];
   messId: string;
   activeMonthId: string;
   userId: string;
   isManager?: boolean;
+  calcCategories: CalcCategory[];
+  calcExceptions: CalcException[];
+  calcPayments: CalcPayment[];
 }) {
   const memberDues = useMemo(() => {
     if (!messId || !activeMonthId) return {};
-    const categories = calcStore.getCategories(messId, activeMonthId);
-    const exceptions = calcStore.getAllExceptions(messId, activeMonthId);
-    const payments = calcStore.getPayments(messId, activeMonthId);
     const totalMembers = members.length;
 
     const dues: Record<string, { shouldPay: number; totalPaid: number }> = {};
     for (const m of members) {
-      const shouldPay = calcStore.calculateMemberDues(categories, exceptions, totalMembers, m.id);
-      const totalPaid = payments.filter(p => p.userId === m.id).reduce((s, p) => s + p.amount, 0);
+      const shouldPay = calcStore.calculateMemberDues(calcCategories, calcExceptions, totalMembers, m.id);
+      const totalPaid = calcPayments.filter(p => p.userId === m.id).reduce((s, p) => s + p.amount, 0);
       dues[m.id] = { shouldPay, totalPaid };
     }
     return dues;

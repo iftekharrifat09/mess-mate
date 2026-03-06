@@ -57,11 +57,16 @@ export default function CalculatorPage() {
 
   const messId = user?.messId || '';
 
-  const reload = useCallback(() => {
+  const reload = useCallback(async () => {
     if (!messId || !activeMonthId) return;
-    setCategories(calcStore.getCategories(messId, activeMonthId));
-    setAllExceptions(calcStore.getAllExceptions(messId, activeMonthId));
-    setPayments(calcStore.getPayments(messId, activeMonthId));
+    const [cats, excs, pays] = await Promise.all([
+      calcStore.getCategories(messId, activeMonthId),
+      calcStore.getAllExceptions(messId, activeMonthId),
+      calcStore.getPayments(messId, activeMonthId),
+    ]);
+    setCategories(cats);
+    setAllExceptions(excs);
+    setPayments(pays);
   }, [messId, activeMonthId]);
 
   useEffect(() => {
