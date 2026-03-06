@@ -1009,6 +1009,9 @@ app.delete("/api/mess", authMiddleware, async (req, res) => {
       collections.bazarDates.deleteMany({ messId }),
       collections.notifications.deleteMany({ messId }),
       collections.notes.deleteMany({ messId }),
+      collections.calcCategories.deleteMany({ messId }),
+      collections.calcExceptions.deleteMany({ messId }),
+      collections.calcPayments.deleteMany({ messId }),
       collections.messes.deleteOne({ _id: messObjectId }),
     ]);
 
