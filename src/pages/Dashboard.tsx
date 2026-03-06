@@ -43,6 +43,9 @@ export default function Dashboard() {
   const [bazarDates, setBazarDates] = useState<BazarDate[]>([]);
   const [members, setMembers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
+  const [calcCategories, setCalcCategories] = useState<CalcCategory[]>([]);
+  const [calcExceptions, setCalcExceptions] = useState<CalcException[]>([]);
+  const [calcPayments, setCalcPayments] = useState<CalcPayment[]>([]);
   const [isPending, startTransition] = useTransition();
   const headerRef = useRef<HTMLDivElement>(null);
   const dataLoadedRef = useRef(false);
