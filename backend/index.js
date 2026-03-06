@@ -114,6 +114,9 @@ async function connectToDatabase() {
       collections.notes.createIndex({ messId: 1 }),
       collections.otps.createIndex({ email: 1 }),
       collections.otps.createIndex({ expiresAt: 1 }, { expireAfterSeconds: 0 }),
+      collections.calcCategories.createIndex({ messId: 1, monthId: 1 }),
+      collections.calcExceptions.createIndex({ categoryId: 1 }),
+      collections.calcPayments.createIndex({ messId: 1, monthId: 1 }),
     ]);
   } catch (error) {
     console.error("❌ MongoDB Connection Error:", error);
