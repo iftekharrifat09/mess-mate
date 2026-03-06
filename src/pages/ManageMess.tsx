@@ -511,7 +511,7 @@ export default function ManageMess() {
                   variant="outline"
                   onClick={() => {
                     if (!mess) return;
-                    removeDescoSettings(mess.id);
+                    await removeDescoSettings(mess.id);
                     setDescoAccountNo('');
                     setDescoSaved(false);
                     toast({
