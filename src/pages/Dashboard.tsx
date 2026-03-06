@@ -230,6 +230,9 @@ export default function Dashboard() {
           activeMonthId={monthSummary?.monthId || ''}
           userId={user?.id || ''}
           isManager={user?.role === 'manager'}
+          calcCategories={calcCategories}
+          calcExceptions={calcExceptions}
+          calcPayments={calcPayments}
         />
       </motion.div>
     </DashboardLayout>
