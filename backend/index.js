@@ -961,10 +961,12 @@ app.get("/api/mess/search/:query", async (req, res) => {
 
 app.put("/api/mess", authMiddleware, async (req, res) => {
   try {
-    const { name, code } = req.body;
+    const { name, code, descoAccountNo, descoApiType } = req.body;
     const updateData = {};
     if (name) updateData.name = name;
     if (code) updateData.code = code.toUpperCase();
+    if (descoAccountNo !== undefined) updateData.descoAccountNo = descoAccountNo;
+    if (descoApiType !== undefined) updateData.descoApiType = descoApiType;
 
     await collections.messes.updateOne(
       { _id: new ObjectId(req.user.messId) },
@@ -975,11 +977,14 @@ app.put("/api/mess", authMiddleware, async (req, res) => {
       _id: new ObjectId(req.user.messId),
     });
 
-    await notifyMembers(req.user.messId, req.userId, {
-      title: "Mess Updated",
-      message: name ? `Mess name changed to "${name}"` : "Mess code has been updated",
-      type: "mess_update",
-    });
+    // Only notify members for name/code changes, not DESCO settings
+    if (name || code) {
+      await notifyMembers(req.user.messId, req.userId, {
+        title: "Mess Updated",
+        message: name ? `Mess name changed to "${name}"` : "Mess code has been updated",
+        type: "mess_update",
+      });
+    }
 
     res.json({ success: true, mess: transformMessDoc(mess) });
   } catch (error) {
