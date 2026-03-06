@@ -509,7 +509,7 @@ export default function ManageMess() {
               {descoSaved && (
                 <Button
                   variant="outline"
-                  onClick={() => {
+                  onClick={async () => {
                     if (!mess) return;
                     await removeDescoSettings(mess.id);
                     setDescoAccountNo('');
