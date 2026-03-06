@@ -82,6 +82,18 @@ export default function Dashboard() {
           setPersonalSummary(pSummary);
           setMembersSummary(allMembers);
         });
+
+        // Load calc data for utility expenses
+        if (user.messId && activeMonth.id) {
+          const [cats, excs, pays] = await Promise.all([
+            calcStore.getCategories(user.messId, activeMonth.id),
+            calcStore.getAllExceptions(user.messId, activeMonth.id),
+            calcStore.getPayments(user.messId, activeMonth.id),
+          ]);
+          setCalcCategories(cats);
+          setCalcExceptions(excs);
+          setCalcPayments(pays);
+        }
       } else {
         startTransition(() => {
           setMonthSummary(EMPTY_MONTH_SUMMARY);
