@@ -194,18 +194,82 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
       <CardContent className="space-y-4 px-4 sm:px-6">
         {/* Balance Overview */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
-            className="bg-accent/10 border border-accent/20 rounded-xl p-2.5 sm:p-3.5 text-center"
-          >
-            <div className="inline-flex p-2 rounded-full bg-accent/10 mb-1.5">
-              <Wallet className="h-4 w-4 text-accent" />
-            </div>
-            <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">Balance</p>
-            <p className="text-base sm:text-xl font-bold text-accent mt-0.5">
-              ৳{data.balance?.balance?.toFixed(2) ?? '0.00'}
-            </p>
-          </motion.div>
+          {(() => {
+            const balance = data.balance?.balance ?? 0;
+            const isEmergency = balance <= 100;
+            const isWarning = balance > 100 && balance <= 299;
+            const isSafe = balance > 300;
+            
+            const colorClasses = isEmergency
+              ? 'bg-destructive/15 border-destructive/40'
+              : isWarning
+              ? 'bg-warning/15 border-warning/40'
+              : 'bg-success/15 border-success/40';
+            
+            const iconBgClasses = isEmergency
+              ? 'bg-destructive/20'
+              : isWarning
+              ? 'bg-warning/20'
+              : 'bg-success/20';
+            
+            const iconColorClasses = isEmergency
+              ? 'text-destructive'
+              : isWarning
+              ? 'text-warning'
+              : 'text-success';
+            
+            const textColorClasses = isEmergency
+              ? 'text-destructive'
+              : isWarning
+              ? 'text-warning'
+              : 'text-success';
+
+            return (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={isEmergency ? {
+                  opacity: 1,
+                  y: 0,
+                  boxShadow: [
+                    '0 0 0 0 hsl(var(--destructive) / 0)',
+                    '0 0 20px 4px hsl(var(--destructive) / 0.4)',
+                    '0 0 0 0 hsl(var(--destructive) / 0)'
+                  ]
+                } : { opacity: 1, y: 0 }}
+                transition={isEmergency ? {
+                  delay: 0.1,
+                  boxShadow: { duration: 1.5, repeat: Infinity, ease: 'easeInOut' }
+                } : { delay: 0.1 }}
+                className={`relative overflow-hidden rounded-xl p-2.5 sm:p-3.5 text-center border ${colorClasses}`}
+              >
+                {/* Emergency pulse overlay */}
+                {isEmergency && (
+                  <motion.div
+                    className="absolute inset-0 bg-destructive/10"
+                    animate={{ opacity: [0.3, 0.6, 0.3] }}
+                    transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+                  />
+                )}
+                <div className={`relative inline-flex p-2 rounded-full ${iconBgClasses} mb-1.5`}>
+                  <Wallet className={`h-4 w-4 ${iconColorClasses}`} />
+                </div>
+                <p className="relative text-[11px] text-muted-foreground font-medium uppercase tracking-wider">Balance</p>
+                <p className={`relative text-base sm:text-xl font-bold ${textColorClasses} mt-0.5`}>
+                  ৳{balance.toFixed(2)}
+                </p>
+                {isEmergency && (
+                  <motion.p
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: [0.7, 1, 0.7] }}
+                    transition={{ duration: 1, repeat: Infinity }}
+                    className="relative text-[9px] font-semibold text-destructive mt-1 uppercase"
+                  >
+                    ⚠️ Low Balance
+                  </motion.p>
+                )}
+              </motion.div>
+            );
+          })()}
 
           <motion.div
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
