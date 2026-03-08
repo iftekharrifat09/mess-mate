@@ -1412,10 +1412,10 @@ export async function getChatMessagesByMessId(messId: string): Promise<ChatMessa
   return storage.getChatMessagesByMessId(messId);
 }
 
-export async function sendChatMessage(data: { messId: string; userId: string; senderName: string; message: string }, activeUserIds?: string[]): Promise<ChatMessage> {
+export async function sendChatMessage(data: { messId: string; userId: string; senderName: string; message: string }, activeUserIds?: string[], replyTo?: { id: string; senderName: string; message: string } | null): Promise<ChatMessage> {
   if (shouldUseBackend()) {
     try {
-      const result = await api.sendChatMessageAPI(data.message, activeUserIds);
+      const result = await api.sendChatMessageAPI(data.message, activeUserIds, replyTo);
       if (result.success && result.data) {
         const msg = (result.data as any).message || result.data;
         return msg;
@@ -1425,7 +1425,6 @@ export async function sendChatMessage(data: { messId: string; userId: string; se
     }
     showFallbackAlert();
   }
-  // Save locally and mark as unsynced
   const msg = storage.createChatMessage(data);
   storage.addUnsyncedChatMessage(msg);
   return msg;
@@ -1469,16 +1468,26 @@ export async function deleteChatMessageById(id: string): Promise<boolean> {
   return storage.deleteChatMessage(id);
 }
 
-export async function chatHeartbeat(): Promise<{ activeUsers: Array<{ userId: string; name: string }>; count: number }> {
+export async function chatHeartbeat(): Promise<{ activeUsers: Array<{ userId: string; name: string }>; count: number; typingUsers: Array<{ userId: string; name: string }> }> {
   if (shouldUseBackend()) {
     try {
       const result = await api.chatHeartbeatAPI();
       if (result.success && result.data) {
-        return { activeUsers: (result.data as any).activeUsers || [], count: (result.data as any).count || 0 };
+        return {
+          activeUsers: (result.data as any).activeUsers || [],
+          count: (result.data as any).count || 0,
+          typingUsers: (result.data as any).typingUsers || [],
+        };
       }
     } catch {}
   }
-  return { activeUsers: [], count: 0 };
+  return { activeUsers: [], count: 0, typingUsers: [] };
+}
+
+export async function chatTyping(): Promise<void> {
+  if (shouldUseBackend()) {
+    try { await api.chatTypingAPI(); } catch {}
+  }
 }
 
 export async function chatLeave(): Promise<void> {

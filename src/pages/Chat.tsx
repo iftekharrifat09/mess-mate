@@ -10,7 +10,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Send, Trash2, MessageCircle, Loader2, WifiOff, RefreshCw, MoreVertical, Pencil, X, Users } from 'lucide-react';
+import { Send, Trash2, MessageCircle, Loader2, WifiOff, RefreshCw, MoreVertical, Pencil, X, Users, Reply } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import * as dataService from '@/lib/dataService';
@@ -21,6 +21,39 @@ import type { ChatMessage, ChatActiveUser } from '@/types';
 import { toast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
+
+// Typing indicator bubble with bouncing dots animation
+function TypingIndicator({ names }: { names: string[] }) {
+  if (names.length === 0) return null;
+  const label = names.length === 1
+    ? names[0]
+    : names.length === 2
+      ? `${names[0]} and ${names[1]}`
+      : `${names[0]} and ${names.length - 1} others`;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: 10 }}
+      className="flex items-end gap-2 mb-3"
+    >
+      <Avatar className="h-8 w-8 flex-shrink-0">
+        <AvatarFallback className="text-xs bg-primary/10 text-primary">
+          {names[0]?.[0]?.toUpperCase() || '?'}
+        </AvatarFallback>
+      </Avatar>
+      <div>
+        <p className="text-xs text-muted-foreground mb-1 px-1">{label}</p>
+        <div className="bg-muted rounded-2xl rounded-tl-sm px-4 py-3 inline-flex items-center gap-1">
+          <span className="w-2 h-2 rounded-full bg-muted-foreground/50 animate-[bounce_1.4s_ease-in-out_infinite]" />
+          <span className="w-2 h-2 rounded-full bg-muted-foreground/50 animate-[bounce_1.4s_ease-in-out_0.2s_infinite]" />
+          <span className="w-2 h-2 rounded-full bg-muted-foreground/50 animate-[bounce_1.4s_ease-in-out_0.4s_infinite]" />
+        </div>
+      </div>
+    </motion.div>
+  );
+}
 
 export default function Chat() {
   const { user } = useAuth();
@@ -33,11 +66,14 @@ export default function Chat() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [activeUsers, setActiveUsers] = useState<ChatActiveUser[]>([]);
+  const [typingUsers, setTypingUsers] = useState<ChatActiveUser[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [replyTo, setReplyTo] = useState<{ id: string; senderName: string; message: string } | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevMessageCountRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
   const editInputRef = useRef<HTMLInputElement>(null);
+  const lastTypingSentRef = useRef(0);
 
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -60,9 +96,7 @@ export default function Chat() {
     }
   }, [user?.messId, scrollToBottom]);
 
-  useEffect(() => {
-    loadMessages();
-  }, [loadMessages]);
+  useEffect(() => { loadMessages(); }, [loadMessages]);
 
   // Poll messages every 3 seconds
   useEffect(() => {
@@ -70,11 +104,12 @@ export default function Chat() {
     return () => clearInterval(interval);
   }, [loadMessages]);
 
-  // Heartbeat every 5 seconds for active presence
+  // Heartbeat every 5 seconds for active presence + typing
   useEffect(() => {
     const sendHeartbeat = async () => {
       const result = await dataService.chatHeartbeat();
       setActiveUsers(result.activeUsers);
+      setTypingUsers(result.typingUsers);
     };
     sendHeartbeat();
     const interval = setInterval(sendHeartbeat, 5000);
@@ -92,6 +127,15 @@ export default function Chat() {
       syncUnsyncedChatMessages().then(() => loadMessages());
     }
   }, [loadMessages]);
+
+  // Send typing indicator (debounced - max once per 2 seconds)
+  const sendTyping = useCallback(() => {
+    const now = Date.now();
+    if (now - lastTypingSentRef.current > 2000) {
+      lastTypingSentRef.current = now;
+      dataService.chatTyping();
+    }
+  }, []);
 
   const handleSync = async () => {
     setSyncing(true);
@@ -116,8 +160,10 @@ export default function Chat() {
           message: newMessage.trim(),
         },
         activeIds,
+        replyTo,
       );
       setNewMessage('');
+      setReplyTo(null);
       await loadMessages();
       setTimeout(scrollToBottom, 150);
       inputRef.current?.focus();
@@ -126,6 +172,15 @@ export default function Chat() {
     } finally {
       setSending(false);
     }
+  };
+
+  const handleReply = (msg: ChatMessage) => {
+    setReplyTo({
+      id: msg.id,
+      senderName: msg.senderName,
+      message: msg.message,
+    });
+    inputRef.current?.focus();
   };
 
   const handleEdit = (msg: ChatMessage) => {
@@ -147,14 +202,8 @@ export default function Chat() {
   };
 
   const handleEditKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleEditSave();
-    }
-    if (e.key === 'Escape') {
-      setEditingId(null);
-      setEditText('');
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleEditSave(); }
+    if (e.key === 'Escape') { setEditingId(null); setEditText(''); }
   };
 
   const handleDelete = async () => {
@@ -170,10 +219,12 @@ export default function Chat() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setNewMessage(e.target.value);
+    if (e.target.value.trim()) sendTyping();
   };
 
   const getInitials = (name: string) =>
@@ -194,6 +245,44 @@ export default function Chat() {
 
   const isOffline = !shouldUseBackend();
 
+  const MessageMenu = ({ msg, isOwn }: { msg: ChatMessage; isOwn: boolean }) => {
+    const canEdit = isOwn;
+    const canDelete = isOwn || user?.role === 'manager';
+    if (!canEdit && !canDelete) return null;
+
+    return (
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-1"
+          >
+            <MoreVertical className="h-3.5 w-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align={isOwn ? 'end' : 'start'} className="w-32">
+          <DropdownMenuItem onClick={() => handleReply(msg)}>
+            <Reply className="h-3.5 w-3.5 mr-2" />
+            Reply
+          </DropdownMenuItem>
+          {canEdit && (
+            <DropdownMenuItem onClick={() => handleEdit(msg)}>
+              <Pencil className="h-3.5 w-3.5 mr-2" />
+              Edit
+            </DropdownMenuItem>
+          )}
+          {canDelete && (
+            <DropdownMenuItem onClick={() => setDeleteTarget(msg.id)} className="text-destructive focus:text-destructive">
+              <Trash2 className="h-3.5 w-3.5 mr-2" />
+              Delete
+            </DropdownMenuItem>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
+
   return (
     <DashboardLayout>
       <div className="flex flex-col h-[calc(100vh-2rem)] max-h-[calc(100vh-2rem)]">
@@ -212,12 +301,11 @@ export default function Chat() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {/* Active users indicator */}
             {activeUsers.length > 0 && (
               <div className="flex items-center gap-1.5 bg-muted px-3 py-1.5 rounded-full" title={activeUsers.map(u => u.name).join(', ')}>
                 <span className="relative flex h-2.5 w-2.5">
-                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 bg-[hsl(var(--success))]"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-[hsl(var(--success))]"></span>
                 </span>
                 <Users className="h-3.5 w-3.5 text-muted-foreground" />
                 <span className="text-xs font-medium text-foreground">{activeUsers.length}</span>
@@ -225,13 +313,7 @@ export default function Chat() {
               </div>
             )}
             {unsyncedCount > 0 && (
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleSync}
-                disabled={syncing || isOffline}
-                className="gap-1.5 text-xs"
-              >
+              <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing || isOffline} className="gap-1.5 text-xs">
                 {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                 Sync {unsyncedCount}
               </Button>
@@ -265,8 +347,6 @@ export default function Chat() {
                     {group.messages.map((msg) => {
                       const isOwn = msg.userId === user?.id;
                       const isEditing = editingId === msg.id;
-                      const canEdit = isOwn;
-                      const canDelete = isOwn || user?.role === 'manager';
 
                       return (
                         <motion.div
@@ -288,34 +368,8 @@ export default function Chat() {
                               <p className="text-xs font-medium text-muted-foreground mb-1 px-1">{msg.senderName}</p>
                             )}
                             <div className="flex items-start gap-1">
-                              {/* Three-dot menu - shows on left for own, right for others */}
-                              {isOwn && (canEdit || canDelete) && !isEditing && (
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-1"
-                                    >
-                                      <MoreVertical className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="end" className="w-32">
-                                    {canEdit && (
-                                      <DropdownMenuItem onClick={() => handleEdit(msg)}>
-                                        <Pencil className="h-3.5 w-3.5 mr-2" />
-                                        Edit
-                                      </DropdownMenuItem>
-                                    )}
-                                    {canDelete && (
-                                      <DropdownMenuItem onClick={() => setDeleteTarget(msg.id)} className="text-destructive focus:text-destructive">
-                                        <Trash2 className="h-3.5 w-3.5 mr-2" />
-                                        Delete
-                                      </DropdownMenuItem>
-                                    )}
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              )}
+                              {/* Three-dot menu on left for own messages */}
+                              {isOwn && !isEditing && <MessageMenu msg={msg} isOwn={isOwn} />}
 
                               <div
                                 className={cn(
@@ -325,6 +379,23 @@ export default function Chat() {
                                     : 'bg-muted text-foreground rounded-tl-sm'
                                 )}
                               >
+                                {/* Reply quote */}
+                                {msg.replyTo && !isEditing && (
+                                  <div className={cn(
+                                    'mb-2 pl-3 py-1 rounded text-xs border-l-2',
+                                    isOwn
+                                      ? 'border-primary-foreground/40 bg-primary-foreground/10'
+                                      : 'border-primary/40 bg-primary/5'
+                                  )}>
+                                    <p className={cn('font-semibold', isOwn ? 'text-primary-foreground/80' : 'text-primary')}>
+                                      {msg.replyTo.senderName}
+                                    </p>
+                                    <p className={cn('line-clamp-1', isOwn ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
+                                      {msg.replyTo.message}
+                                    </p>
+                                  </div>
+                                )}
+
                                 {isEditing ? (
                                   <div className="flex items-center gap-2">
                                     <Input
@@ -355,26 +426,8 @@ export default function Chat() {
                                 )}
                               </div>
 
-                              {/* Three-dot menu for other people's messages (manager can delete) */}
-                              {!isOwn && canDelete && !isEditing && (
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="icon"
-                                      className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-1"
-                                    >
-                                      <MoreVertical className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent align="start" className="w-32">
-                                    <DropdownMenuItem onClick={() => setDeleteTarget(msg.id)} className="text-destructive focus:text-destructive">
-                                      <Trash2 className="h-3.5 w-3.5 mr-2" />
-                                      Delete
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              )}
+                              {/* Three-dot menu on right for other's messages */}
+                              {!isOwn && !isEditing && <MessageMenu msg={msg} isOwn={isOwn} />}
                             </div>
                           </div>
                         </motion.div>
@@ -383,19 +436,50 @@ export default function Chat() {
                   </AnimatePresence>
                 </div>
               ))}
+
+              {/* Typing indicator */}
+              <AnimatePresence>
+                {typingUsers.length > 0 && (
+                  <TypingIndicator names={typingUsers.map(u => u.name)} />
+                )}
+              </AnimatePresence>
+
               <div ref={bottomRef} />
             </>
           )}
         </div>
 
+        {/* Reply preview bar */}
+        <AnimatePresence>
+          {replyTo && (
+            <motion.div
+              initial={{ height: 0, opacity: 0 }}
+              animate={{ height: 'auto', opacity: 1 }}
+              exit={{ height: 0, opacity: 0 }}
+              className="border-t border-border overflow-hidden"
+            >
+              <div className="flex items-center gap-3 px-3 py-2 bg-muted/50">
+                <Reply className="h-4 w-4 text-primary flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-semibold text-primary">{replyTo.senderName}</p>
+                  <p className="text-xs text-muted-foreground truncate">{replyTo.message}</p>
+                </div>
+                <Button variant="ghost" size="icon" className="h-6 w-6 flex-shrink-0" onClick={() => setReplyTo(null)}>
+                  <X className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
         {/* Input Area */}
-        <div className="border-t border-border pt-3 mt-2">
+        <div className="border-t border-border pt-3 mt-auto">
           <div className="flex gap-2 items-end">
             <Input
               ref={inputRef}
               placeholder="Type a message..."
               value={newMessage}
-              onChange={e => setNewMessage(e.target.value)}
+              onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               maxLength={2000}
               className="flex-1 rounded-xl"
@@ -417,7 +501,6 @@ export default function Chat() {
         </div>
       </div>
 
-      {/* Delete Confirmation */}
       <DeleteConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}

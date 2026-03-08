@@ -2877,8 +2877,10 @@ app.get("/api/desco/alert-status", authMiddleware, async (req, res) => {
 // CHAT API
 // ============================================
 
-// In-memory active chat users: { messId -> { userId -> lastPing timestamp } }
+// In-memory active chat users: { messId -> { userId -> { timestamp, name } } }
 const activeChatUsers = new Map();
+// In-memory typing indicators: { messId -> { userId -> { timestamp, name } } }
+const typingUsers = new Map();
 
 // Heartbeat - mark user as active on chat page
 app.post("/api/chat/heartbeat", authMiddleware, async (req, res) => {
@@ -2886,9 +2888,7 @@ app.post("/api/chat/heartbeat", authMiddleware, async (req, res) => {
     const messId = req.user.messId;
     if (!messId) return res.status(400).json({ success: false, error: "Not in a mess" });
 
-    if (!activeChatUsers.has(messId)) {
-      activeChatUsers.set(messId, new Map());
-    }
+    if (!activeChatUsers.has(messId)) activeChatUsers.set(messId, new Map());
     activeChatUsers.get(messId).set(req.user.id, {
       timestamp: Date.now(),
       name: req.user.name || "Unknown",
@@ -2898,9 +2898,7 @@ app.post("/api/chat/heartbeat", authMiddleware, async (req, res) => {
     const messUsers = activeChatUsers.get(messId);
     const now = Date.now();
     for (const [uid, data] of messUsers.entries()) {
-      if (now - data.timestamp > 15000) {
-        messUsers.delete(uid);
-      }
+      if (now - data.timestamp > 15000) messUsers.delete(uid);
     }
 
     const activeList = [];
@@ -2908,7 +2906,20 @@ app.post("/api/chat/heartbeat", authMiddleware, async (req, res) => {
       activeList.push({ userId: uid, name: data.name });
     }
 
-    res.json({ success: true, activeUsers: activeList, count: activeList.length });
+    // Clean up stale typing indicators (older than 4 seconds)
+    const typingList = [];
+    if (typingUsers.has(messId)) {
+      const typingMap = typingUsers.get(messId);
+      for (const [uid, data] of typingMap.entries()) {
+        if (now - data.timestamp > 4000) {
+          typingMap.delete(uid);
+        } else if (uid !== req.user.id) {
+          typingList.push({ userId: uid, name: data.name });
+        }
+      }
+    }
+
+    res.json({ success: true, activeUsers: activeList, count: activeList.length, typingUsers: typingList });
   } catch (error) {
     res.status(500).json({ success: false, error: "Heartbeat failed" });
   }
@@ -2921,6 +2932,22 @@ app.post("/api/chat/leave", authMiddleware, async (req, res) => {
     if (messId && activeChatUsers.has(messId)) {
       activeChatUsers.get(messId).delete(req.user.id);
     }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false });
+  }
+});
+
+// Typing indicator
+app.post("/api/chat/typing", authMiddleware, async (req, res) => {
+  try {
+    const messId = req.user.messId;
+    if (!messId) return res.status(400).json({ success: false });
+    if (!typingUsers.has(messId)) typingUsers.set(messId, new Map());
+    typingUsers.get(messId).set(req.user.id, {
+      timestamp: Date.now(),
+      name: req.user.name || "Unknown",
+    });
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false });
@@ -2974,7 +3001,7 @@ app.post("/api/chat/messages", authMiddleware, async (req, res) => {
     const messId = req.user.messId;
     if (!messId) return res.status(400).json({ success: false, error: "Not in a mess" });
 
-    const { message, activeUserIds } = req.body;
+    const { message, activeUserIds, replyTo } = req.body;
     if (!message || !message.trim()) {
       return res.status(400).json({ success: false, error: "Message cannot be empty" });
     }
@@ -2985,6 +3012,7 @@ app.post("/api/chat/messages", authMiddleware, async (req, res) => {
       messId,
       userId: req.user.id,
       message: trimmed,
+      replyTo: replyTo || null,
       editedAt: null,
       createdAt: new Date().toISOString(),
     };
