@@ -256,11 +256,18 @@ export async function getMonths(): Promise<Month[]> {
 export async function getMonthsByMessId(messId: string | undefined): Promise<Month[]> {
   if (!messId) return [];
   
+  // Check cache first
+  const cacheKey = cacheKeys.months(messId);
+  const cached = apiCache.get<Month[]>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     try {
       const result = await api.getMonthsAPI(messId);
       if (result.success && result.data) {
-        return (result.data as any).months || result.data || [];
+        const months = (result.data as any).months || result.data || [];
+        apiCache.set(cacheKey, months, apiCache.getTTL('default'));
+        return months;
       }
       if (result.usingLocalStorage) {
         return storage.getMonthsByMessId(messId);
