@@ -2467,6 +2467,50 @@ app.delete("/api/calc-bill-payments/:id", authMiddleware, async (req, res) => {
 });
 
 // ============================================
+// ACTIVITY LOGS
+// ============================================
+
+// Get activity logs by mess ID
+app.get("/api/activity-logs/:messId", authenticateToken, async (req, res) => {
+  try {
+    const logs = await collections.activityLogs
+      .find({ messId: req.params.messId })
+      .sort({ createdAt: -1 })
+      .toArray();
+    res.json({ success: true, logs: transformDocs(logs) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to fetch activity logs" });
+  }
+});
+
+// Create activity log
+app.post("/api/activity-logs", authenticateToken, async (req, res) => {
+  try {
+    const { messId, type, description } = req.body;
+    const result = await collections.activityLogs.insertOne({
+      messId,
+      type,
+      description,
+      createdAt: new Date().toISOString(),
+    });
+    const log = await collections.activityLogs.findOne({ _id: result.insertedId });
+    res.json({ success: true, log: transformDoc(log) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to create activity log" });
+  }
+});
+
+// Delete activity log
+app.delete("/api/activity-logs/:id", authenticateToken, async (req, res) => {
+  try {
+    await collections.activityLogs.deleteOne({ _id: new ObjectId(req.params.id) });
+    res.json({ success: true, message: "Activity log deleted" });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to delete activity log" });
+  }
+});
+
+// ============================================
 // START SERVER
 // ============================================
 
