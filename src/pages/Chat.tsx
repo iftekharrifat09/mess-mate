@@ -10,12 +10,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Send, Trash2, MessageCircle, Loader2, WifiOff, RefreshCw, MoreVertical, Pencil, X, Users, Reply } from 'lucide-react';
+import { Send, Trash2, MessageCircle, Loader2, MoreVertical, Pencil, X, Users, Reply } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import * as dataService from '@/lib/dataService';
 import { syncUnsyncedChatMessages } from '@/lib/dataService';
-import { shouldUseBackend } from '@/lib/config';
 import { getUnsyncedChatMessages } from '@/lib/storage';
 import type { ChatMessage, ChatActiveUser } from '@/types';
 import { toast } from '@/hooks/use-toast';
@@ -61,8 +60,7 @@ export default function Chat() {
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [unsyncedCount, setUnsyncedCount] = useState(0);
-  const [syncing, setSyncing] = useState(false);
+  
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [activeUsers, setActiveUsers] = useState<ChatActiveUser[]>([]);
@@ -88,7 +86,7 @@ export default function Chat() {
         setTimeout(scrollToBottom, 100);
       }
       prevMessageCountRef.current = msgs.length;
-      setUnsyncedCount(getUnsyncedChatMessages().length);
+      
     } catch (e) {
       console.error('Failed to load chat:', e);
     } finally {
@@ -119,13 +117,20 @@ export default function Chat() {
     };
   }, []);
 
-  // Auto-sync when backend becomes available
+  // Auto-sync when backend becomes available (silent, automatic)
   useEffect(() => {
-    if (!shouldUseBackend()) return;
-    const unsyncedMessages = getUnsyncedChatMessages();
-    if (unsyncedMessages.length > 0) {
-      syncUnsyncedChatMessages().then(() => loadMessages());
-    }
+    const doSync = async () => {
+      try {
+        const unsyncedMessages = getUnsyncedChatMessages();
+        if (unsyncedMessages.length > 0) {
+          await syncUnsyncedChatMessages();
+          await loadMessages();
+        }
+      } catch {}
+    };
+    doSync();
+    const interval = setInterval(doSync, 15000);
+    return () => clearInterval(interval);
   }, [loadMessages]);
 
   // Send typing indicator (debounced - max once per 2 seconds)
@@ -136,16 +141,6 @@ export default function Chat() {
       dataService.chatTyping();
     }
   }, []);
-
-  const handleSync = async () => {
-    setSyncing(true);
-    try {
-      await syncUnsyncedChatMessages();
-      await loadMessages();
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   const handleSend = async () => {
     if (!newMessage.trim() || sending || !user) return;
@@ -243,7 +238,7 @@ export default function Chat() {
     }
   }
 
-  const isOffline = !shouldUseBackend();
+  
 
   const MessageMenu = ({ msg, isOwn }: { msg: ChatMessage; isOwn: boolean }) => {
     const canEdit = isOwn;
@@ -296,7 +291,6 @@ export default function Chat() {
               <h1 className="text-xl font-bold text-foreground">Mess Chat</h1>
               <p className="text-xs text-muted-foreground">
                 {messages.length} messages
-                {isOffline && <span className="text-destructive ml-1">• Offline mode</span>}
               </p>
             </div>
           </div>
@@ -312,13 +306,7 @@ export default function Chat() {
                 <span className="text-xs text-muted-foreground hidden sm:inline">online</span>
               </div>
             )}
-            {unsyncedCount > 0 && (
-              <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing || isOffline} className="gap-1.5 text-xs">
-                {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                Sync {unsyncedCount}
-              </Button>
-            )}
-            {isOffline && <WifiOff className="h-4 w-4 text-destructive" />}
+            
           </div>
         </div>
 
@@ -496,7 +484,6 @@ export default function Chat() {
           </div>
           <p className="text-[10px] text-muted-foreground mt-1 text-right">
             {newMessage.length}/2000
-            {isOffline && ' • Messages will sync when online'}
           </p>
         </div>
       </div>
