@@ -579,7 +579,7 @@ export default function CalculatorPage() {
                                   }}>
                                     <Edit2 className="h-4 w-4" />
                                   </Button>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteDeposit(p.id)}>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteTarget({ type: 'deposit', id: p.id, label: `${p.userName}'s deposit` })}>
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
                                 </div>
