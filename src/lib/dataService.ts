@@ -327,6 +327,10 @@ export async function createMonth(monthData: Omit<Month, 'id' | 'createdAt'>): P
 }
 
 export async function updateMonth(id: string, updates: Partial<Month>): Promise<Month | undefined> {
+  // Invalidate month-related caches
+  apiCache.invalidatePrefix('month:');
+  apiCache.invalidatePrefix('months:');
+  
   if (shouldUseBackend()) {
     const result = await api.updateMonthAPI(id, updates);
     if (result.success && result.data) {
