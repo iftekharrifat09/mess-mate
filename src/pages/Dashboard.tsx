@@ -157,14 +157,18 @@ export default function Dashboard() {
         className="space-y-6"
       >
         {/* Header */}
-        <div ref={headerRef} className="flex items-start justify-between">
+        <div ref={headerRef} className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-foreground">{messName}</h1>
             <p className="text-muted-foreground">
               Welcome back, {user?.fullName}! Here's your mess overview.
             </p>
           </div>
-          <CalendarModal />
+          <div className="flex items-center gap-3">
+            {/* Today's Date Display */}
+            <TodayDateDisplay />
+            <CalendarModal />
+          </div>
         </div>
 
         {/* Main Grid */}
