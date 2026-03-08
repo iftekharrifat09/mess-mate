@@ -1221,6 +1221,9 @@ export async function getNotesByMessId(messId: string): Promise<Note[]> {
 }
 
 export async function createNote(noteData: Omit<Note, 'id' | 'createdAt'>): Promise<Note> {
+  // Invalidate notes cache
+  if ((noteData as any).messId) apiCache.invalidate(cacheKeys.notes((noteData as any).messId));
+  
   if (shouldUseBackend()) {
     const result = await api.createNoteAPI(noteData as any);
     if (result.success && result.data) {
