@@ -567,15 +567,15 @@ export default function CalculatorPage() {
                           )}
 
                           {isManager && (
-                            <div className="flex gap-2 pt-2 border-t border-border">
-                              <Button variant="outline" size="sm" onClick={() => { setEditCat(cat); setCatTitle(cat.title); setCatCost(String(cat.totalCost)); setCatModal(true); }}>
-                                <Edit2 className="h-3.5 w-3.5 mr-1" /> Edit
+                            <div className="flex gap-1.5 md:gap-2 pt-2 border-t border-border flex-wrap">
+                              <Button variant="outline" size="sm" className="h-7 md:h-9 text-xs md:text-sm px-2 md:px-3" onClick={() => { setEditCat(cat); setCatTitle(cat.title); setCatCost(String(cat.totalCost)); setCatModal(true); }}>
+                                <Edit2 className="h-3 w-3 md:h-3.5 md:w-3.5 mr-1" /> Edit
                               </Button>
-                              <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteTarget({ type: 'category', id: cat.id, label: `"${cat.title}"` })}>
-                                <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
+                              <Button variant="outline" size="sm" className="h-7 md:h-9 text-xs md:text-sm px-2 md:px-3 text-destructive hover:text-destructive" onClick={() => setDeleteTarget({ type: 'category', id: cat.id, label: `"${cat.title}"` })}>
+                                <Trash2 className="h-3 w-3 md:h-3.5 md:w-3.5 mr-1" /> Delete
                               </Button>
-                              <Button variant="outline" size="sm" onClick={() => { setExcModal(cat.id); setExcStep(1); setExcUserId(''); setExcAmount(''); }}>
-                                <UserPlus className="h-3.5 w-3.5 mr-1" /> Exception
+                              <Button variant="outline" size="sm" className="h-7 md:h-9 text-xs md:text-sm px-2 md:px-3" onClick={() => { setExcModal(cat.id); setExcStep(1); setExcUserId(''); setExcAmount(''); }}>
+                                <UserPlus className="h-3 w-3 md:h-3.5 md:w-3.5 mr-1" /> Exception
                               </Button>
                             </div>
                           )}
