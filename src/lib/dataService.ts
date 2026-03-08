@@ -903,10 +903,17 @@ export async function getNoticesByMessId(messId: string): Promise<Notice[]> {
 }
 
 export async function getLatestNotice(messId: string): Promise<Notice | undefined> {
+  // Check cache first
+  const cacheKey = cacheKeys.latestNotice(messId);
+  const cached = apiCache.get<Notice>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     const result = await api.getActiveNoticeAPI(messId);
     if (result.success && result.data) {
-      return (result.data as any).notice || result.data;
+      const notice = (result.data as any).notice || result.data;
+      if (notice) apiCache.set(cacheKey, notice, apiCache.getTTL('default'));
+      return notice;
     }
   }
   return storage.getLatestNotice(messId);
