@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { updateUser, getUserByEmail } from '@/lib/storage';
-import { getNotificationSoundEnabled, setNotificationSoundEnabled } from '@/lib/preferences';
+import { getNotificationSoundEnabled, setNotificationSoundEnabled, getEmailNotificationEnabled, setEmailNotificationEnabled } from '@/lib/preferences';
 import {
   updateProfileAPI,
   sendOtpAPI,
