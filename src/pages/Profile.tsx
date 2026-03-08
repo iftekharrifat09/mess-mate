@@ -691,7 +691,7 @@ export default function Profile() {
                     <input
                       id="tone-upload"
                       type="file"
-                      accept="audio/*"
+                      accept=".mp3,audio/mpeg"
                       className="hidden"
                       onChange={handleUploadTone}
                     />
