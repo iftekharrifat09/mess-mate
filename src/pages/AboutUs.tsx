@@ -313,7 +313,7 @@ export default function AboutUs() {
           >
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium mb-6">
               <Heart className="w-4 h-4" />
-              Meet the Team Behind Mess Manager
+              Meet the Team Behind Mess Mate
             </div>
             <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
               About <span className="text-primary">Us</span>
