@@ -38,7 +38,10 @@ export default function DeleteConfirmDialog({
           <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
           <AlertDialogAction
             className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            onClick={onConfirm}
+            onClick={(e) => {
+              e.preventDefault();
+              onConfirm();
+            }}
             disabled={isDeleting}
           >
             {isDeleting && <Loader2 className="h-4 w-4 animate-spin mr-1" />}

@@ -181,7 +181,6 @@ export default function CalculatorPage() {
   };
 
   const handleDeleteCategory = async (id: string) => {
-    setDeleteTarget(null);
     setIsDeleting(true);
     try {
       const cat = categories.find(c => c.id === id);
@@ -189,6 +188,7 @@ export default function CalculatorPage() {
       if (!shouldUseBackend() && cat) {
         dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Category Deleted', message: `Expense category "${cat.title}" has been removed` });
       }
+      setDeleteTarget(null);
       await reload();
       toast({ title: 'Category deleted', variant: 'destructive' });
     } finally { setIsDeleting(false); }
@@ -211,7 +211,6 @@ export default function CalculatorPage() {
   };
 
   const handleDeleteException = async (id: string) => {
-    setDeleteTarget(null);
     setIsDeleting(true);
     try {
       const exc = allExceptions.find(e => e.id === id);
@@ -220,6 +219,7 @@ export default function CalculatorPage() {
         const cat = categories.find(c => c.id === exc.categoryId);
         dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Exception Removed', message: `${exc.userName}'s exception for "${cat?.title || ''}" has been removed` });
       }
+      setDeleteTarget(null);
       await reload();
     } finally { setIsDeleting(false); }
   };
@@ -290,7 +290,6 @@ export default function CalculatorPage() {
   };
 
   const handleDeleteDeposit = async (id: string) => {
-    setDeleteTarget(null);
     setIsDeleting(true);
     try {
       const dep = payments.find(p => p.id === id);
@@ -298,6 +297,7 @@ export default function CalculatorPage() {
       if (!shouldUseBackend() && dep) {
         dataService.notifyMessMembers(messId, user?.id || '', { type: 'deposit', title: 'Deposit Deleted', message: `${dep.userName}'s deposit of ${formatCurrency(dep.amount)} has been removed` });
       }
+      setDeleteTarget(null);
       await reload();
       toast({ title: 'Deposit deleted', variant: 'destructive' });
     } finally { setIsDeleting(false); }
@@ -345,7 +345,6 @@ export default function CalculatorPage() {
   };
 
   const handleDeleteBillPayment = async (id: string) => {
-    setDeleteTarget(null);
     setIsDeleting(true);
     try {
       const bp = billPayments.find(b => b.id === id);
@@ -353,6 +352,7 @@ export default function CalculatorPage() {
       if (!shouldUseBackend() && bp) {
         dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Bill Payment Deleted', message: `Bill payment of ${formatCurrency(bp.amount)} for "${bp.categoryName}" has been removed` });
       }
+      setDeleteTarget(null);
       await reload();
       toast({ title: 'Bill payment deleted', variant: 'destructive' });
     } finally { setIsDeleting(false); }
@@ -930,7 +930,7 @@ export default function CalculatorPage() {
 
       <DeleteConfirmDialog
         open={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        onOpenChange={(open) => { if (!open && !isDeleting) setDeleteTarget(null); }}
         onConfirm={() => {
           if (!deleteTarget) return;
           if (deleteTarget.type === 'category') handleDeleteCategory(deleteTarget.id);
