@@ -39,6 +39,7 @@ import { ShoppingCart, Plus, Trash2, Edit2, Wallet, Loader2 } from 'lucide-react
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/calculations';
 import { Navigate } from 'react-router-dom';
+import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
 
 export default function MealCosts() {
   const { user, isLoading: authLoading } = useAuth();
