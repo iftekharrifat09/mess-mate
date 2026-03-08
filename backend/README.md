@@ -139,6 +139,32 @@ For production, update `VITE_API_BASE_URL` to your deployed backend URL.
 - `PUT /api/notifications/mark-seen` - Mark all as seen
 - `DELETE /api/notifications/:id` - Delete notification
 
+### DESCO Low Balance Alerts
+- `POST /api/desco/check-balance-alerts` - Manually trigger balance check (manager only)
+- `GET /api/desco/alert-status` - Get alert status and timing info
+
+## DESCO Low Balance Email Feature
+
+The backend automatically monitors DESCO prepaid electricity balances and sends email alerts when the balance falls below ৳100.
+
+### How it works:
+1. **Balance Check:** Every 30 minutes, the server checks DESCO balance for all messes with configured accounts
+2. **Threshold:** Alerts trigger when balance ≤ ৳100
+3. **Email Alerts:** All mess members with verified emails receive warning emails
+4. **Spam Prevention:** Maximum one email per 12 hours per mess
+5. **In-App Notifications:** Also creates in-app notifications for all members
+
+### Requirements:
+- DESCO account number must be configured in Manage Mess settings
+- Members must have verified email addresses
+- Email notifications must be enabled in user preferences
+
+### Alert Email Content:
+- Current balance amount
+- Mess name and account number
+- Urgent recharge warning
+- Next alert timing info
+
 ## Troubleshooting
 
 ### "Failed to fetch" error
@@ -162,6 +188,12 @@ For production, update `VITE_API_BASE_URL` to your deployed backend URL.
 - Monitor MongoDB Atlas metrics for slow queries
 - Ensure proper indexes are created (the backend creates them automatically)
 
+### DESCO alerts not sending
+- Verify descoAccountNo is set in the messes collection
+- Check that users have emailVerified: true
+- Check backend console for DESCO API errors
+- Verify EMAIL_USER and EMAIL_PASS are configured correctly
+
 ## Production Deployment
 
 1. **Use a process manager:** `npm install -g pm2 && pm2 start index.js`
@@ -169,3 +201,4 @@ For production, update `VITE_API_BASE_URL` to your deployed backend URL.
 3. **Use HTTPS:** Put behind a reverse proxy like nginx with SSL
 4. **Restrict CORS:** Update CORS settings to only allow your frontend domain
 5. **Environment variables:** Never commit `.env` files to version control
+6. **DESCO monitoring:** The balance monitor starts automatically with the server
