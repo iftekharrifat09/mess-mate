@@ -343,6 +343,9 @@ function CustomTooltip({ active, payload, label }: any) {
       <p className="font-medium text-foreground mb-1">{label}</p>
       <p className="text-muted-foreground">৳{item.taka} spent</p>
       <p className="text-muted-foreground">{item.kwh} kWh used</p>
+      <p className="text-muted-foreground">
+        Unit rate: ৳{item.kwh > 0 ? (item.taka / item.kwh).toFixed(2) : '0.00'}/kWh
+      </p>
     </div>
   );
 }
