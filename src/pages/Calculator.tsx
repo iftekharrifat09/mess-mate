@@ -161,20 +161,23 @@ export default function CalculatorPage() {
   // Handlers
   const handleSaveCategory = async () => {
     if (!catTitle.trim() || !catCost) return;
-    if (editCat) {
-      await calcStore.updateCategory(editCat.id, { title: catTitle.trim(), totalCost: Number(catCost) });
-      if (!shouldUseBackend()) {
-        dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Category Updated', message: `Expense category "${catTitle.trim()}" has been updated` });
+    setIsSaving(true);
+    try {
+      if (editCat) {
+        await calcStore.updateCategory(editCat.id, { title: catTitle.trim(), totalCost: Number(catCost) });
+        if (!shouldUseBackend()) {
+          dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Category Updated', message: `Expense category "${catTitle.trim()}" has been updated` });
+        }
+      } else {
+        await calcStore.createCategory({ messId, monthId: activeMonthId, title: catTitle.trim(), totalCost: Number(catCost), status: 'unpaid' });
+        if (!shouldUseBackend()) {
+          dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Category Added', message: `New expense category "${catTitle.trim()}" added (${formatCurrency(Number(catCost))})` });
+        }
       }
-    } else {
-      await calcStore.createCategory({ messId, monthId: activeMonthId, title: catTitle.trim(), totalCost: Number(catCost), status: 'unpaid' });
-      if (!shouldUseBackend()) {
-        dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Category Added', message: `New expense category "${catTitle.trim()}" added (${formatCurrency(Number(catCost))})` });
-      }
-    }
-    setCatModal(false); setEditCat(null); setCatTitle(''); setCatCost('');
-    reload();
-    toast({ title: editCat ? 'Category updated' : 'Category added' });
+      setCatModal(false); setEditCat(null); setCatTitle(''); setCatCost('');
+      await reload();
+      toast({ title: editCat ? 'Category updated' : 'Category added' });
+    } finally { setIsSaving(false); }
   };
 
   const handleDeleteCategory = async (id: string) => {
