@@ -423,7 +423,7 @@ export default function OtherCosts() {
                                 size="sm" 
                                 variant="ghost" 
                                 className="text-destructive"
-                                onClick={() => handleDelete(cost.id)}
+                                onClick={() => setDeleteTargetId(cost.id)}
                                 disabled={deletingId === cost.id}
                               >
                                 {deletingId === cost.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
