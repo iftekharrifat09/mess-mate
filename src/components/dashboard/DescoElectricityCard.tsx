@@ -99,7 +99,14 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
         label: d.toLocaleDateString('en-BD', { day: 'numeric', month: 'short' }),
         taka: Math.max(0, parseFloat(taka.toFixed(2))),
         kwh: Math.max(0, parseFloat(kwh.toFixed(2))),
+        cumulativeKwh: 0,
       });
+    }
+    // Calculate cumulative kWh
+    let cumulative = 0;
+    for (const d of diffs) {
+      cumulative += d.kwh;
+      d.cumulativeKwh = parseFloat(cumulative.toFixed(2));
     }
     return diffs;
   }, [data]);
