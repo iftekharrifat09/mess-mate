@@ -535,14 +535,20 @@ export async function deleteDeposit(id: string): Promise<boolean> {
 // ============================================
 
 export async function getMealCostsByMonthId(monthId: string): Promise<MealCost[]> {
+  // Check cache first
+  const cacheKey = cacheKeys.mealCosts(monthId);
+  const cached = apiCache.get<MealCost[]>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     try {
       const result = await api.getMealCostsAPI(monthId);
       if (result.success && result.data) {
         const data = result.data as any;
-        // Backend returns { success: true, costs: [...] }
         const mealCosts = data.costs || data.mealCosts || (Array.isArray(data) ? data : []);
-        return Array.isArray(mealCosts) ? mealCosts : [];
+        const result_arr = Array.isArray(mealCosts) ? mealCosts : [];
+        apiCache.set(cacheKey, result_arr, apiCache.getTTL('short'));
+        return result_arr;
       }
       if (result.usingLocalStorage) {
         return storage.getMealCostsByMonthId(monthId);
