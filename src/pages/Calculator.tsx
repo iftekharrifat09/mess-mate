@@ -230,6 +230,10 @@ export default function CalculatorPage() {
 
   // Pay Bill handlers
   const handleOpenBillModal = () => {
+    if (unpaidCategories.length === 0) {
+      setBillWarning(true);
+      return;
+    }
     setBillModal(true); setBillCatId(''); setBillAmount(''); setBillDesc(''); setEditBillPayment(null);
   };
 
