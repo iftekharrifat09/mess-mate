@@ -32,15 +32,6 @@ function getNotifIcon(type: AppNotification['type']) {
   return NOTIF_ICONS[type] || '🔔';
 }
 
-// Request browser notification permission
-export async function requestBrowserNotificationPermission(): Promise<boolean> {
-  if (!('Notification' in window)) return false;
-  if (Notification.permission === 'granted') return true;
-  if (Notification.permission === 'denied') return false;
-  const result = await Notification.requestPermission();
-  return result === 'granted';
-}
-
 // Send a browser push notification
 function sendBrowserNotification(title: string, body: string, icon?: string) {
   if (!('Notification' in window) || Notification.permission !== 'granted') return;
