@@ -648,11 +648,16 @@ export async function getOtherCostsByMonthId(monthId: string): Promise<OtherCost
 }
 
 export async function createOtherCost(costData: Omit<OtherCost, 'id' | 'createdAt'>): Promise<OtherCost> {
+  // Invalidate cache
+  if ((costData as any).monthId) {
+    apiCache.invalidate(cacheKeys.otherCosts((costData as any).monthId));
+    apiCache.invalidatePrefix('summary:');
+  }
+  
   if (shouldUseBackend()) {
     const result = await api.createOtherCostAPI(costData);
     if (result.success && result.data) {
       const data = result.data as any;
-      // Backend returns { success: true, cost: {...} }
       return data.cost || data.otherCost || data;
     }
     if (result.usingLocalStorage) {
