@@ -41,6 +41,8 @@ export default function CalculatorPage() {
   const [payments, setPayments] = useState<CalcPayment[]>([]);
   const [billPayments, setBillPayments] = useState<CalcBillPayment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Modal states
   const [catModal, setCatModal] = useState(false);
