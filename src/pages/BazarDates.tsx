@@ -482,7 +482,7 @@ export default function BazarDates() {
                         <p className="text-muted-foreground">{getMemberName(bazar.userId)}</p>
                         <p className="text-xs text-muted-foreground">{format(new Date(bazar.date), 'EEE, MMM d')}</p>
                       </div>
-                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(bazar)}>
+                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setDeleteTarget(bazar)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
