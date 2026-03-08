@@ -35,6 +35,13 @@ interface LocationInfo {
   status: 'detecting' | 'resolved' | 'fallback' | 'error';
 }
 
+interface RamadanTimes {
+  fajr: string;
+  maghrib: string;
+  date: Date;
+  loading: boolean;
+}
+
 // ─── Helpers ───
 const PRAYER_KEYS: (keyof PrayerTimes)[] = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
 const PRAYER_ICONS = ['🌙', '☀️', '🌤️', '🌅', '🌃'];
@@ -81,12 +88,18 @@ function getActivePrayer(timings: PrayerTimes): number {
   });
   let active = -1;
   for (let i = mins.length - 1; i >= 0; i--) {
-    if (nowMins >= mins[i]) {
-      active = i;
-      break;
-    }
+    if (nowMins >= mins[i]) { active = i; break; }
   }
   return active === -1 ? mins.length - 1 : active;
+}
+
+function isSameDay(a: Date, b: Date): boolean {
+  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+function formatDateLabel(date: Date, today: Date): string {
+  if (isSameDay(date, today)) return 'Today';
+  return date.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
 }
 
 // ─── Component ───
@@ -95,26 +108,26 @@ export default function CalendarModal() {
   const today = new Date();
   const [viewYear, setViewYear] = useState(today.getFullYear());
   const [viewMonth, setViewMonth] = useState(today.getMonth());
+  const [selectedDate, setSelectedDate] = useState<Date>(today);
 
   // Location & prayer state
   const [location, setLocation] = useState<LocationInfo>({
-    name: 'Detecting…',
-    lat: 23.8103,
-    lon: 90.4125,
-    status: 'detecting',
+    name: 'Detecting…', lat: 23.8103, lon: 90.4125, status: 'detecting',
   });
   const [prayerTimes, setPrayerTimes] = useState<PrayerTimes | null>(null);
   const [prayerLoading, setPrayerLoading] = useState(true);
   const [ramadanToday, setRamadanToday] = useState(false);
+  const [ramadanTimes, setRamadanTimes] = useState<RamadanTimes | null>(null);
   const [countdown, setCountdown] = useState('');
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const locationDetectedRef = useRef(false);
+  const locationRef = useRef(location);
+  locationRef.current = location;
 
-  // Bangla / Hijri for today
   const todayBangla = useMemo(() => toBanglaDate(today), []);
   const todayHijri = useMemo(() => toHijriDate(today), []);
 
-  // ─── Location detection ───
+  // ─── Fetch prayer times for today ───
   const fetchPrayerTimes = useCallback(async (lat: number, lon: number) => {
     setPrayerLoading(true);
     try {
@@ -122,7 +135,11 @@ export default function CalendarModal() {
       const data = await res.json();
       const t = data.data.timings as PrayerTimes;
       setPrayerTimes(t);
-      setRamadanToday(isRamadan(today));
+      const isRam = isRamadan(today);
+      setRamadanToday(isRam);
+      if (isRam) {
+        setRamadanTimes({ fajr: t.Fajr, maghrib: t.Maghrib, date: today, loading: false });
+      }
     } catch {
       setPrayerTimes(null);
     } finally {
@@ -130,6 +147,42 @@ export default function CalendarModal() {
     }
   }, []);
 
+  // ─── Fetch Ramadan times for a specific date ───
+  const fetchRamadanForDate = useCallback(async (date: Date) => {
+    if (!isRamadan(date)) {
+      setRamadanTimes(null);
+      return;
+    }
+    const { lat, lon } = locationRef.current;
+    setRamadanTimes({ fajr: '', maghrib: '', date, loading: true });
+    const dateStr = `${String(date.getDate()).padStart(2, '0')}-${String(date.getMonth() + 1).padStart(2, '0')}-${date.getFullYear()}`;
+    try {
+      const res = await fetch(`https://api.aladhan.com/v1/timings/${dateStr}?latitude=${lat}&longitude=${lon}&method=1`);
+      const data = await res.json();
+      const t = data.data.timings;
+      setRamadanTimes({ fajr: t.Fajr, maghrib: t.Maghrib, date, loading: false });
+    } catch {
+      setRamadanTimes(null);
+    }
+  }, []);
+
+  // ─── Day click handler ───
+  const onDayClick = useCallback((day: number) => {
+    const clicked = new Date(viewYear, viewMonth, day);
+    setSelectedDate(clicked);
+    if (isRamadan(clicked)) {
+      // If it's today, use already-fetched prayer times
+      if (isSameDay(clicked, today) && prayerTimes) {
+        setRamadanTimes({ fajr: prayerTimes.Fajr, maghrib: prayerTimes.Maghrib, date: clicked, loading: false });
+      } else {
+        fetchRamadanForDate(clicked);
+      }
+    } else {
+      setRamadanTimes(null);
+    }
+  }, [viewYear, viewMonth, prayerTimes, fetchRamadanForDate]);
+
+  // ─── Location detection ───
   const detectLocation = useCallback(() => {
     if (locationDetectedRef.current) return;
     locationDetectedRef.current = true;
@@ -165,15 +218,17 @@ export default function CalendarModal() {
     );
   }, [fetchPrayerTimes]);
 
-  // Detect location when modal opens
   useEffect(() => {
     if (open) detectLocation();
   }, [open, detectLocation]);
 
-  // Ramadan countdown
+  // ─── Ramadan countdown (only for today) ───
   useEffect(() => {
-    if (!ramadanToday || !prayerTimes) return;
     if (countdownRef.current) clearInterval(countdownRef.current);
+    if (!ramadanToday || !prayerTimes || !ramadanTimes || !isSameDay(ramadanTimes.date, today)) {
+      setCountdown('');
+      return;
+    }
 
     const tick = () => {
       const now = new Date();
@@ -201,10 +256,7 @@ export default function CalendarModal() {
       const target = new Date();
       target.setHours(th, tm, 0, 0);
       const diff = target.getTime() - now.getTime();
-      if (diff <= 0) {
-        setCountdown('');
-        return;
-      }
+      if (diff <= 0) { setCountdown(''); return; }
       const h = Math.floor(diff / 3600000);
       const m = Math.floor((diff % 3600000) / 60000);
       const s = Math.floor((diff % 60000) / 1000);
@@ -213,10 +265,8 @@ export default function CalendarModal() {
 
     tick();
     countdownRef.current = setInterval(tick, 1000);
-    return () => {
-      if (countdownRef.current) clearInterval(countdownRef.current);
-    };
-  }, [ramadanToday, prayerTimes]);
+    return () => { if (countdownRef.current) clearInterval(countdownRef.current); };
+  }, [ramadanToday, prayerTimes, ramadanTimes]);
 
   // ─── Calendar data ───
   const calendarData = useMemo(() => {
@@ -230,6 +280,8 @@ export default function CalendarModal() {
       hijriText: string;
       isToday: boolean;
       isFriday: boolean;
+      isSelected: boolean;
+      isRamadan: boolean;
     }> = [];
 
     for (let d = 1; d <= daysInMonth; d++) {
@@ -237,13 +289,16 @@ export default function CalendarModal() {
       const bangla = toBanglaDate(date);
       const hijri = toHijriDate(date);
       const dayOfWeek = date.getDay();
+      const isT = isSameDay(date, today);
       days.push({
         day: d,
         banglaDay: toBanglaDigits(bangla.day),
         banglaMonth: bangla.month,
         hijriText: `${hijri.month} ${hijri.day}`,
-        isToday: d === today.getDate() && viewMonth === today.getMonth() && viewYear === today.getFullYear(),
+        isToday: isT,
         isFriday: dayOfWeek === 5,
+        isSelected: isSameDay(date, selectedDate) && !isT,
+        isRamadan: isRamadan(date),
       });
     }
 
@@ -265,7 +320,7 @@ export default function CalendarModal() {
         : `${hijriFirst.month} ${hijriFirst.day} - ${hijriLast.month} ${hijriLast.day}, ${hijriLast.year} AH`;
 
     return { days, firstDay, banglaRange, hijriRange };
-  }, [viewYear, viewMonth]);
+  }, [viewYear, viewMonth, selectedDate]);
 
   const goToPrev = () => {
     if (viewMonth === 0) { setViewMonth(11); setViewYear((p) => p - 1); }
@@ -275,10 +330,26 @@ export default function CalendarModal() {
     if (viewMonth === 11) { setViewMonth(0); setViewYear((p) => p + 1); }
     else setViewMonth((p) => p + 1);
   };
-  const goToToday = () => { setViewYear(today.getFullYear()); setViewMonth(today.getMonth()); };
+  const goToToday = () => {
+    setViewYear(today.getFullYear());
+    setViewMonth(today.getMonth());
+    setSelectedDate(today);
+    if (ramadanToday && prayerTimes) {
+      setRamadanTimes({ fajr: prayerTimes.Fajr, maghrib: prayerTimes.Maghrib, date: today, loading: false });
+    }
+  };
 
   const activePrayer = prayerTimes ? getActivePrayer(prayerTimes) : -1;
-  const hijriDay = getHijriDayNum(today);
+
+  // Ramadan banner state
+  const showRamadan = ramadanTimes && !ramadanTimes.loading && ramadanTimes.fajr;
+  const ramadanHijriDay = ramadanTimes ? getHijriDayNum(ramadanTimes.date) : null;
+  const isSelectedToday = ramadanTimes ? isSameDay(ramadanTimes.date, today) : false;
+  const isSelectedPast = ramadanTimes ? ramadanTimes.date < today && !isSelectedToday : false;
+  const isSelectedFuture = ramadanTimes ? ramadanTimes.date > today : false;
+
+  const sehriLabel = isSelectedPast ? 'Sehri was' : isSelectedFuture ? 'Sehri will be' : 'Sehri ends';
+  const iftarLabel = isSelectedPast ? 'Iftar was' : isSelectedFuture ? 'Iftar will be' : 'Iftar time';
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -313,7 +384,6 @@ export default function CalendarModal() {
             </div>
           </DialogHeader>
 
-          {/* Today's date strip */}
           <div className="mt-2 rounded-lg border border-border bg-background/60 px-2 py-1.5 sm:px-3 sm:py-2">
             <p className="text-[0.55rem] sm:text-xs text-success leading-tight truncate">
               আজ: {toBanglaDigits(todayBangla.day)} {todayBangla.month} {toBanglaDigits(todayBangla.year)} বঙ্গাব্দ
@@ -357,13 +427,19 @@ export default function CalendarModal() {
             {calendarData.days.map((day) => (
               <div
                 key={day.day}
-                className={`min-h-[44px] sm:min-h-[70px] rounded-md sm:rounded-xl p-0.5 sm:p-2 flex flex-col transition-colors duration-200 ${
+                onClick={() => onDayClick(day.day)}
+                className={`min-h-[44px] sm:min-h-[70px] rounded-md sm:rounded-xl p-0.5 sm:p-2 flex flex-col transition-colors duration-200 cursor-pointer relative ${
                   day.isToday
                     ? 'bg-primary/10 border border-primary/30 ring-1 ring-primary/20'
+                    : day.isSelected
+                    ? 'bg-info/10 border border-info/30 ring-1 ring-info/20'
                     : 'bg-secondary/50 border border-transparent hover:bg-secondary hover:border-border/60'
                 }`}
               >
-                <span className={`font-bold text-[0.65rem] sm:text-lg leading-none ${day.isToday ? 'text-primary' : day.isFriday ? 'text-destructive' : 'text-foreground'}`}>
+                {day.isRamadan && (
+                  <span className="absolute top-0 right-0.5 text-[0.4rem] sm:text-[0.5rem] opacity-30">☽</span>
+                )}
+                <span className={`font-bold text-[0.65rem] sm:text-lg leading-none ${day.isToday ? 'text-primary' : day.isSelected ? 'text-info' : day.isFriday ? 'text-destructive' : 'text-foreground'}`}>
                   {day.day}
                 </span>
                 <span className="text-[0.35rem] sm:text-[0.6rem] text-success leading-tight mt-0.5 opacity-90 truncate">
@@ -386,54 +462,71 @@ export default function CalendarModal() {
         </div>
 
         {/* ─── Ramadan Banner ─── */}
-        {ramadanToday && prayerTimes && (
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="mx-2 sm:mx-4 mb-2 sm:mb-3 rounded-xl border border-gold/30 bg-gold/5 p-3 sm:p-4"
-          >
-            <div className="flex items-center gap-2 mb-2 sm:mb-3">
-              <span className="text-lg">☽</span>
-              <h3 className="text-sm sm:text-base font-bold text-gold">Ramadan Mubarak</h3>
-              {hijriDay && (
-                <span className="ml-auto text-[0.6rem] sm:text-xs text-gold/60 italic">
-                  {ordinal(hijriDay)} of Ramadan
+        <AnimatePresence mode="wait">
+          {ramadanTimes && (
+            <motion.div
+              key={`ram-${ramadanTimes.date.toDateString()}`}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+              className="mx-2 sm:mx-4 mb-2 sm:mb-3 rounded-xl border border-gold/30 bg-gold/5 p-3 sm:p-4"
+            >
+              <div className="flex items-center gap-2 mb-2 sm:mb-3">
+                <span className="text-lg">☽</span>
+                <h3 className="text-sm sm:text-base font-bold text-gold">Ramadan Mubarak</h3>
+                <span className="ml-auto text-[0.55rem] sm:text-xs text-gold/60 italic">
+                  {ramadanHijriDay ? `${ordinal(ramadanHijriDay)} of Ramadan` : ''}
+                  {!isSelectedToday && ` · ${formatDateLabel(ramadanTimes.date, today)}`}
                 </span>
+              </div>
+
+              {ramadanTimes.loading ? (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-5 w-5 animate-spin text-gold/60" />
+                </div>
+              ) : (
+                <>
+                  <div className="grid grid-cols-2 gap-2 sm:gap-3">
+                    <div className="rounded-lg border border-gold/25 bg-gold/[0.08] px-2.5 py-2 sm:px-4 sm:py-3 flex items-center gap-2 sm:gap-3">
+                      <span className="text-xl sm:text-2xl shrink-0">🌙</span>
+                      <div className="min-w-0">
+                        <div className="text-[0.5rem] sm:text-[0.65rem] uppercase tracking-wider text-gold/60">{sehriLabel}</div>
+                        <div className="text-sm sm:text-lg font-semibold text-foreground tabular-nums">{to12h(ramadanTimes.fajr)}</div>
+                        <div className="text-[0.45rem] sm:text-[0.6rem] text-muted-foreground">Before Fajr</div>
+                      </div>
+                    </div>
+                    <div className="rounded-lg border border-gold/25 bg-gold/[0.08] px-2.5 py-2 sm:px-4 sm:py-3 flex items-center gap-2 sm:gap-3">
+                      <span className="text-xl sm:text-2xl shrink-0">🌅</span>
+                      <div className="min-w-0">
+                        <div className="text-[0.5rem] sm:text-[0.65rem] uppercase tracking-wider text-gold/60">{iftarLabel}</div>
+                        <div className="text-sm sm:text-lg font-semibold text-foreground tabular-nums">{to12h(ramadanTimes.maghrib)}</div>
+                        <div className="text-[0.45rem] sm:text-[0.6rem] text-muted-foreground">At Maghrib</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {isSelectedToday && countdown && (
+                    <div className="text-center mt-2 pt-2 border-t border-gold/10 text-[0.6rem] sm:text-xs text-gold/60">
+                      <span className="text-gold font-medium tabular-nums">{countdown}</span>
+                    </div>
+                  )}
+
+                  {!isSelectedToday && (
+                    <div className="text-center mt-2 pt-2 border-t border-gold/10">
+                      <Button variant="ghost" size="sm" className="text-[0.6rem] sm:text-xs h-5 text-gold/60 hover:text-gold" onClick={goToToday}>
+                        ← Back to today
+                      </Button>
+                    </div>
+                  )}
+                </>
               )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-2 sm:gap-3">
-              {/* Sehri */}
-              <div className="rounded-lg border border-gold/25 bg-gold/[0.08] px-2.5 py-2 sm:px-4 sm:py-3 flex items-center gap-2 sm:gap-3">
-                <span className="text-xl sm:text-2xl shrink-0">🌙</span>
-                <div className="min-w-0">
-                  <div className="text-[0.5rem] sm:text-[0.65rem] uppercase tracking-wider text-gold/60">Sehri ends</div>
-                  <div className="text-sm sm:text-lg font-semibold text-foreground tabular-nums">{to12h(prayerTimes.Fajr)}</div>
-                  <div className="text-[0.45rem] sm:text-[0.6rem] text-muted-foreground">Before Fajr</div>
-                </div>
-              </div>
-              {/* Iftar */}
-              <div className="rounded-lg border border-gold/25 bg-gold/[0.08] px-2.5 py-2 sm:px-4 sm:py-3 flex items-center gap-2 sm:gap-3">
-                <span className="text-xl sm:text-2xl shrink-0">🌅</span>
-                <div className="min-w-0">
-                  <div className="text-[0.5rem] sm:text-[0.65rem] uppercase tracking-wider text-gold/60">Iftar time</div>
-                  <div className="text-sm sm:text-lg font-semibold text-foreground tabular-nums">{to12h(prayerTimes.Maghrib)}</div>
-                  <div className="text-[0.45rem] sm:text-[0.6rem] text-muted-foreground">At Maghrib</div>
-                </div>
-              </div>
-            </div>
-
-            {countdown && (
-              <div className="text-center mt-2 pt-2 border-t border-gold/10 text-[0.6rem] sm:text-xs text-gold/60">
-                <span className="text-gold font-medium tabular-nums">{countdown}</span>
-              </div>
-            )}
-          </motion.div>
-        )}
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* ─── Prayer Times + Location ─── */}
         <div className="grid grid-cols-1 sm:grid-cols-[auto_1fr] gap-2 sm:gap-3 px-2 sm:px-4 pb-3 sm:pb-4">
-          {/* Location */}
           <div className="rounded-lg border border-border bg-secondary/30 px-3 py-2 sm:px-4 sm:py-3 flex items-center gap-2 sm:flex-col sm:items-start sm:gap-1">
             <MapPin className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-info shrink-0" />
             <div className="min-w-0">
@@ -445,16 +538,11 @@ export default function CalendarModal() {
                   <span className="text-[0.5rem] text-muted-foreground">Locating…</span>
                 </div>
               )}
-              {location.status === 'resolved' && (
-                <span className="text-[0.5rem] text-success">✓ Live</span>
-              )}
-              {location.status === 'fallback' && (
-                <span className="text-[0.5rem] text-warning">Default location</span>
-              )}
+              {location.status === 'resolved' && <span className="text-[0.5rem] text-success">✓ Live</span>}
+              {location.status === 'fallback' && <span className="text-[0.5rem] text-warning">Default location</span>}
             </div>
           </div>
 
-          {/* Prayer pills */}
           <div className="rounded-lg border border-border bg-secondary/30 px-2 py-2 sm:px-4 sm:py-3">
             <div className="text-[0.5rem] sm:text-[0.6rem] uppercase tracking-wider text-muted-foreground mb-1.5 sm:mb-2">
               Today's Prayer Times
@@ -469,18 +557,12 @@ export default function CalendarModal() {
                   <div
                     key={key}
                     className={`rounded-md sm:rounded-lg px-1 py-1.5 sm:px-2 sm:py-2.5 text-center transition-colors ${
-                      i === activePrayer
-                        ? 'bg-primary/15 border border-primary/30'
-                        : 'bg-background/50 border border-transparent'
+                      i === activePrayer ? 'bg-primary/15 border border-primary/30' : 'bg-background/50 border border-transparent'
                     }`}
                   >
                     <div className="text-sm sm:text-base mb-0.5">{PRAYER_ICONS[i]}</div>
-                    <div className={`text-[0.45rem] sm:text-[0.6rem] uppercase tracking-wider mb-0.5 ${i === activePrayer ? 'text-primary' : 'text-muted-foreground'}`}>
-                      {key}
-                    </div>
-                    <div className={`text-[0.55rem] sm:text-xs font-medium tabular-nums ${i === activePrayer ? 'text-primary' : 'text-foreground'}`}>
-                      {to12h(prayerTimes[key])}
-                    </div>
+                    <div className={`text-[0.45rem] sm:text-[0.6rem] uppercase tracking-wider mb-0.5 ${i === activePrayer ? 'text-primary' : 'text-muted-foreground'}`}>{key}</div>
+                    <div className={`text-[0.55rem] sm:text-xs font-medium tabular-nums ${i === activePrayer ? 'text-primary' : 'text-foreground'}`}>{to12h(prayerTimes[key])}</div>
                   </div>
                 ))}
               </div>
