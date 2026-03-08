@@ -214,7 +214,7 @@ export default function BazarDates() {
   };
 
   const sortedDates = [...bazarDates].sort((a, b) => 
-    new Date(a.date).getTime() - new Date(b.date).getTime()
+    new Date(b.date).getTime() - new Date(a.date).getTime()
   );
 
   // Use startOfDay to properly compare dates ignoring time component

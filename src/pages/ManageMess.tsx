@@ -84,7 +84,7 @@ export default function ManageMess() {
         const logs = await dataService.getActivityLogsByMessId(messData.id);
         const oneYearAgo = new Date();
         oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
-        setActivityLogs(logs.filter(l => new Date(l.createdAt) >= oneYearAgo));
+        setActivityLogs(logs.filter(l => new Date(l.createdAt) >= oneYearAgo).sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
       }
     } catch (error) {
       console.error('Error loading mess data:', error);

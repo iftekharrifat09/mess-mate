@@ -47,7 +47,7 @@ export default function Notes() {
     setIsLoading(true);
     try {
       const allNotes = await dataService.getNotesByMessId(user.messId);
-      setNotes(allNotes);
+      setNotes(allNotes.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
     } catch (error) {
       console.error('Error loading notes:', error);
       toast({
