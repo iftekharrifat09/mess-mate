@@ -61,7 +61,7 @@ const App = () => (
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/edit-calendar" element={<EditCalendar />} />
                 <Route path="/calculator" element={<Calculator />} />
-                <Route path="/chat" element={<Chat />} />
+                
               </Routes>
             </BrowserRouter>
           </TooltipProvider>
