@@ -201,7 +201,7 @@ export default function CalculatorPage() {
     await calcStore.deleteException(id);
     if (!shouldUseBackend() && exc) {
       const cat = categories.find(c => c.id === exc.categoryId);
-      dataService.notifyMessMembers(messId, user?.id || '', { type: 'general', title: 'Expense Exception Removed', message: `${exc.userName}'s exception for "${cat?.title || ''}" has been removed` });
+      dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Exception Removed', message: `${exc.userName}'s exception for "${cat?.title || ''}" has been removed` });
     }
     reload();
   };
