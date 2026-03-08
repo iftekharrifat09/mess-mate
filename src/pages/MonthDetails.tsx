@@ -48,8 +48,9 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import * as dataService from '@/lib/dataService';
 import { 
-  calculateMonthSummary, 
-  getAllMembersSummary, 
+  fetchMonthData,
+  calculateMonthSummaryFromData, 
+  getAllMembersSummaryFromData, 
   formatCurrency, 
   formatNumber 
 } from '@/lib/calculations';
