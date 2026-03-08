@@ -28,6 +28,7 @@ import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 
 export default function CalculatorPage() {
   const { user } = useAuth();
