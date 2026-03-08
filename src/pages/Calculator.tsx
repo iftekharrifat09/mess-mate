@@ -263,7 +263,7 @@ export default function CalculatorPage() {
     } else {
       await calcStore.createPayment({ messId, monthId: activeMonthId, userId: payUserId, userName: memberName, amount: Number(payAmount), description: payDesc });
       if (!shouldUseBackend()) {
-        dataService.notifyMessMembers(messId, user?.id || '', { type: 'general', title: 'Member Deposit Recorded', message: `${memberName} deposited ${formatCurrency(Number(payAmount))}${payDesc ? ` - ${payDesc}` : ''}` });
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'deposit', title: 'Member Deposit Recorded', message: `${memberName} deposited ${formatCurrency(Number(payAmount))}${payDesc ? ` - ${payDesc}` : ''}` });
       }
     }
     setPayModal(false); setPayUserId(''); setPayAmount(''); setPayDesc(''); setPayStep(1);
