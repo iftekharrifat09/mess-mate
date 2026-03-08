@@ -376,6 +376,14 @@ export default function Deposits() {
           </CardContent>
         </Card>
       </div>
+
+      <DeleteConfirmDialog
+        open={!!deleteTargetId}
+        onOpenChange={(open) => !open && setDeleteTargetId(null)}
+        onConfirm={() => deleteTargetId && handleDelete(deleteTargetId)}
+        title="Delete this deposit?"
+        description="This deposit will be permanently deleted. This action cannot be undone."
+      />
     </DashboardLayout>
   );
 }

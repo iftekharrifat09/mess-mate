@@ -440,6 +440,14 @@ export default function OtherCosts() {
           </CardContent>
         </Card>
       </div>
+
+      <DeleteConfirmDialog
+        open={!!deleteTargetId}
+        onOpenChange={(open) => !open && setDeleteTargetId(null)}
+        onConfirm={() => deleteTargetId && handleDelete(deleteTargetId)}
+        title="Delete this cost?"
+        description="This cost entry will be permanently deleted. This action cannot be undone."
+      />
     </DashboardLayout>
   );
 }

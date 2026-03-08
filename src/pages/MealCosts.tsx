@@ -477,6 +477,14 @@ export default function MealCosts() {
           </CardContent>
         </Card>
       </motion.div>
+
+      <DeleteConfirmDialog
+        open={!!deleteTargetId}
+        onOpenChange={(open) => !open && setDeleteTargetId(null)}
+        onConfirm={() => deleteTargetId && handleDelete(deleteTargetId)}
+        title="Delete this meal cost?"
+        description="This meal cost entry will be permanently deleted. This action cannot be undone."
+      />
     </DashboardLayout>
   );
 }

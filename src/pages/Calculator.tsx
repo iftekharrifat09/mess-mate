@@ -841,6 +841,20 @@ export default function CalculatorPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          if (deleteTarget.type === 'category') handleDeleteCategory(deleteTarget.id);
+          else if (deleteTarget.type === 'exception') handleDeleteException(deleteTarget.id);
+          else if (deleteTarget.type === 'deposit') handleDeleteDeposit(deleteTarget.id);
+          else if (deleteTarget.type === 'billPayment') handleDeleteBillPayment(deleteTarget.id);
+        }}
+        title={`Delete ${deleteTarget?.label}?`}
+        description="This will be permanently deleted. This action cannot be undone."
+      />
     </DashboardLayout>
   );
 }

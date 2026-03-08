@@ -493,6 +493,14 @@ export default function BazarDates() {
           </Card>
         </div>
       </motion.div>
+
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
+        title="Delete this bazar date?"
+        description="This bazar date entry will be permanently deleted. This action cannot be undone."
+      />
     </DashboardLayout>
   );
 }

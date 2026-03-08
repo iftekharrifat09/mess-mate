@@ -292,6 +292,14 @@ export default function Notices() {
           </div>
         )}
       </motion.div>
+
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
+        title={`Delete "${deleteTarget?.title}"?`}
+        description="This notice will be permanently deleted. This action cannot be undone."
+      />
     </DashboardLayout>
   );
 }
