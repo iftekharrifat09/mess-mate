@@ -312,7 +312,7 @@ export default function CalculatorPage() {
     } else {
       await calcStore.createBillPayment({ messId, monthId: activeMonthId, categoryId: billCatId, categoryName: catName, amount: amt, description: billDesc });
       if (!shouldUseBackend()) {
-        dataService.notifyMessMembers(messId, user?.id || '', { type: 'general', title: 'Bill Payment Recorded', message: `${formatCurrency(amt)} paid for "${catName}"${billDesc ? ` - ${billDesc}` : ''}` });
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Bill Payment Recorded', message: `${formatCurrency(amt)} paid for "${catName}"${billDesc ? ` - ${billDesc}` : ''}` });
       }
     }
     setBillModal(false); setBillCatId(''); setBillAmount(''); setBillDesc('');
