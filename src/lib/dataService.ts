@@ -886,10 +886,17 @@ export async function getMessMembers(messId: string | undefined): Promise<User[]
 // ============================================
 
 export async function getNoticesByMessId(messId: string): Promise<Notice[]> {
+  // Check cache first
+  const cacheKey = cacheKeys.notices(messId);
+  const cached = apiCache.get<Notice[]>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     const result = await api.getNoticesAPI(messId);
     if (result.success && result.data) {
-      return (result.data as any).notices || result.data || [];
+      const notices = (result.data as any).notices || result.data || [];
+      apiCache.set(cacheKey, notices, apiCache.getTTL('default'));
+      return notices;
     }
   }
   return storage.getNoticesByMessId(messId);
