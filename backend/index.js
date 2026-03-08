@@ -2938,6 +2938,22 @@ app.post("/api/chat/leave", authMiddleware, async (req, res) => {
   }
 });
 
+// Typing indicator
+app.post("/api/chat/typing", authMiddleware, async (req, res) => {
+  try {
+    const messId = req.user.messId;
+    if (!messId) return res.status(400).json({ success: false });
+    if (!typingUsers.has(messId)) typingUsers.set(messId, new Map());
+    typingUsers.get(messId).set(req.user.id, {
+      timestamp: Date.now(),
+      name: req.user.name || "Unknown",
+    });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false });
+  }
+});
+
 // Get chat messages for the user's mess (with pagination)
 app.get("/api/chat/messages", authMiddleware, async (req, res) => {
   try {
