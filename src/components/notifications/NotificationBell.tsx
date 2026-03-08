@@ -66,7 +66,7 @@ function sendBrowserNotification(title: string, body: string, icon?: string) {
 
 export default function NotificationBell() {
   const { user } = useAuth();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unseenCount, setUnseenCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const { playNotificationSound, primeNotificationSound } = useNotificationSound();
