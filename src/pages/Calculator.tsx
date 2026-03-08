@@ -157,8 +157,14 @@ export default function CalculatorPage() {
     if (!catTitle.trim() || !catCost) return;
     if (editCat) {
       await calcStore.updateCategory(editCat.id, { title: catTitle.trim(), totalCost: Number(catCost) });
+      if (!shouldUseBackend()) {
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'general', title: 'Expense Category Updated', message: `Expense category "${catTitle.trim()}" has been updated` });
+      }
     } else {
       await calcStore.createCategory({ messId, monthId: activeMonthId, title: catTitle.trim(), totalCost: Number(catCost), status: 'unpaid' });
+      if (!shouldUseBackend()) {
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'general', title: 'Expense Category Added', message: `New expense category "${catTitle.trim()}" added (${formatCurrency(Number(catCost))})` });
+      }
     }
     setCatModal(false); setEditCat(null); setCatTitle(''); setCatCost('');
     reload();
