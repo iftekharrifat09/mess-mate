@@ -276,7 +276,7 @@ export default function CalculatorPage() {
     const dep = payments.find(p => p.id === id);
     await calcStore.deletePayment(id);
     if (!shouldUseBackend() && dep) {
-      dataService.notifyMessMembers(messId, user?.id || '', { type: 'general', title: 'Deposit Deleted', message: `${dep.userName}'s deposit of ${formatCurrency(dep.amount)} has been removed` });
+      dataService.notifyMessMembers(messId, user?.id || '', { type: 'deposit', title: 'Deposit Deleted', message: `${dep.userName}'s deposit of ${formatCurrency(dep.amount)} has been removed` });
     }
     reload();
     toast({ title: 'Deposit deleted', variant: 'destructive' });
