@@ -66,6 +66,7 @@ export async function requestBrowserNotificationPermission(): Promise<boolean> {
     const result = await requestPermissionCompat();
     return result === 'granted';
   } catch {
-    return Notification.permission === 'granted';
+    const latestPermission = Notification.permission as NotificationPermission;
+    return latestPermission === 'granted';
   }
 }
