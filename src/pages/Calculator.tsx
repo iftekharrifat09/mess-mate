@@ -181,11 +181,21 @@ export default function CalculatorPage() {
     reload();
   };
 
-  const isDepositsCapped = monthlyTotal > 0 && totalDeposits >= monthlyTotal;
+  const isDepositsCapped = monthlyTotal > 0 && actualTotalDeposits >= monthlyTotal;
+
+  // Members who still have dues (can deposit even when capped)
+  const membersWithDues = useMemo(() => {
+    if (!isDepositsCapped) return [];
+    return members.filter(m => {
+      const due = memberDues[m.id] || 0;
+      const paid = memberPayments[m.id] || 0;
+      return due > 0 && paid < due;
+    });
+  }, [isDepositsCapped, members, memberDues, memberPayments]);
 
   // Member Deposit handlers
   const handleOpenDepositModal = () => {
-    if (isDepositsCapped) {
+    if (isDepositsCapped && membersWithDues.length === 0) {
       setDepositWarning(true);
       return;
     }
@@ -194,22 +204,28 @@ export default function CalculatorPage() {
 
   const handleSaveDeposit = async () => {
     if (!payUserId || !payAmount) return;
-    // Cap: total deposits cannot exceed monthly total
-    if (!editPayment && monthlyTotal > 0) {
-      const newTotal = totalDeposits + Number(payAmount);
-      if (newTotal > monthlyTotal) {
-        const maxAllowed = monthlyTotal - totalDeposits;
-        toast({ title: 'Deposit exceeds limit', description: `Maximum deposit allowed is ${formatCurrency(maxAllowed)}. Total deposits cannot exceed Monthly Total.`, variant: 'destructive' });
+    const amt = Number(payAmount);
+    const due = memberDues[payUserId] || 0;
+    const paid = memberPayments[payUserId] || 0;
+    const memberRemaining = Math.max(0, due - paid);
+
+    if (!editPayment && isDepositsCapped) {
+      // After cap: member can only deposit up to their remaining due
+      if (amt > memberRemaining) {
+        toast({ title: 'Deposit exceeds member due', description: `This member's remaining due is ${formatCurrency(memberRemaining)}. Cannot deposit more than that.`, variant: 'destructive' });
         return;
       }
-    }
-    // Block deposit if monthly total is fully paid and this member is also fully paid
-    if (!editPayment && isMonthlyFullyPaid) {
-      const due = memberDues[payUserId] || 0;
-      const paid = memberPayments[payUserId] || 0;
-      if (due > 0 && paid >= due) {
-        toast({ title: 'Deposit not allowed', description: 'Monthly total is fully paid and this member has already paid their dues.', variant: 'destructive' });
-        return;
+    } else if (!editPayment && monthlyTotal > 0) {
+      // Before cap: total deposits cannot exceed monthly total
+      const newTotal = actualTotalDeposits + amt;
+      if (newTotal > monthlyTotal) {
+        // Check if member has dues and the excess is within their due
+        const excessOverCap = newTotal - monthlyTotal;
+        if (excessOverCap > memberRemaining) {
+          const maxAllowed = monthlyTotal - actualTotalDeposits + memberRemaining;
+          toast({ title: 'Deposit exceeds limit', description: `Maximum deposit allowed is ${formatCurrency(Math.max(0, maxAllowed))}. Total deposits cannot exceed Monthly Total plus member's remaining due.`, variant: 'destructive' });
+          return;
+        }
       }
     }
     if (editPayment) {
