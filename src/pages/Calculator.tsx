@@ -197,7 +197,12 @@ export default function CalculatorPage() {
 
   const handleDeleteException = async (id: string) => {
     setDeleteTarget(null);
+    const exc = allExceptions.find(e => e.id === id);
     await calcStore.deleteException(id);
+    if (!shouldUseBackend() && exc) {
+      const cat = categories.find(c => c.id === exc.categoryId);
+      dataService.notifyMessMembers(messId, user?.id || '', { type: 'general', title: 'Expense Exception Removed', message: `${exc.userName}'s exception for "${cat?.title || ''}" has been removed` });
+    }
     reload();
   };
 
