@@ -296,15 +296,34 @@ export default function BazarDates() {
                 <div className="space-y-2">
                   <Label>{editingBazar ? 'Date' : 'Add Dates'}</Label>
                   <div className="flex gap-2">
-                    <Input
-                      type="date"
-                      value={currentDate}
-                      onChange={(e) => {
-                        setCurrentDate(e.target.value);
-                        setDateError(null);
-                      }}
-                      className="flex-1"
-                    />
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "flex-1 justify-start text-left font-normal",
+                            !currentDate && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4 text-foreground" />
+                          {currentDate ? format(new Date(currentDate + 'T00:00:00'), 'PPP') : <span>Pick a date</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <CalendarComponent
+                          mode="single"
+                          selected={currentDate ? new Date(currentDate + 'T00:00:00') : undefined}
+                          onSelect={(date) => {
+                            if (date) {
+                              setCurrentDate(format(date, 'yyyy-MM-dd'));
+                              setDateError(null);
+                            }
+                          }}
+                          initialFocus
+                          className={cn("p-3 pointer-events-auto")}
+                        />
+                      </PopoverContent>
+                    </Popover>
                     {!editingBazar && (
                       <Button type="button" onClick={handleAddDate} variant="outline" size="icon">
                         <Plus className="h-4 w-4" />
