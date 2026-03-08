@@ -246,9 +246,9 @@ async function notifyMembers(messId, excludeUserId, notification) {
   if (notifications.length > 0) {
     await collections.notifications.insertMany(notifications);
 
-    // Send email notifications to verified members
+    // Send email notifications to verified members who have email notifications enabled
     for (const member of members) {
-      if (member.emailVerified) {
+      if (member.emailVerified && member.emailNotifications !== false) {
         await sendNotificationEmail(member, notification);
       }
     }
@@ -498,10 +498,15 @@ app.get("/api/auth/me", authMiddleware, async (req, res) => {
 // Update Profile
 app.put("/api/auth/profile", authMiddleware, async (req, res) => {
   try {
-    const { name, phone } = req.body;
+    const { name, phone, emailNotifications } = req.body;
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (phone !== undefined) updateData.phone = phone;
+    if (emailNotifications !== undefined) updateData.emailNotifications = emailNotifications;
+
     await collections.users.updateOne(
       { _id: new ObjectId(req.userId) },
-      { $set: { name, phone } }
+      { $set: updateData }
     );
 
     const user = await collections.users.findOne({
@@ -513,7 +518,7 @@ app.put("/api/auth/profile", authMiddleware, async (req, res) => {
       user: {
         id: user._id.toString(),
         name: user.name,
-        fullName: user.name,  // Frontend expects fullName
+        fullName: user.name,
         email: user.email,
         phone: user.phone || "",
         role: user.role,
@@ -521,6 +526,7 @@ app.put("/api/auth/profile", authMiddleware, async (req, res) => {
         isApproved: user.isApproved !== false,
         isActive: user.isActive !== false,
         emailVerified: user.emailVerified || false,
+        emailNotifications: user.emailNotifications !== false,
       },
     });
   } catch (error) {

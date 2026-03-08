@@ -19,7 +19,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { updateUser, getUserByEmail } from '@/lib/storage';
-import { getNotificationSoundEnabled, setNotificationSoundEnabled } from '@/lib/preferences';
+import { getNotificationSoundEnabled, setNotificationSoundEnabled, getEmailNotificationEnabled, setEmailNotificationEnabled } from '@/lib/preferences';
 import {
   updateProfileAPI,
   sendOtpAPI,
@@ -28,7 +28,7 @@ import {
   requestEmailChangeAPI,
   confirmEmailChangeAPI,
 } from '@/lib/api';
-import { User, Phone, Mail, Check, X, Edit2, Shield, Lock, KeyRound, Volume2, Loader2 } from 'lucide-react';
+import { User, Phone, Mail, Check, X, Edit2, Shield, Lock, KeyRound, Volume2, Loader2, MailCheck } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Profile() {
@@ -36,10 +36,12 @@ export default function Profile() {
   const { toast } = useToast();
 
   const [notificationSoundEnabled, setNotificationSoundEnabledState] = useState(true);
+  const [emailNotificationEnabled, setEmailNotificationEnabledState] = useState(true);
 
   useEffect(() => {
     if (!user) return;
     setNotificationSoundEnabledState(getNotificationSoundEnabled(user.id));
+    setEmailNotificationEnabledState(getEmailNotificationEnabled(user.id));
   }, [user]);
 
   const handleToggleNotificationSound = (checked: boolean) => {
@@ -47,6 +49,21 @@ export default function Profile() {
     setNotificationSoundEnabledState(checked);
     setNotificationSoundEnabled(user.id, checked);
     toast({ title: checked ? 'Notification sound enabled' : 'Notification sound disabled', variant: 'success' });
+  };
+
+  const handleToggleEmailNotification = async (checked: boolean) => {
+    if (!user) return;
+    setEmailNotificationEnabledState(checked);
+    setEmailNotificationEnabled(user.id, checked);
+
+    // Sync preference to backend
+    try {
+      await updateProfileAPI({ emailNotifications: checked });
+    } catch {
+      // localStorage already updated as fallback
+    }
+
+    toast({ title: checked ? 'Email notifications enabled' : 'Email notifications disabled', variant: 'success' });
   };
   
   const [isEditingName, setIsEditingName] = useState(false);
@@ -513,6 +530,18 @@ export default function Profile() {
                   </p>
                 </div>
                 <Switch checked={notificationSoundEnabled} onCheckedChange={handleToggleNotificationSound} />
+              </div>
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-1">
+                  <p className="font-medium flex items-center gap-2">
+                    <MailCheck className="h-4 w-4 text-muted-foreground" />
+                    Email notifications
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Receive email alerts for mess activities
+                  </p>
+                </div>
+                <Switch checked={emailNotificationEnabled} onCheckedChange={handleToggleEmailNotification} />
               </div>
             </CardContent>
           </Card>
