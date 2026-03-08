@@ -323,22 +323,25 @@ export default function CalculatorPage() {
       toast({ title: 'Insufficient balance', description: `Current balance is ${formatCurrency(currentBalance)}`, variant: 'destructive' });
       return;
     }
-    const catName = categories.find(c => c.id === billCatId)?.title || '';
-    if (editBillPayment) {
-      await calcStore.updateBillPayment(editBillPayment.id, { amount: amt, description: billDesc, categoryId: billCatId, categoryName: catName });
-      if (!shouldUseBackend()) {
-        dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Bill Payment Updated', message: `Bill payment for "${catName}" updated to ${formatCurrency(amt)}` });
+    setIsSaving(true);
+    try {
+      const catName = categories.find(c => c.id === billCatId)?.title || '';
+      if (editBillPayment) {
+        await calcStore.updateBillPayment(editBillPayment.id, { amount: amt, description: billDesc, categoryId: billCatId, categoryName: catName });
+        if (!shouldUseBackend()) {
+          dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Bill Payment Updated', message: `Bill payment for "${catName}" updated to ${formatCurrency(amt)}` });
+        }
+        setEditBillPayment(null);
+      } else {
+        await calcStore.createBillPayment({ messId, monthId: activeMonthId, categoryId: billCatId, categoryName: catName, amount: amt, description: billDesc });
+        if (!shouldUseBackend()) {
+          dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Bill Payment Recorded', message: `${formatCurrency(amt)} paid for "${catName}"${billDesc ? ` - ${billDesc}` : ''}` });
+        }
       }
-      setEditBillPayment(null);
-    } else {
-      await calcStore.createBillPayment({ messId, monthId: activeMonthId, categoryId: billCatId, categoryName: catName, amount: amt, description: billDesc });
-      if (!shouldUseBackend()) {
-        dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Bill Payment Recorded', message: `${formatCurrency(amt)} paid for "${catName}"${billDesc ? ` - ${billDesc}` : ''}` });
-      }
-    }
-    setBillModal(false); setBillCatId(''); setBillAmount(''); setBillDesc('');
-    reload();
-    toast({ title: editBillPayment ? 'Bill payment updated' : 'Bill payment recorded' });
+      setBillModal(false); setBillCatId(''); setBillAmount(''); setBillDesc('');
+      await reload();
+      toast({ title: editBillPayment ? 'Bill payment updated' : 'Bill payment recorded' });
+    } finally { setIsSaving(false); }
   };
 
   const handleDeleteBillPayment = async (id: string) => {
