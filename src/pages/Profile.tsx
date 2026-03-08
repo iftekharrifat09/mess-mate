@@ -35,7 +35,7 @@ import {
   requestEmailChangeAPI,
   confirmEmailChangeAPI,
 } from '@/lib/api';
-import { User, Phone, Mail, Check, X, Edit2, Shield, Lock, KeyRound, Volume2, Loader2, MailCheck, Play, Upload, Trash2, Music } from 'lucide-react';
+import { User, Phone, Mail, Check, X, Edit2, Shield, Lock, KeyRound, Volume2, Loader2, MailCheck, Play, Upload, Trash2, Music, BellRing } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Profile() {
