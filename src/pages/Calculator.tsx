@@ -182,6 +182,15 @@ export default function CalculatorPage() {
 
   const handleSaveDeposit = async () => {
     if (!payUserId || !payAmount) return;
+    // Block deposit if monthly total is fully paid and this member is also fully paid
+    if (!editPayment && isMonthlyFullyPaid) {
+      const due = memberDues[payUserId] || 0;
+      const paid = memberPayments[payUserId] || 0;
+      if (due > 0 && paid >= due) {
+        toast({ title: 'Deposit not allowed', description: 'Monthly total is fully paid and this member has already paid their dues.', variant: 'destructive' });
+        return;
+      }
+    }
     if (editPayment) {
       await calcStore.updatePayment(editPayment.id, { amount: Number(payAmount), description: payDesc });
       setEditPayment(null);
