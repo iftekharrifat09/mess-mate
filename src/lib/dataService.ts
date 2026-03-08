@@ -69,6 +69,10 @@ export async function getUserByEmail(email: string): Promise<User | undefined> {
 }
 
 export async function updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
+  // Invalidate user cache on mutation
+  apiCache.invalidate(cacheKeys.user(id));
+  if (updates.messId) apiCache.invalidate(cacheKeys.messMembers(updates.messId));
+  
   if (shouldUseBackend()) {
     const result = await api.updateUserAPI(id, updates);
     if (result.success && result.data) {
