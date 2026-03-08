@@ -668,6 +668,10 @@ export async function createOtherCost(costData: Omit<OtherCost, 'id' | 'createdA
 }
 
 export async function updateOtherCost(id: string, updates: Partial<OtherCost>): Promise<OtherCost | undefined> {
+  // Invalidate cache
+  apiCache.invalidatePrefix('otherCosts:');
+  apiCache.invalidatePrefix('summary:');
+  
   if (shouldUseBackend()) {
     const result = await api.updateOtherCostAPI(id, updates);
     if (result.success && result.data) {
