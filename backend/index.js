@@ -2319,6 +2319,16 @@ app.put("/api/calc-categories/:id", authMiddleware, async (req, res) => {
     if (status !== undefined) updateData.status = status;
     await collections.calcCategories.updateOne({ _id: new ObjectId(req.params.id) }, { $set: updateData });
     const doc = await collections.calcCategories.findOne({ _id: new ObjectId(req.params.id) });
+
+    // Notify members
+    if (doc) {
+      await notifyMembers(doc.messId, req.userId, {
+        title: "Expense Category Updated",
+        message: `Expense category "${doc.title}" has been updated`,
+        type: "general",
+      });
+    }
+
     res.json({ success: true, category: transformDoc(doc) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to update category" });
