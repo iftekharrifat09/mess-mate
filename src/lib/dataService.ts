@@ -686,6 +686,10 @@ export async function updateOtherCost(id: string, updates: Partial<OtherCost>): 
 }
 
 export async function deleteOtherCost(id: string): Promise<boolean> {
+  // Invalidate cache
+  apiCache.invalidatePrefix('otherCosts:');
+  apiCache.invalidatePrefix('summary:');
+  
   if (shouldUseBackend()) {
     const result = await api.deleteOtherCostAPI(id);
     if (result.success) {
