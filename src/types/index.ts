@@ -143,6 +143,12 @@ export interface MonthSummary {
   totalSharedCost: number;
 }
 
+export interface ChatReaction {
+  emoji: string;
+  userId: string;
+  userName: string;
+}
+
 export interface ChatMessage {
   id: string;
   messId: string;
@@ -154,6 +160,7 @@ export interface ChatMessage {
     senderName: string;
     message: string;
   } | null;
+  reactions?: ChatReaction[];
   editedAt?: string | null;
   createdAt: string;
 }
