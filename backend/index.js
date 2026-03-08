@@ -462,6 +462,10 @@ app.post("/api/auth/login", async (req, res) => {
         isApproved: user.isApproved !== false,
         isActive: user.isActive !== false,
         emailVerified: user.emailVerified || false,
+        notificationSoundEnabled: user.notificationSoundEnabled !== false,
+        browserNotificationsEnabled: user.browserNotificationsEnabled || false,
+        notificationTone: user.notificationTone || "chime",
+        customToneData: user.customToneData || null,
       },
       token,
     });
