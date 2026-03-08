@@ -1119,6 +1119,9 @@ export async function createNotification(notificationData: Omit<Notification, 'i
 }
 
 export async function markNotificationAsSeen(id: string): Promise<void> {
+  // Invalidate notification caches
+  apiCache.invalidatePrefix('notifications:');
+  
   if (shouldUseBackend()) {
     const result = await api.markNotificationReadAPI(id);
     if (result.success) {
