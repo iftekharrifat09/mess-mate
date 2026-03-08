@@ -17,7 +17,7 @@ export default function Index() {
             <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
               <Utensils className="w-5 h-5 text-primary-foreground" />
             </div>
-            <span className="font-bold text-xl text-foreground">Mess Manager</span>
+            <span className="font-bold text-xl text-foreground">Mess Mate</span>
           </div>
           
           {/* Desktop Navigation */}
@@ -182,10 +182,10 @@ export default function Index() {
             <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
               <Utensils className="w-4 h-4 text-primary-foreground" />
             </div>
-            <span className="font-semibold text-foreground">Mess Manager</span>
+            <span className="font-semibold text-foreground">Mess Mate</span>
           </div>
           <p className="text-sm text-muted-foreground text-center">
-            © {new Date().getFullYear()} Mess Manager. All rights reserved.
+            © {new Date().getFullYear()} Mess Mate. All rights reserved.
           </p>
         </div>
       </footer>

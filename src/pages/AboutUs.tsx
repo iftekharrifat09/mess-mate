@@ -245,7 +245,7 @@ export default function AboutUs() {
             <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
               <Utensils className="w-5 h-5 text-primary-foreground" />
             </div>
-            <span className="font-bold text-xl text-foreground">Mess Manager</span>
+            <span className="font-bold text-xl text-foreground">Mess Mate</span>
           </Link>
           
           {/* Desktop Navigation */}
@@ -313,7 +313,7 @@ export default function AboutUs() {
           >
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium mb-6">
               <Heart className="w-4 h-4" />
-              Meet the Team Behind Mess Manager
+              Meet the Team Behind Mess Mate
             </div>
             <h1 className="text-4xl md:text-6xl font-bold text-foreground mb-6">
               About <span className="text-primary">Us</span>
@@ -379,7 +379,7 @@ export default function AboutUs() {
           >
             <h2 className="text-3xl font-bold text-foreground mb-4">Meet Our Developers</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              The talented individuals who brought Mess Manager to life
+              The talented individuals who brought Mess Mate to life
             </p>
           </motion.div>
 
@@ -497,10 +497,10 @@ export default function AboutUs() {
             <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
               <Utensils className="w-4 h-4 text-primary-foreground" />
             </div>
-            <span className="font-semibold text-foreground">Mess Manager</span>
+            <span className="font-semibold text-foreground">Mess Mate</span>
           </div>
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Mess Manager. All rights reserved.
+            © {new Date().getFullYear()} Mess Mate. All rights reserved.
           </p>
         </div>
       </footer>

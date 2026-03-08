@@ -86,7 +86,7 @@ export default function Sidebar() {
                 <Utensils className="w-5 h-5 text-primary-foreground" />
               </div>
               <div>
-                <h2 className="font-bold text-sidebar-foreground">Mess Manager</h2>
+                <h2 className="font-bold text-sidebar-foreground">Mess Mate</h2>
                 <p className="text-xs text-sidebar-muted capitalize">{user?.role}</p>
               </div>
             </div>
