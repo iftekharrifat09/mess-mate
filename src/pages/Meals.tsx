@@ -5,6 +5,9 @@ import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
 import { Label } from '@/components/ui/label';
 import {
   Dialog,
@@ -18,7 +21,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import * as dataService from '@/lib/dataService';
 import { Meal, User } from '@/types';
-import { Utensils, Plus, Trash2, Edit2, Minus, Coffee, Sun, Moon, Settings2, Calendar, Loader2 } from 'lucide-react';
+import { Utensils, Plus, Trash2, Edit2, Minus, Coffee, Sun, Moon, Settings2, Calendar, CalendarIcon, Loader2 } from 'lucide-react';
 import { format, isToday, isBefore } from 'date-fns';
 
 // Default meal settings storage
@@ -467,12 +470,32 @@ export default function Meals() {
                       <Calendar className="h-4 w-4" />
                       Select Date
                     </Label>
-                    <Input
-                      type="date"
-                      value={selectedDate}
-                      onChange={(e) => setSelectedDate(e.target.value)}
-                      max={format(new Date(), 'yyyy-MM-dd')}
-                    />
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "w-full justify-start text-left font-normal",
+                            !selectedDate && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4 text-foreground" />
+                          {selectedDate ? format(new Date(selectedDate + 'T00:00:00'), 'PPP') : <span>Pick a date</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <CalendarComponent
+                          mode="single"
+                          selected={selectedDate ? new Date(selectedDate + 'T00:00:00') : undefined}
+                          onSelect={(date) => {
+                            if (date) setSelectedDate(format(date, 'yyyy-MM-dd'));
+                          }}
+                          disabled={(date) => date > new Date()}
+                          initialFocus
+                          className={cn("p-3 pointer-events-auto")}
+                        />
+                      </PopoverContent>
+                    </Popover>
                     {dateHasMeals(selectedDate) && (
                       <p className="text-xs text-warning flex items-center gap-1">
                         <Edit2 className="h-3 w-3" />
