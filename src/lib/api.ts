@@ -859,6 +859,10 @@ export async function chatHeartbeatAPI() {
   return apiRequest('/chat/heartbeat', { method: 'POST' });
 }
 
+export async function chatTypingAPI() {
+  return apiRequest('/chat/typing', { method: 'POST' });
+}
+
 export async function chatLeaveAPI() {
   return apiRequest('/chat/leave', { method: 'POST' });
 }

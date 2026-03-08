@@ -149,6 +149,11 @@ export interface ChatMessage {
   userId: string;
   senderName: string;
   message: string;
+  replyTo?: {
+    id: string;
+    senderName: string;
+    message: string;
+  } | null;
   editedAt?: string | null;
   createdAt: string;
 }
