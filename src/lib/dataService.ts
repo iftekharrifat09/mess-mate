@@ -86,6 +86,9 @@ export async function updateUser(id: string, updates: Partial<User>): Promise<Us
 }
 
 export async function deleteUser(id: string): Promise<boolean> {
+  // Invalidate user cache
+  invalidateUserData(id);
+  
   if (shouldUseBackend()) {
     const result = await api.deleteUserAPI(id);
     if (result.success) {
