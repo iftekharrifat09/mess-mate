@@ -48,7 +48,7 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 min-w-0">
               {isMealKing && (
-                <Crown className="h-5 w-5 flex-shrink-0" style={{ color: '#eab308', filter: 'drop-shadow(0 0 4px rgba(234,179,8,0.5))' }} />
+                <Crown className="h-6 w-6 flex-shrink-0 animate-pulse" style={{ color: '#f59e0b', filter: 'drop-shadow(0 0 6px rgba(245,158,11,0.7)) drop-shadow(0 0 12px rgba(234,179,8,0.4))' }} />
               )}
               <CardTitle className="text-lg font-semibold truncate">
                 {summary.userName}
