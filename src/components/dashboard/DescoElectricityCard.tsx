@@ -104,11 +104,17 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
         cumulativeKwh: 0,
       });
     }
-    // Calculate cumulative kWh
+    // Calculate cumulative kWh and detect slab crossing
     let cumulative = 0;
+    const RETROACTIVE_CHARGE = parseFloat(((5.26 - 4.63) * 50).toFixed(2)); // 31.50
     for (const d of diffs) {
+      const prevCumulative = cumulative;
       cumulative += d.kwh;
       d.cumulativeKwh = parseFloat(cumulative.toFixed(2));
+      if (prevCumulative < 50 && cumulative >= 50) {
+        d.crossedSlab = true;
+        d.adjustedTaka = parseFloat(Math.max(0, d.taka - RETROACTIVE_CHARGE).toFixed(2));
+      }
     }
     return diffs;
   }, [data]);
