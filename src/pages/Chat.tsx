@@ -10,12 +10,12 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Send, Trash2, MessageCircle, Loader2, WifiOff, RefreshCw, MoreVertical, Pencil, X, Users, Reply } from 'lucide-react';
+import { Send, Trash2, MessageCircle, Loader2, MoreVertical, Pencil, X, Users, Reply } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import * as dataService from '@/lib/dataService';
 import { syncUnsyncedChatMessages } from '@/lib/dataService';
-import { shouldUseBackend } from '@/lib/config';
+import { getUnsyncedChatMessages } from '@/lib/storage';
 import { getUnsyncedChatMessages } from '@/lib/storage';
 import type { ChatMessage, ChatActiveUser } from '@/types';
 import { toast } from '@/hooks/use-toast';
