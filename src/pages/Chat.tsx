@@ -16,7 +16,6 @@ import { format } from 'date-fns';
 import * as dataService from '@/lib/dataService';
 import { syncUnsyncedChatMessages } from '@/lib/dataService';
 import { getUnsyncedChatMessages } from '@/lib/storage';
-import { getUnsyncedChatMessages } from '@/lib/storage';
 import type { ChatMessage, ChatActiveUser } from '@/types';
 import { toast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
