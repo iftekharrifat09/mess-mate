@@ -21,6 +21,11 @@ import { useToast } from '@/hooks/use-toast';
 import { updateUser, getUserByEmail } from '@/lib/storage';
 import { getNotificationSoundEnabled, setNotificationSoundEnabled, getEmailNotificationEnabled, setEmailNotificationEnabled } from '@/lib/preferences';
 import {
+  BUILT_IN_TONES, getSelectedToneId, setSelectedToneId,
+  getCustomToneData, setCustomToneData, removeCustomTone,
+} from '@/lib/notificationTones';
+import { useNotificationSound } from '@/hooks/useNotificationSound';
+import {
   updateProfileAPI,
   sendOtpAPI,
   verifyOtpAPI,
@@ -28,7 +33,7 @@ import {
   requestEmailChangeAPI,
   confirmEmailChangeAPI,
 } from '@/lib/api';
-import { User, Phone, Mail, Check, X, Edit2, Shield, Lock, KeyRound, Volume2, Loader2, MailCheck } from 'lucide-react';
+import { User, Phone, Mail, Check, X, Edit2, Shield, Lock, KeyRound, Volume2, Loader2, MailCheck, Play, Upload, Trash2, Music } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Profile() {
@@ -37,11 +42,16 @@ export default function Profile() {
 
   const [notificationSoundEnabled, setNotificationSoundEnabledState] = useState(true);
   const [emailNotificationEnabled, setEmailNotificationEnabledState] = useState(true);
+  const [selectedTone, setSelectedTone] = useState('chime');
+  const [hasCustomTone, setHasCustomTone] = useState(false);
+  const { previewTone } = useNotificationSound();
 
   useEffect(() => {
     if (!user) return;
     setNotificationSoundEnabledState(getNotificationSoundEnabled(user.id));
     setEmailNotificationEnabledState(getEmailNotificationEnabled(user.id));
+    setSelectedTone(getSelectedToneId(user.id));
+    setHasCustomTone(!!getCustomToneData(user.id));
   }, [user]);
 
   const handleToggleNotificationSound = (checked: boolean) => {
@@ -64,6 +74,50 @@ export default function Profile() {
     }
 
     toast({ title: checked ? 'Email notifications enabled' : 'Email notifications disabled', variant: 'success' });
+  };
+
+  const handleSelectTone = (toneId: string) => {
+    if (!user) return;
+    setSelectedTone(toneId);
+    setSelectedToneId(user.id, toneId);
+    previewTone(toneId, user.id);
+    toast({ title: `Notification tone set to "${toneId === 'custom' ? 'Custom' : BUILT_IN_TONES.find(t => t.id === toneId)?.name || toneId}"` });
+  };
+
+  const handleUploadTone = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!user || !e.target.files?.[0]) return;
+    const file = e.target.files[0];
+    if (file.size > 1024 * 1024) {
+      toast({ title: 'File too large', description: 'Max 1MB allowed', variant: 'destructive' });
+      return;
+    }
+    if (!file.type.startsWith('audio/')) {
+      toast({ title: 'Invalid file', description: 'Please upload an audio file (.mp3, .wav, .ogg)', variant: 'destructive' });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setCustomToneData(user.id, dataUrl);
+      setHasCustomTone(true);
+      setSelectedTone('custom');
+      setSelectedToneId(user.id, 'custom');
+      // Preview it
+      const audio = new Audio(dataUrl);
+      audio.volume = 0.5;
+      audio.play().catch(() => {});
+      toast({ title: 'Custom tone uploaded and selected' });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleRemoveCustomTone = () => {
+    if (!user) return;
+    removeCustomTone(user.id);
+    setHasCustomTone(false);
+    setSelectedTone('chime');
+    toast({ title: 'Custom tone removed', variant: 'destructive' });
   };
   
   const [isEditingName, setIsEditingName] = useState(false);
@@ -513,7 +567,7 @@ export default function Profile() {
           </Card>
 
           {/* Preferences Card */}
-          <Card>
+          <Card className="md:col-span-2">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Volume2 className="h-5 w-5 text-primary" />
@@ -543,6 +597,102 @@ export default function Profile() {
                 </div>
                 <Switch checked={emailNotificationEnabled} onCheckedChange={handleToggleEmailNotification} />
               </div>
+
+              {/* Notification Tone Picker */}
+              {notificationSoundEnabled && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: 'auto' }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="space-y-3 pt-2"
+                >
+                  <div className="space-y-1">
+                    <p className="font-medium flex items-center gap-2">
+                      <Music className="h-4 w-4 text-muted-foreground" />
+                      Notification tone
+                    </p>
+                    <p className="text-sm text-muted-foreground">Choose a tone or upload your own</p>
+                  </div>
+
+                  {/* Built-in tones */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                    {BUILT_IN_TONES.map((tone) => (
+                      <button
+                        key={tone.id}
+                        onClick={() => handleSelectTone(tone.id)}
+                        className={`flex items-center gap-2.5 p-2.5 rounded-lg border text-left transition-all ${
+                          selectedTone === tone.id
+                            ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
+                            : 'border-border hover:border-muted-foreground/30 hover:bg-muted/50'
+                        }`}
+                      >
+                        <span className="text-lg">{tone.icon}</span>
+                        <span className="text-sm font-medium flex-1">{tone.name}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 shrink-0"
+                          onClick={(e) => { e.stopPropagation(); previewTone(tone.id, user?.id); }}
+                        >
+                          <Play className="h-3.5 w-3.5" />
+                        </Button>
+                      </button>
+                    ))}
+
+                    {/* Custom tone option */}
+                    {hasCustomTone && (
+                      <button
+                        onClick={() => handleSelectTone('custom')}
+                        className={`flex items-center gap-2.5 p-2.5 rounded-lg border text-left transition-all ${
+                          selectedTone === 'custom'
+                            ? 'border-primary bg-primary/10 ring-1 ring-primary/30'
+                            : 'border-border hover:border-muted-foreground/30 hover:bg-muted/50'
+                        }`}
+                      >
+                        <span className="text-lg">🎧</span>
+                        <span className="text-sm font-medium flex-1">Custom</span>
+                        <div className="flex gap-0.5">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0"
+                            onClick={(e) => { e.stopPropagation(); previewTone('custom', user?.id); }}
+                          >
+                            <Play className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 shrink-0 text-destructive hover:text-destructive"
+                            onClick={(e) => { e.stopPropagation(); handleRemoveCustomTone(); }}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Upload custom tone */}
+                  <div className="flex items-center gap-2">
+                    <Label
+                      htmlFor="tone-upload"
+                      className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/30 cursor-pointer transition-all text-sm text-muted-foreground"
+                    >
+                      <Upload className="h-4 w-4" />
+                      {hasCustomTone ? 'Replace custom tone' : 'Upload custom tone'}
+                    </Label>
+                    <input
+                      id="tone-upload"
+                      type="file"
+                      accept="audio/*"
+                      className="hidden"
+                      onChange={handleUploadTone}
+                    />
+                    <span className="text-[11px] text-muted-foreground">MP3, WAV, OGG • Max 1MB</span>
+                  </div>
+                </motion.div>
+              )}
             </CardContent>
           </Card>
         </div>

@@ -39,7 +39,7 @@ export default function NotificationBell() {
         count > prevUnseenCountRef.current &&
         getNotificationSoundEnabled(user.id)
       ) {
-        playNotificationSound();
+        playNotificationSound(user.id);
       }
 
       prevUnseenCountRef.current = count;
