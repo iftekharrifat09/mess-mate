@@ -307,13 +307,7 @@ export default function Chat() {
                 <span className="text-xs text-muted-foreground hidden sm:inline">online</span>
               </div>
             )}
-            {unsyncedCount > 0 && (
-              <Button variant="outline" size="sm" onClick={handleSync} disabled={syncing || isOffline} className="gap-1.5 text-xs">
-                {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
-                Sync {unsyncedCount}
-              </Button>
-            )}
-            {isOffline && <WifiOff className="h-4 w-4 text-destructive" />}
+            
           </div>
         </div>
 
