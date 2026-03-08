@@ -1,4 +1,4 @@
-import { User, Mess, Month, Meal, Deposit, MealCost, OtherCost, JoinRequest, Notice, BazarDate, Notification, Note, MessActivityLog } from '@/types';
+import { User, Mess, Month, Meal, Deposit, MealCost, OtherCost, JoinRequest, Notice, BazarDate, Notification, Note, MessActivityLog, ChatMessage } from '@/types';
 
 const STORAGE_KEYS = {
   USERS: 'mess_manager_users',
