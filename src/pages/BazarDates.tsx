@@ -4,7 +4,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Dialog,
@@ -22,10 +21,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import * as dataService from '@/lib/dataService';
 import { BazarDate, User } from '@/types';
-import { ShoppingCart, Plus, Edit2, Trash2, Calendar, AlertCircle, X, Loader2 } from 'lucide-react';
+import { ShoppingCart, Plus, Edit2, Trash2, Calendar, CalendarIcon, AlertCircle, X, Loader2 } from 'lucide-react';
 import { format, isToday, isFuture, isPast } from 'date-fns';
 import { Navigate } from 'react-router-dom';
 
