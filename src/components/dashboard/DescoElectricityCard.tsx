@@ -362,10 +362,24 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
   );
 }
 
+// DESCO LT-A Residential Tariff Slab Calculation
+function getSlabInfo(totalKwh: number) {
+  if (totalKwh <= 50) {
+    return { rate: 4.63, slab: '0-50', expectedCost: totalKwh * 4.63, extraCharge: 0 };
+  }
+  // After 50 units, rate becomes 5.26/unit for ALL units (retroactive)
+  // Extra charge for first 50 units = (5.26 - 4.63) * 50 = 31.50
+  const extraCharge = (5.26 - 4.63) * 50;
+  const expectedCost = totalKwh * 5.26;
+  return { rate: 5.26, slab: '50-75', expectedCost, extraCharge };
+}
+
 function CustomTooltip({ active, payload, label }: any) {
   if (!active || !payload?.length) return null;
   const item = payload[0]?.payload as DailyDiff | undefined;
   if (!item) return null;
+
+  const slab = getSlabInfo(item.cumulativeKwh);
 
   return (
     <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs shadow-lg">
@@ -378,6 +392,14 @@ function CustomTooltip({ active, payload, label }: any) {
       <p className="text-[#8b5cf6] font-medium mt-0.5">
         Total consumed: {item.cumulativeKwh} kWh
       </p>
+      <p className="text-muted-foreground mt-0.5">
+        Slab: ৳{slab.rate}/kWh ({slab.slab} units)
+      </p>
+      {slab.extraCharge > 0 && (
+        <p className="text-destructive text-[10px] mt-0.5">
+          +৳{slab.extraCharge.toFixed(2)} retroactive charge on first 50 units
+        </p>
+      )}
     </div>
   );
 }
