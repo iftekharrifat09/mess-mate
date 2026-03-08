@@ -306,7 +306,7 @@ export default function CalculatorPage() {
     if (editBillPayment) {
       await calcStore.updateBillPayment(editBillPayment.id, { amount: amt, description: billDesc, categoryId: billCatId, categoryName: catName });
       if (!shouldUseBackend()) {
-        dataService.notifyMessMembers(messId, user?.id || '', { type: 'general', title: 'Bill Payment Updated', message: `Bill payment for "${catName}" updated to ${formatCurrency(amt)}` });
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Bill Payment Updated', message: `Bill payment for "${catName}" updated to ${formatCurrency(amt)}` });
       }
       setEditBillPayment(null);
     } else {
