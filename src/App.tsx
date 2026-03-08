@@ -26,6 +26,7 @@ import Notes from "./pages/Notes";
 import Profile from "./pages/Profile";
 import EditCalendar from "./pages/EditCalendar";
 import Calculator from "./pages/Calculator";
+import Chat from "./pages/Chat";
 
 const queryClient = new QueryClient();
 
