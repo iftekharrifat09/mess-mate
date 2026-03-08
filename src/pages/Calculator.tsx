@@ -21,7 +21,7 @@ import { CalcCategory, CalcException, CalcPayment, CalcBillPayment } from '@/lib
 import { formatCurrency } from '@/lib/calculations';
 import {
   Plus, Edit2, Trash2, UserPlus, Calculator as CalcIcon,
-  CheckCircle, Users, Wallet, DollarSign, Receipt, CreditCard,
+  CheckCircle, Users, Wallet, DollarSign, Receipt, CreditCard, Loader2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
@@ -41,6 +41,8 @@ export default function CalculatorPage() {
   const [payments, setPayments] = useState<CalcPayment[]>([]);
   const [billPayments, setBillPayments] = useState<CalcBillPayment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Modal states
   const [catModal, setCatModal] = useState(false);
@@ -159,55 +161,67 @@ export default function CalculatorPage() {
   // Handlers
   const handleSaveCategory = async () => {
     if (!catTitle.trim() || !catCost) return;
-    if (editCat) {
-      await calcStore.updateCategory(editCat.id, { title: catTitle.trim(), totalCost: Number(catCost) });
-      if (!shouldUseBackend()) {
-        dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Category Updated', message: `Expense category "${catTitle.trim()}" has been updated` });
+    setIsSaving(true);
+    try {
+      if (editCat) {
+        await calcStore.updateCategory(editCat.id, { title: catTitle.trim(), totalCost: Number(catCost) });
+        if (!shouldUseBackend()) {
+          dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Category Updated', message: `Expense category "${catTitle.trim()}" has been updated` });
+        }
+      } else {
+        await calcStore.createCategory({ messId, monthId: activeMonthId, title: catTitle.trim(), totalCost: Number(catCost), status: 'unpaid' });
+        if (!shouldUseBackend()) {
+          dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Category Added', message: `New expense category "${catTitle.trim()}" added (${formatCurrency(Number(catCost))})` });
+        }
       }
-    } else {
-      await calcStore.createCategory({ messId, monthId: activeMonthId, title: catTitle.trim(), totalCost: Number(catCost), status: 'unpaid' });
-      if (!shouldUseBackend()) {
-        dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Category Added', message: `New expense category "${catTitle.trim()}" added (${formatCurrency(Number(catCost))})` });
-      }
-    }
-    setCatModal(false); setEditCat(null); setCatTitle(''); setCatCost('');
-    reload();
-    toast({ title: editCat ? 'Category updated' : 'Category added' });
+      setCatModal(false); setEditCat(null); setCatTitle(''); setCatCost('');
+      await reload();
+      toast({ title: editCat ? 'Category updated' : 'Category added' });
+    } finally { setIsSaving(false); }
   };
 
   const handleDeleteCategory = async (id: string) => {
     setDeleteTarget(null);
-    const cat = categories.find(c => c.id === id);
-    await calcStore.deleteCategory(id);
-    if (!shouldUseBackend() && cat) {
-      dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Category Deleted', message: `Expense category "${cat.title}" has been removed` });
-    }
-    reload();
-    toast({ title: 'Category deleted', variant: 'destructive' });
+    setIsDeleting(true);
+    try {
+      const cat = categories.find(c => c.id === id);
+      await calcStore.deleteCategory(id);
+      if (!shouldUseBackend() && cat) {
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Category Deleted', message: `Expense category "${cat.title}" has been removed` });
+      }
+      await reload();
+      toast({ title: 'Category deleted', variant: 'destructive' });
+    } finally { setIsDeleting(false); }
   };
 
   const handleSaveException = async () => {
     if (!excModal || !excUserId || !excAmount) return;
-    const memberName = members.find(m => m.id === excUserId)?.fullName || '';
-    await calcStore.createException({ categoryId: excModal, userId: excUserId, userName: memberName, amount: Number(excAmount) });
-    if (!shouldUseBackend()) {
-      const cat = categories.find(c => c.id === excModal);
-      dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Exception Added', message: `${memberName} has a fixed contribution of ${formatCurrency(Number(excAmount))} for "${cat?.title || ''}"` });
-    }
-    setExcModal(null); setExcUserId(''); setExcAmount(''); setExcStep(1);
-    reload();
-    toast({ title: 'Exception added' });
+    setIsSaving(true);
+    try {
+      const memberName = members.find(m => m.id === excUserId)?.fullName || '';
+      await calcStore.createException({ categoryId: excModal, userId: excUserId, userName: memberName, amount: Number(excAmount) });
+      if (!shouldUseBackend()) {
+        const cat = categories.find(c => c.id === excModal);
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Exception Added', message: `${memberName} has a fixed contribution of ${formatCurrency(Number(excAmount))} for "${cat?.title || ''}"` });
+      }
+      setExcModal(null); setExcUserId(''); setExcAmount(''); setExcStep(1);
+      await reload();
+      toast({ title: 'Exception added' });
+    } finally { setIsSaving(false); }
   };
 
   const handleDeleteException = async (id: string) => {
     setDeleteTarget(null);
-    const exc = allExceptions.find(e => e.id === id);
-    await calcStore.deleteException(id);
-    if (!shouldUseBackend() && exc) {
-      const cat = categories.find(c => c.id === exc.categoryId);
-      dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Exception Removed', message: `${exc.userName}'s exception for "${cat?.title || ''}" has been removed` });
-    }
-    reload();
+    setIsDeleting(true);
+    try {
+      const exc = allExceptions.find(e => e.id === id);
+      await calcStore.deleteException(id);
+      if (!shouldUseBackend() && exc) {
+        const cat = categories.find(c => c.id === exc.categoryId);
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Exception Removed', message: `${exc.userName}'s exception for "${cat?.title || ''}" has been removed` });
+      }
+      await reload();
+    } finally { setIsDeleting(false); }
   };
 
   const isDepositsCapped = monthlyTotal > 0 && actualTotalDeposits >= monthlyTotal;
@@ -239,16 +253,13 @@ export default function CalculatorPage() {
     const memberRemaining = Math.max(0, due - paid);
 
     if (!editPayment && isDepositsCapped) {
-      // After cap: member can only deposit up to their remaining due
       if (amt > memberRemaining) {
         toast({ title: 'Deposit exceeds member due', description: `This member's remaining due is ${formatCurrency(memberRemaining)}. Cannot deposit more than that.`, variant: 'destructive' });
         return;
       }
     } else if (!editPayment && monthlyTotal > 0) {
-      // Before cap: total deposits cannot exceed monthly total
       const newTotal = actualTotalDeposits + amt;
       if (newTotal > monthlyTotal) {
-        // Check if member has dues and the excess is within their due
         const excessOverCap = newTotal - monthlyTotal;
         if (excessOverCap > memberRemaining) {
           const maxAllowed = monthlyTotal - actualTotalDeposits + memberRemaining;
@@ -257,33 +268,39 @@ export default function CalculatorPage() {
         }
       }
     }
-    const memberName = members.find(m => m.id === payUserId)?.fullName || '';
-    if (editPayment) {
-      await calcStore.updatePayment(editPayment.id, { amount: Number(payAmount), description: payDesc });
-      if (!shouldUseBackend()) {
-        dataService.notifyMessMembers(messId, user?.id || '', { type: 'deposit', title: 'Deposit Updated', message: `${memberName}'s deposit has been updated to ${formatCurrency(Number(payAmount))}` });
+    setIsSaving(true);
+    try {
+      const memberName = members.find(m => m.id === payUserId)?.fullName || '';
+      if (editPayment) {
+        await calcStore.updatePayment(editPayment.id, { amount: Number(payAmount), description: payDesc });
+        if (!shouldUseBackend()) {
+          dataService.notifyMessMembers(messId, user?.id || '', { type: 'deposit', title: 'Deposit Updated', message: `${memberName}'s deposit has been updated to ${formatCurrency(Number(payAmount))}` });
+        }
+        setEditPayment(null);
+      } else {
+        await calcStore.createPayment({ messId, monthId: activeMonthId, userId: payUserId, userName: memberName, amount: Number(payAmount), description: payDesc });
+        if (!shouldUseBackend()) {
+          dataService.notifyMessMembers(messId, user?.id || '', { type: 'deposit', title: 'Member Deposit Recorded', message: `${memberName} deposited ${formatCurrency(Number(payAmount))}${payDesc ? ` - ${payDesc}` : ''}` });
+        }
       }
-      setEditPayment(null);
-    } else {
-      await calcStore.createPayment({ messId, monthId: activeMonthId, userId: payUserId, userName: memberName, amount: Number(payAmount), description: payDesc });
-      if (!shouldUseBackend()) {
-        dataService.notifyMessMembers(messId, user?.id || '', { type: 'deposit', title: 'Member Deposit Recorded', message: `${memberName} deposited ${formatCurrency(Number(payAmount))}${payDesc ? ` - ${payDesc}` : ''}` });
-      }
-    }
-    setPayModal(false); setPayUserId(''); setPayAmount(''); setPayDesc(''); setPayStep(1);
-    reload();
-    toast({ title: editPayment ? 'Deposit updated' : 'Deposit recorded' });
+      setPayModal(false); setPayUserId(''); setPayAmount(''); setPayDesc(''); setPayStep(1);
+      await reload();
+      toast({ title: editPayment ? 'Deposit updated' : 'Deposit recorded' });
+    } finally { setIsSaving(false); }
   };
 
   const handleDeleteDeposit = async (id: string) => {
     setDeleteTarget(null);
-    const dep = payments.find(p => p.id === id);
-    await calcStore.deletePayment(id);
-    if (!shouldUseBackend() && dep) {
-      dataService.notifyMessMembers(messId, user?.id || '', { type: 'deposit', title: 'Deposit Deleted', message: `${dep.userName}'s deposit of ${formatCurrency(dep.amount)} has been removed` });
-    }
-    reload();
-    toast({ title: 'Deposit deleted', variant: 'destructive' });
+    setIsDeleting(true);
+    try {
+      const dep = payments.find(p => p.id === id);
+      await calcStore.deletePayment(id);
+      if (!shouldUseBackend() && dep) {
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'deposit', title: 'Deposit Deleted', message: `${dep.userName}'s deposit of ${formatCurrency(dep.amount)} has been removed` });
+      }
+      await reload();
+      toast({ title: 'Deposit deleted', variant: 'destructive' });
+    } finally { setIsDeleting(false); }
   };
 
   // Pay Bill handlers
@@ -306,33 +323,39 @@ export default function CalculatorPage() {
       toast({ title: 'Insufficient balance', description: `Current balance is ${formatCurrency(currentBalance)}`, variant: 'destructive' });
       return;
     }
-    const catName = categories.find(c => c.id === billCatId)?.title || '';
-    if (editBillPayment) {
-      await calcStore.updateBillPayment(editBillPayment.id, { amount: amt, description: billDesc, categoryId: billCatId, categoryName: catName });
-      if (!shouldUseBackend()) {
-        dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Bill Payment Updated', message: `Bill payment for "${catName}" updated to ${formatCurrency(amt)}` });
+    setIsSaving(true);
+    try {
+      const catName = categories.find(c => c.id === billCatId)?.title || '';
+      if (editBillPayment) {
+        await calcStore.updateBillPayment(editBillPayment.id, { amount: amt, description: billDesc, categoryId: billCatId, categoryName: catName });
+        if (!shouldUseBackend()) {
+          dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Bill Payment Updated', message: `Bill payment for "${catName}" updated to ${formatCurrency(amt)}` });
+        }
+        setEditBillPayment(null);
+      } else {
+        await calcStore.createBillPayment({ messId, monthId: activeMonthId, categoryId: billCatId, categoryName: catName, amount: amt, description: billDesc });
+        if (!shouldUseBackend()) {
+          dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Bill Payment Recorded', message: `${formatCurrency(amt)} paid for "${catName}"${billDesc ? ` - ${billDesc}` : ''}` });
+        }
       }
-      setEditBillPayment(null);
-    } else {
-      await calcStore.createBillPayment({ messId, monthId: activeMonthId, categoryId: billCatId, categoryName: catName, amount: amt, description: billDesc });
-      if (!shouldUseBackend()) {
-        dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Bill Payment Recorded', message: `${formatCurrency(amt)} paid for "${catName}"${billDesc ? ` - ${billDesc}` : ''}` });
-      }
-    }
-    setBillModal(false); setBillCatId(''); setBillAmount(''); setBillDesc('');
-    reload();
-    toast({ title: editBillPayment ? 'Bill payment updated' : 'Bill payment recorded' });
+      setBillModal(false); setBillCatId(''); setBillAmount(''); setBillDesc('');
+      await reload();
+      toast({ title: editBillPayment ? 'Bill payment updated' : 'Bill payment recorded' });
+    } finally { setIsSaving(false); }
   };
 
   const handleDeleteBillPayment = async (id: string) => {
     setDeleteTarget(null);
-    const bp = billPayments.find(b => b.id === id);
-    await calcStore.deleteBillPayment(id);
-    if (!shouldUseBackend() && bp) {
-      dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Bill Payment Deleted', message: `Bill payment of ${formatCurrency(bp.amount)} for "${bp.categoryName}" has been removed` });
-    }
-    reload();
-    toast({ title: 'Bill payment deleted', variant: 'destructive' });
+    setIsDeleting(true);
+    try {
+      const bp = billPayments.find(b => b.id === id);
+      await calcStore.deleteBillPayment(id);
+      if (!shouldUseBackend() && bp) {
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Bill Payment Deleted', message: `Bill payment of ${formatCurrency(bp.amount)} for "${bp.categoryName}" has been removed` });
+      }
+      await reload();
+      toast({ title: 'Bill payment deleted', variant: 'destructive' });
+    } finally { setIsDeleting(false); }
   };
 
   const getExceptionsForCategory = (catId: string) => allExceptions.filter(e => e.categoryId === catId);
@@ -716,7 +739,9 @@ export default function CalculatorPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCatModal(false)}>Cancel</Button>
-            <Button onClick={handleSaveCategory} disabled={!catTitle.trim() || !catCost}>Save</Button>
+            <Button onClick={handleSaveCategory} disabled={!catTitle.trim() || !catCost || isSaving}>
+              {isSaving && <Loader2 className="h-4 w-4 animate-spin" />} Save
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -750,7 +775,9 @@ export default function CalculatorPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => { setExcModal(null); setExcStep(1); }}>Cancel</Button>
-            {excStep === 2 && <Button onClick={handleSaveException} disabled={!excAmount}>Save</Button>}
+            {excStep === 2 && <Button onClick={handleSaveException} disabled={!excAmount || isSaving}>
+              {isSaving && <Loader2 className="h-4 w-4 animate-spin" />} Save
+            </Button>}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -805,7 +832,9 @@ export default function CalculatorPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => { setPayModal(false); setEditPayment(null); }}>Cancel</Button>
-            {payStep === 2 && <Button onClick={handleSaveDeposit} disabled={!payAmount}>Save</Button>}
+            {payStep === 2 && <Button onClick={handleSaveDeposit} disabled={!payAmount || isSaving}>
+              {isSaving && <Loader2 className="h-4 w-4 animate-spin" />} Save
+            </Button>}
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -856,7 +885,9 @@ export default function CalculatorPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setBillModal(false); setEditBillPayment(null); }}>Cancel</Button>
-            <Button onClick={handleSaveBillPayment} disabled={!billCatId || !billAmount}>Save</Button>
+            <Button onClick={handleSaveBillPayment} disabled={!billCatId || !billAmount || isSaving}>
+              {isSaving && <Loader2 className="h-4 w-4 animate-spin" />} Save
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -909,6 +940,7 @@ export default function CalculatorPage() {
         }}
         title={`Delete ${deleteTarget?.label}?`}
         description="This will be permanently deleted. This action cannot be undone."
+        isDeleting={isDeleting}
       />
     </DashboardLayout>
   );
