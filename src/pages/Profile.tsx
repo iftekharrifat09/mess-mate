@@ -75,6 +75,50 @@ export default function Profile() {
 
     toast({ title: checked ? 'Email notifications enabled' : 'Email notifications disabled', variant: 'success' });
   };
+
+  const handleSelectTone = (toneId: string) => {
+    if (!user) return;
+    setSelectedTone(toneId);
+    setSelectedToneId(user.id, toneId);
+    previewTone(toneId, user.id);
+    toast({ title: `Notification tone set to "${toneId === 'custom' ? 'Custom' : BUILT_IN_TONES.find(t => t.id === toneId)?.name || toneId}"` });
+  };
+
+  const handleUploadTone = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!user || !e.target.files?.[0]) return;
+    const file = e.target.files[0];
+    if (file.size > 1024 * 1024) {
+      toast({ title: 'File too large', description: 'Max 1MB allowed', variant: 'destructive' });
+      return;
+    }
+    if (!file.type.startsWith('audio/')) {
+      toast({ title: 'Invalid file', description: 'Please upload an audio file (.mp3, .wav, .ogg)', variant: 'destructive' });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = reader.result as string;
+      setCustomToneData(user.id, dataUrl);
+      setHasCustomTone(true);
+      setSelectedTone('custom');
+      setSelectedToneId(user.id, 'custom');
+      // Preview it
+      const audio = new Audio(dataUrl);
+      audio.volume = 0.5;
+      audio.play().catch(() => {});
+      toast({ title: 'Custom tone uploaded and selected' });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = '';
+  };
+
+  const handleRemoveCustomTone = () => {
+    if (!user) return;
+    removeCustomTone(user.id);
+    setHasCustomTone(false);
+    setSelectedTone('chime');
+    toast({ title: 'Custom tone removed', variant: 'destructive' });
+  };
   
   const [isEditingName, setIsEditingName] = useState(false);
   const [isEditingPhone, setIsEditingPhone] = useState(false);
