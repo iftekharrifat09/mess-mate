@@ -180,8 +180,14 @@ export default function CalculatorPage() {
     reload();
   };
 
+  const isDepositsCapped = monthlyTotal > 0 && totalDeposits >= monthlyTotal;
+
   // Member Deposit handlers
   const handleOpenDepositModal = () => {
+    if (isDepositsCapped) {
+      setDepositWarning(true);
+      return;
+    }
     setPayModal(true); setPayStep(1); setPayUserId(''); setPayAmount(''); setPayDesc(''); setEditPayment(null);
   };
 
