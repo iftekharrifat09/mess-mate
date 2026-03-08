@@ -796,6 +796,14 @@ export function createActivityLog(logData: Omit<MessActivityLog, 'id' | 'created
   return newLog;
 }
 
+export function deleteActivityLog(logId: string): boolean {
+  const logs = getActivityLogs();
+  const filtered = logs.filter(l => l.id !== logId);
+  if (filtered.length === logs.length) return false;
+  saveActivityLogs(filtered);
+  return true;
+}
+
 // ============ DELETE MONTH ============
 export function deleteMonth(monthId: string): void {
   const months = getMonths().filter(m => m.id !== monthId);
