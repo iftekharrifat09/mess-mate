@@ -118,6 +118,7 @@ export default function CalculatorPage() {
   const totalDeposits = useMemo(() => payments.reduce((s, p) => s + p.amount, 0), [payments]);
   const totalBillsPaid = useMemo(() => billPayments.reduce((s, bp) => s + bp.amount, 0), [billPayments]);
   const currentBalance = totalDeposits - totalBillsPaid;
+  const isMonthlyFullyPaid = monthlyTotal > 0 && totalBillsPaid >= monthlyTotal;
 
   // Category paid amounts
   const categoryPaidMap = useMemo(() => {
@@ -181,6 +182,15 @@ export default function CalculatorPage() {
 
   const handleSaveDeposit = async () => {
     if (!payUserId || !payAmount) return;
+    // Block deposit if monthly total is fully paid and this member is also fully paid
+    if (!editPayment && isMonthlyFullyPaid) {
+      const due = memberDues[payUserId] || 0;
+      const paid = memberPayments[payUserId] || 0;
+      if (due > 0 && paid >= due) {
+        toast({ title: 'Deposit not allowed', description: 'Monthly total is fully paid and this member has already paid their dues.', variant: 'destructive' });
+        return;
+      }
+    }
     if (editPayment) {
       await calcStore.updatePayment(editPayment.id, { amount: Number(payAmount), description: payDesc });
       setEditPayment(null);
@@ -281,7 +291,10 @@ export default function CalculatorPage() {
                 <div className="p-2 rounded-lg bg-primary/10"><DollarSign className="h-5 w-5 text-primary" /></div>
                 <div>
                   <p className="text-xs text-muted-foreground">Monthly Total</p>
-                  <p className="text-xl font-bold">{formatCurrency(monthlyTotal)}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xl font-bold">{formatCurrency(monthlyTotal)}</p>
+                    {isMonthlyFullyPaid && <Badge className="bg-success text-success-foreground text-xs">Paid</Badge>}
+                  </div>
                 </div>
               </div>
             </CardContent>
@@ -649,9 +662,17 @@ export default function CalculatorPage() {
               <Select onValueChange={v => { setPayUserId(v); setPayStep(2); }}>
                 <SelectTrigger><SelectValue placeholder="Choose a member" /></SelectTrigger>
                 <SelectContent>
-                  {members.map(m => (
-                    <SelectItem key={m.id} value={m.id}>{m.fullName}</SelectItem>
-                  ))}
+                  {members.map(m => {
+                    const due = memberDues[m.id] || 0;
+                    const paid = memberPayments[m.id] || 0;
+                    const isMemberPaid = due > 0 && paid >= due;
+                    const disabled = isMonthlyFullyPaid && isMemberPaid;
+                    return (
+                      <SelectItem key={m.id} value={m.id} disabled={disabled}>
+                        {m.fullName}{disabled ? ' (Fully Paid)' : ''}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
