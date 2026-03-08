@@ -3001,7 +3001,7 @@ app.post("/api/chat/messages", authMiddleware, async (req, res) => {
     const messId = req.user.messId;
     if (!messId) return res.status(400).json({ success: false, error: "Not in a mess" });
 
-    const { message, activeUserIds } = req.body;
+    const { message, activeUserIds, replyTo } = req.body;
     if (!message || !message.trim()) {
       return res.status(400).json({ success: false, error: "Message cannot be empty" });
     }
@@ -3012,6 +3012,7 @@ app.post("/api/chat/messages", authMiddleware, async (req, res) => {
       messId,
       userId: req.user.id,
       message: trimmed,
+      replyTo: replyTo || null,
       editedAt: null,
       createdAt: new Date().toISOString(),
     };
