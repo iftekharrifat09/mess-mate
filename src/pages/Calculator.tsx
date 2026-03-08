@@ -290,7 +290,6 @@ export default function CalculatorPage() {
   };
 
   const handleDeleteDeposit = async (id: string) => {
-    setDeleteTarget(null);
     setIsDeleting(true);
     try {
       const dep = payments.find(p => p.id === id);
@@ -298,6 +297,7 @@ export default function CalculatorPage() {
       if (!shouldUseBackend() && dep) {
         dataService.notifyMessMembers(messId, user?.id || '', { type: 'deposit', title: 'Deposit Deleted', message: `${dep.userName}'s deposit of ${formatCurrency(dep.amount)} has been removed` });
       }
+      setDeleteTarget(null);
       await reload();
       toast({ title: 'Deposit deleted', variant: 'destructive' });
     } finally { setIsDeleting(false); }
