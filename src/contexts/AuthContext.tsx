@@ -215,6 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           emailVerified: apiUser.emailVerified || false,
           createdAt: new Date().toISOString(),
         };
+        syncNotificationPrefsFromApi(localUser.id, apiUser);
         setUser(localUser);
         saveCurrentUser(localUser);
         setIsBackendConnected(true);
