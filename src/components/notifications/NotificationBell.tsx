@@ -26,6 +26,7 @@ const NOTIF_ICONS: Record<string, string> = {
   bazar: '🛒',
   mess_update: '🏠',
   join_request: '👋',
+  chat: '💬',
 };
 
 function getNotifIcon(type: AppNotification['type']) {

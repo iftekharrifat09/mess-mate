@@ -143,6 +143,15 @@ export interface MonthSummary {
   totalSharedCost: number;
 }
 
+export interface ChatMessage {
+  id: string;
+  messId: string;
+  userId: string;
+  senderName: string;
+  message: string;
+  createdAt: string;
+}
+
 export interface MessActivityLog {
   id: string;
   messId: string;
