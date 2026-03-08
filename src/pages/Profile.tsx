@@ -84,18 +84,51 @@ export default function Profile() {
 
   const handleToggleBrowserNotifications = async (checked: boolean) => {
     if (!user) return;
+
     if (checked) {
-      // Check if permanently denied first
-      if ('Notification' in window && Notification.permission === 'denied') {
+      if (browserPermissionRequestInFlightRef.current) return;
+
+      const availability = getBrowserNotificationAvailability();
+      if (availability === 'unsupported') {
+        toast({ title: 'Not supported', description: 'Browser notifications are not supported on this device/browser.', variant: 'destructive' });
+        return;
+      }
+      if (availability === 'insecure') {
+        toast({ title: 'Secure connection required', description: 'Open the app over HTTPS to enable browser notifications.', variant: 'destructive' });
+        return;
+      }
+
+      const isIOS = /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+      const isStandalone =
+        window.matchMedia('(display-mode: standalone)').matches ||
+        (window.navigator as Navigator & { standalone?: boolean }).standalone === true;
+
+      if (isIOS && !isStandalone) {
+        toast({
+          title: 'Enable from Home Screen',
+          description: 'On iPhone/iPad, add this app to Home Screen first, then enable browser notifications.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (Notification.permission === 'denied') {
         toast({ title: 'Notifications blocked', description: 'Please enable notifications in your browser/device settings and try again.', variant: 'destructive' });
         return;
       }
-      const granted = await requestBrowserNotificationPermission();
-      if (!granted) {
-        toast({ title: 'Notifications blocked', description: 'Please enable notifications in your browser/device settings and try again.', variant: 'destructive' });
-        return;
+
+      browserPermissionRequestInFlightRef.current = true;
+      try {
+        const granted = await requestBrowserNotificationPermission();
+        if (!granted) {
+          toast({ title: 'Notifications blocked', description: 'Please enable notifications in your browser/device settings and try again.', variant: 'destructive' });
+          return;
+        }
+      } finally {
+        browserPermissionRequestInFlightRef.current = false;
       }
     }
+
     setBrowserNotifEnabledState(checked);
     setBrowserNotificationsEnabled(user.id, checked);
     // Sync to backend
