@@ -1,4 +1,4 @@
-import { User, Mess, Month, Meal, Deposit, MealCost, OtherCost, JoinRequest, Notice, BazarDate, Notification, Note, MessActivityLog } from '@/types';
+import { User, Mess, Month, Meal, Deposit, MealCost, OtherCost, JoinRequest, Notice, BazarDate, Notification, Note, MessActivityLog, ChatMessage } from '@/types';
 
 const STORAGE_KEYS = {
   USERS: 'mess_manager_users',
@@ -15,6 +15,8 @@ const STORAGE_KEYS = {
   NOTIFICATIONS: 'mess_manager_notifications',
   NOTES: 'mess_manager_notes',
   ACTIVITY_LOGS: 'mess_manager_activity_logs',
+  CHAT_MESSAGES: 'mess_manager_chat_messages',
+  CHAT_UNSYNCED: 'mess_manager_chat_unsynced',
 };
 
 function getFromStorage<T>(key: string, defaultValue: T[] = []): T[] {
@@ -875,4 +877,63 @@ export function deleteMess(messId: string): void {
   
   const activityLogs = getActivityLogs().filter(l => l.messId !== messId);
   saveActivityLogs(activityLogs);
+
+  const chatMessages = getChatMessages().filter(m => m.messId !== messId);
+  saveChatMessages(chatMessages);
+}
+
+// ============================================
+// CHAT MESSAGES
+// ============================================
+
+export function getChatMessages(): ChatMessage[] {
+  return getFromStorage<ChatMessage>(STORAGE_KEYS.CHAT_MESSAGES);
+}
+
+export function saveChatMessages(messages: ChatMessage[]): void {
+  saveToStorage(STORAGE_KEYS.CHAT_MESSAGES, messages);
+}
+
+export function getChatMessagesByMessId(messId: string): ChatMessage[] {
+  return getChatMessages()
+    .filter(m => m.messId === messId)
+    .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+}
+
+export function createChatMessage(data: { messId: string; userId: string; senderName: string; message: string }): ChatMessage {
+  const msg: ChatMessage = {
+    id: generateId(),
+    messId: data.messId,
+    userId: data.userId,
+    senderName: data.senderName,
+    message: data.message,
+    createdAt: new Date().toISOString(),
+  };
+  const messages = getChatMessages();
+  messages.push(msg);
+  saveChatMessages(messages);
+  return msg;
+}
+
+export function deleteChatMessage(id: string): boolean {
+  const messages = getChatMessages();
+  const filtered = messages.filter(m => m.id !== id);
+  if (filtered.length === messages.length) return false;
+  saveChatMessages(filtered);
+  return true;
+}
+
+// Unsynced chat messages (sent while offline)
+export function getUnsyncedChatMessages(): ChatMessage[] {
+  return getFromStorage<ChatMessage>(STORAGE_KEYS.CHAT_UNSYNCED);
+}
+
+export function addUnsyncedChatMessage(msg: ChatMessage): void {
+  const unsynced = getUnsyncedChatMessages();
+  unsynced.push(msg);
+  saveToStorage(STORAGE_KEYS.CHAT_UNSYNCED, unsynced);
+}
+
+export function clearUnsyncedChatMessages(): void {
+  localStorage.removeItem(STORAGE_KEYS.CHAT_UNSYNCED);
 }

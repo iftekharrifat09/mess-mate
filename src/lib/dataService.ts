@@ -8,7 +8,7 @@ import { shouldUseBackend, isBackendAvailable, isMongoDbConnected } from './conf
 import * as api from './api';
 import * as storage from './storage';
 import { apiCache, cacheKeys, invalidateMonthData, invalidateUserData } from './apiCache';
-import { User, Mess, Month, Meal, Deposit, MealCost, OtherCost, JoinRequest, Notice, BazarDate, Notification, Note, MessActivityLog } from '@/types';
+import { User, Mess, Month, Meal, Deposit, MealCost, OtherCost, JoinRequest, Notice, BazarDate, Notification, Note, MessActivityLog, ChatMessage } from '@/types';
 import { toast } from '@/hooks/use-toast';
 
 // Helper to show localStorage fallback alert - debounced
@@ -1385,4 +1385,104 @@ export async function deleteActivityLog(logId: string): Promise<boolean> {
     }
   }
   return storage.deleteActivityLog(logId);
+}
+
+// ============================================
+// CHAT MESSAGES
+// ============================================
+
+export async function getChatMessagesByMessId(messId: string): Promise<ChatMessage[]> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.getChatMessagesAPI(100);
+      if (result.success && result.data) {
+        const msgs = (result.data as any).messages || [];
+        // Cache locally for offline access
+        storage.saveChatMessages([
+          ...storage.getChatMessages().filter(m => m.messId !== messId),
+          ...msgs,
+        ]);
+        return msgs;
+      }
+    } catch (error) {
+      console.error('Error fetching chat from API:', error);
+    }
+  }
+  // Fallback to localStorage
+  return storage.getChatMessagesByMessId(messId);
+}
+
+export async function sendChatMessage(data: { messId: string; userId: string; senderName: string; message: string }): Promise<ChatMessage> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.sendChatMessageAPI(data.message);
+      if (result.success && result.data) {
+        const msg = (result.data as any).message || result.data;
+        return msg;
+      }
+    } catch (error) {
+      console.error('Failed to send chat via backend, saving locally:', error);
+    }
+    showFallbackAlert();
+  }
+  // Save locally and mark as unsynced
+  const msg = storage.createChatMessage(data);
+  storage.addUnsyncedChatMessage(msg);
+  return msg;
+}
+
+export async function deleteChatMessageById(id: string): Promise<boolean> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.deleteChatMessageAPI(id);
+      if (result.success) {
+        storage.deleteChatMessage(id);
+        return true;
+      }
+    } catch (error) {
+      console.error('Error deleting chat message:', error);
+    }
+  }
+  return storage.deleteChatMessage(id);
+}
+
+/**
+ * Sync unsynced chat messages to the backend when connection is restored
+ */
+export async function syncUnsyncedChatMessages(): Promise<number> {
+  if (!shouldUseBackend()) return 0;
+  
+  const unsynced = storage.getUnsyncedChatMessages();
+  if (unsynced.length === 0) return 0;
+
+  let syncedCount = 0;
+  for (const msg of unsynced) {
+    try {
+      const result = await api.sendChatMessageAPI(msg.message);
+      if (result.success) {
+        syncedCount++;
+        // Remove the local-only version
+        storage.deleteChatMessage(msg.id);
+      }
+    } catch {
+      break; // Stop if backend goes down again
+    }
+  }
+
+  if (syncedCount > 0) {
+    // Clear synced messages from unsynced list
+    const remaining = unsynced.slice(syncedCount);
+    if (remaining.length === 0) {
+      storage.clearUnsyncedChatMessages();
+    } else {
+      localStorage.setItem('mess_manager_chat_unsynced', JSON.stringify(remaining));
+    }
+    
+    toast({
+      title: "Chat synced",
+      description: `${syncedCount} offline message(s) synced to server`,
+    });
+  }
+
+  return syncedCount;
 }
