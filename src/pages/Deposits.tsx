@@ -173,6 +173,7 @@ export default function Deposits() {
   const handleDelete = async (depositId: string) => {
     if (deletingId) return;
     setDeletingId(depositId);
+    setDeleteTargetId(null);
     try {
       await dataService.deleteDeposit(depositId);
       loadData();
