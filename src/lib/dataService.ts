@@ -822,6 +822,9 @@ export async function approveJoinRequest(id: string): Promise<boolean> {
 }
 
 export async function rejectJoinRequest(id: string): Promise<boolean> {
+  // Invalidate caches
+  apiCache.invalidatePrefix('joinRequests:');
+  
   if (shouldUseBackend()) {
     const result = await api.rejectJoinRequestAPI(id);
     if (result.success) {
