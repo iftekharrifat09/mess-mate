@@ -253,16 +253,13 @@ export default function CalculatorPage() {
     const memberRemaining = Math.max(0, due - paid);
 
     if (!editPayment && isDepositsCapped) {
-      // After cap: member can only deposit up to their remaining due
       if (amt > memberRemaining) {
         toast({ title: 'Deposit exceeds member due', description: `This member's remaining due is ${formatCurrency(memberRemaining)}. Cannot deposit more than that.`, variant: 'destructive' });
         return;
       }
     } else if (!editPayment && monthlyTotal > 0) {
-      // Before cap: total deposits cannot exceed monthly total
       const newTotal = actualTotalDeposits + amt;
       if (newTotal > monthlyTotal) {
-        // Check if member has dues and the excess is within their due
         const excessOverCap = newTotal - monthlyTotal;
         if (excessOverCap > memberRemaining) {
           const maxAllowed = monthlyTotal - actualTotalDeposits + memberRemaining;
@@ -271,22 +268,25 @@ export default function CalculatorPage() {
         }
       }
     }
-    const memberName = members.find(m => m.id === payUserId)?.fullName || '';
-    if (editPayment) {
-      await calcStore.updatePayment(editPayment.id, { amount: Number(payAmount), description: payDesc });
-      if (!shouldUseBackend()) {
-        dataService.notifyMessMembers(messId, user?.id || '', { type: 'deposit', title: 'Deposit Updated', message: `${memberName}'s deposit has been updated to ${formatCurrency(Number(payAmount))}` });
+    setIsSaving(true);
+    try {
+      const memberName = members.find(m => m.id === payUserId)?.fullName || '';
+      if (editPayment) {
+        await calcStore.updatePayment(editPayment.id, { amount: Number(payAmount), description: payDesc });
+        if (!shouldUseBackend()) {
+          dataService.notifyMessMembers(messId, user?.id || '', { type: 'deposit', title: 'Deposit Updated', message: `${memberName}'s deposit has been updated to ${formatCurrency(Number(payAmount))}` });
+        }
+        setEditPayment(null);
+      } else {
+        await calcStore.createPayment({ messId, monthId: activeMonthId, userId: payUserId, userName: memberName, amount: Number(payAmount), description: payDesc });
+        if (!shouldUseBackend()) {
+          dataService.notifyMessMembers(messId, user?.id || '', { type: 'deposit', title: 'Member Deposit Recorded', message: `${memberName} deposited ${formatCurrency(Number(payAmount))}${payDesc ? ` - ${payDesc}` : ''}` });
+        }
       }
-      setEditPayment(null);
-    } else {
-      await calcStore.createPayment({ messId, monthId: activeMonthId, userId: payUserId, userName: memberName, amount: Number(payAmount), description: payDesc });
-      if (!shouldUseBackend()) {
-        dataService.notifyMessMembers(messId, user?.id || '', { type: 'deposit', title: 'Member Deposit Recorded', message: `${memberName} deposited ${formatCurrency(Number(payAmount))}${payDesc ? ` - ${payDesc}` : ''}` });
-      }
-    }
-    setPayModal(false); setPayUserId(''); setPayAmount(''); setPayDesc(''); setPayStep(1);
-    reload();
-    toast({ title: editPayment ? 'Deposit updated' : 'Deposit recorded' });
+      setPayModal(false); setPayUserId(''); setPayAmount(''); setPayDesc(''); setPayStep(1);
+      await reload();
+      toast({ title: editPayment ? 'Deposit updated' : 'Deposit recorded' });
+    } finally { setIsSaving(false); }
   };
 
   const handleDeleteDeposit = async (id: string) => {
