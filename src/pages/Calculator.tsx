@@ -40,6 +40,7 @@ export default function CalculatorPage() {
   const [allExceptions, setAllExceptions] = useState<CalcException[]>([]);
   const [payments, setPayments] = useState<CalcPayment[]>([]);
   const [billPayments, setBillPayments] = useState<CalcBillPayment[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Modal states
   const [catModal, setCatModal] = useState(false);
