@@ -1081,10 +1081,17 @@ export async function deleteBazarDate(id: string): Promise<boolean> {
 // ============================================
 
 export async function getNotificationsByUserId(userId: string): Promise<Notification[]> {
+  // Check cache first
+  const cacheKey = cacheKeys.notifications(userId);
+  const cached = apiCache.get<Notification[]>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     const result = await api.getNotificationsAPI();
     if (result.success && result.data) {
-      return (result.data as any).notifications || result.data || [];
+      const notifications = (result.data as any).notifications || result.data || [];
+      apiCache.set(cacheKey, notifications, apiCache.getTTL('short'));
+      return notifications;
     }
   }
   return storage.getNotificationsByUserId(userId);
