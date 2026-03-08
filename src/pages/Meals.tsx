@@ -21,7 +21,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import * as dataService from '@/lib/dataService';
 import { Meal, User } from '@/types';
-import { Utensils, Plus, Trash2, Edit2, Minus, Coffee, Sun, Moon, Settings2, Calendar, Loader2 } from 'lucide-react';
+import { Utensils, Plus, Trash2, Edit2, Minus, Coffee, Sun, Moon, Settings2, Calendar, CalendarIcon, Loader2 } from 'lucide-react';
 import { format, isToday, isBefore } from 'date-fns';
 
 // Default meal settings storage
