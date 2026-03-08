@@ -1489,7 +1489,6 @@ export async function chatTyping(): Promise<void> {
     try { await api.chatTypingAPI(); } catch {}
   }
 }
-}
 
 export async function chatLeave(): Promise<void> {
   if (shouldUseBackend()) {
