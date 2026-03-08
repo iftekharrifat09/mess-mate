@@ -22,6 +22,7 @@ import * as dataService from '@/lib/dataService';
 import { Notice } from '@/types';
 import { Megaphone, Plus, Edit2, Trash2, Calendar, Eye, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
+import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
 
 export default function Notices() {
   const { user } = useAuth();
