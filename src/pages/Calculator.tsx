@@ -257,7 +257,7 @@ export default function CalculatorPage() {
     if (editPayment) {
       await calcStore.updatePayment(editPayment.id, { amount: Number(payAmount), description: payDesc });
       if (!shouldUseBackend()) {
-        dataService.notifyMessMembers(messId, user?.id || '', { type: 'general', title: 'Deposit Updated', message: `${memberName}'s deposit has been updated to ${formatCurrency(Number(payAmount))}` });
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'deposit', title: 'Deposit Updated', message: `${memberName}'s deposit has been updated to ${formatCurrency(Number(payAmount))}` });
       }
       setEditPayment(null);
     } else {
