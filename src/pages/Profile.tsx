@@ -500,26 +500,29 @@ export default function Profile() {
 
               {/* Phone */}
               <div className="space-y-2">
-                <Label>Phone Number</Label>
+                <Label className="text-sm">Phone Number</Label>
                 {isEditingPhone ? (
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <Input
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="Enter your phone"
+                      className="flex-1"
                     />
-                    <Button size="icon" onClick={handleUpdatePhone} disabled={isSavingPhone}>
-                      {isSavingPhone ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                    </Button>
-                    <Button size="icon" variant="outline" onClick={() => { setIsEditingPhone(false); setPhone(user.phone); }} disabled={isSavingPhone}>
-                      <X className="h-4 w-4" />
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button size="icon" onClick={handleUpdatePhone} disabled={isSavingPhone} className="h-10 w-10">
+                        {isSavingPhone ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      </Button>
+                      <Button size="icon" variant="outline" onClick={() => { setIsEditingPhone(false); setPhone(user.phone); }} disabled={isSavingPhone} className="h-10 w-10">
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                    <span className="flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      {user.phone || 'Not set'}
+                    <span className="flex items-center gap-2 text-sm sm:text-base">
+                      <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="truncate">{user.phone || 'Not set'}</span>
                     </span>
                     <Button variant="ghost" size="sm" onClick={() => setIsEditingPhone(true)}>
                       <Edit2 className="h-4 w-4" />
@@ -529,14 +532,14 @@ export default function Profile() {
               </div>
 
               {/* Role & Joined */}
-              <div className="grid grid-cols-2 gap-4 pt-2">
-                <div className="p-3 bg-muted/50 rounded-lg">
-                  <p className="text-xs text-muted-foreground">Role</p>
-                  <p className="font-medium capitalize">{user.role}</p>
+              <div className="grid grid-cols-2 gap-2 sm:gap-4 pt-2">
+                <div className="p-2.5 sm:p-3 bg-muted/50 rounded-lg">
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">Role</p>
+                  <p className="text-sm sm:text-base font-medium capitalize">{user.role}</p>
                 </div>
-                <div className="p-3 bg-muted/50 rounded-lg">
-                  <p className="text-xs text-muted-foreground">Joined</p>
-                  <p className="font-medium">{format(new Date(user.createdAt), 'MMM yyyy')}</p>
+                <div className="p-2.5 sm:p-3 bg-muted/50 rounded-lg">
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">Joined</p>
+                  <p className="text-sm sm:text-base font-medium">{format(new Date(user.createdAt), 'MMM yyyy')}</p>
                 </div>
               </div>
             </CardContent>
