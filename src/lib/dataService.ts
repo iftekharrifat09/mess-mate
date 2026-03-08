@@ -514,6 +514,10 @@ export async function updateDeposit(id: string, updates: Partial<Deposit>): Prom
 }
 
 export async function deleteDeposit(id: string): Promise<boolean> {
+  // Invalidate deposit caches
+  apiCache.invalidatePrefix('deposits:');
+  apiCache.invalidatePrefix('summary:');
+  
   if (shouldUseBackend()) {
     const result = await api.deleteDepositAPI(id);
     if (result.success) {
