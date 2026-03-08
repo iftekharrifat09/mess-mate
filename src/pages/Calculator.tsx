@@ -244,6 +244,7 @@ export default function CalculatorPage() {
   };
 
   const handleDeleteDeposit = async (id: string) => {
+    setDeleteTarget(null);
     await calcStore.deletePayment(id);
     reload();
     toast({ title: 'Deposit deleted', variant: 'destructive' });
