@@ -284,9 +284,56 @@ export default function CalendarModal() {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" size="icon" className="h-9 w-9 border-border hover:bg-secondary" title="Calendar" aria-label="Open 3-in-1 calendar">
-          <CalendarDays className="h-4 w-4" />
-        </Button>
+        <motion.div
+          className="relative"
+          whileHover={{ scale: 1.08 }}
+          whileTap={{ scale: 0.95 }}
+        >
+          {/* Animated glow ring */}
+          <motion.div
+            className="absolute inset-0 rounded-lg bg-gradient-to-r from-primary via-gold to-primary opacity-60 blur-md"
+            animate={{
+              scale: [1, 1.25, 1],
+              opacity: [0.5, 0.8, 0.5],
+            }}
+            transition={{
+              duration: 2.5,
+              repeat: Infinity,
+              ease: 'easeInOut',
+            }}
+          />
+          {/* Sparkle dots */}
+          <motion.div
+            className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-gold"
+            animate={{
+              scale: [0.8, 1.2, 0.8],
+              opacity: [0.6, 1, 0.6],
+            }}
+            transition={{ duration: 1.5, repeat: Infinity, ease: 'easeInOut' }}
+          />
+          <motion.div
+            className="absolute -bottom-0.5 -left-0.5 w-1.5 h-1.5 rounded-full bg-primary"
+            animate={{
+              scale: [1, 0.7, 1],
+              opacity: [0.5, 1, 0.5],
+            }}
+            transition={{ duration: 2, repeat: Infinity, ease: 'easeInOut', delay: 0.5 }}
+          />
+          <Button
+            variant="outline"
+            size="icon"
+            className="relative h-9 w-9 border-primary/50 bg-card hover:bg-primary/10 hover:border-primary shadow-lg shadow-primary/20"
+            title="Calendar"
+            aria-label="Open 3-in-1 calendar"
+          >
+            <motion.div
+              animate={{ rotate: [0, -8, 8, 0] }}
+              transition={{ duration: 3, repeat: Infinity, ease: 'easeInOut' }}
+            >
+              <CalendarDays className="h-4 w-4 text-primary" />
+            </motion.div>
+          </Button>
+        </motion.div>
       </DialogTrigger>
 
       <DialogContent className="w-[calc(100vw-0.5rem)] max-w-[760px] max-h-[94vh] overflow-y-auto p-0 gap-0 bg-card border-border shadow-2xl shadow-primary/5">
