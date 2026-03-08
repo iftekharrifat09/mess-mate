@@ -1335,11 +1335,18 @@ export async function deleteMonthAndData(monthId: string): Promise<void> {
 // ============================================
 
 export async function getActivityLogsByMessId(messId: string): Promise<MessActivityLog[]> {
+  // Check cache first
+  const cacheKey = cacheKeys.activityLogs(messId);
+  const cached = apiCache.get<MessActivityLog[]>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     try {
       const result = await api.getActivityLogsAPI(messId);
       if (result.success && result.data) {
-        return (result.data as any).logs || result.data as any;
+        const logs = (result.data as any).logs || result.data as any;
+        apiCache.set(cacheKey, logs, apiCache.getTTL('default'));
+        return logs;
       }
     } catch (error) {
       console.error('Error fetching activity logs from API:', error);
