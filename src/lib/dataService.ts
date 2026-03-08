@@ -1106,6 +1106,9 @@ export async function getUnseenNotificationsCount(userId: string): Promise<numbe
 }
 
 export async function createNotification(notificationData: Omit<Notification, 'id' | 'createdAt' | 'seen'>): Promise<Notification> {
+  // Invalidate notification cache
+  if (notificationData.userId) apiCache.invalidate(cacheKeys.notifications(notificationData.userId));
+  
   if (shouldUseBackend()) {
     const result = await api.createNotificationAPI(notificationData);
     if (result.success && result.data) {
