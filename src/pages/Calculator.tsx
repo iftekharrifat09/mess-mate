@@ -832,7 +832,9 @@ export default function CalculatorPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => { setPayModal(false); setEditPayment(null); }}>Cancel</Button>
-            {payStep === 2 && <Button onClick={handleSaveDeposit} disabled={!payAmount}>Save</Button>}
+            {payStep === 2 && <Button onClick={handleSaveDeposit} disabled={!payAmount || isSaving}>
+              {isSaving && <Loader2 className="h-4 w-4 animate-spin" />} Save
+            </Button>}
           </DialogFooter>
         </DialogContent>
       </Dialog>
