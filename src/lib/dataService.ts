@@ -600,6 +600,10 @@ export async function updateMealCost(id: string, updates: Partial<MealCost>): Pr
 }
 
 export async function deleteMealCost(id: string): Promise<boolean> {
+  // Invalidate cache
+  apiCache.invalidatePrefix('mealCosts:');
+  apiCache.invalidatePrefix('summary:');
+  
   if (shouldUseBackend()) {
     const result = await api.deleteMealCostAPI(id);
     if (result.success) {
