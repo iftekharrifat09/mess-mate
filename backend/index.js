@@ -2463,6 +2463,15 @@ app.put("/api/calc-payments/:id", authMiddleware, async (req, res) => {
     if (description !== undefined) updateData.description = description;
     await collections.calcPayments.updateOne({ _id: new ObjectId(req.params.id) }, { $set: updateData });
     const doc = await collections.calcPayments.findOne({ _id: new ObjectId(req.params.id) });
+
+    if (doc) {
+      await notifyMembers(doc.messId, req.userId, {
+        title: "Deposit Updated",
+        message: `${doc.userName}'s deposit has been updated to ৳${doc.amount}`,
+        type: "general",
+      });
+    }
+
     res.json({ success: true, payment: transformDoc(doc) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to update payment" });
