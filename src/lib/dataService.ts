@@ -1412,10 +1412,10 @@ export async function getChatMessagesByMessId(messId: string): Promise<ChatMessa
   return storage.getChatMessagesByMessId(messId);
 }
 
-export async function sendChatMessage(data: { messId: string; userId: string; senderName: string; message: string }, activeUserIds?: string[]): Promise<ChatMessage> {
+export async function sendChatMessage(data: { messId: string; userId: string; senderName: string; message: string }, activeUserIds?: string[], replyTo?: { id: string; senderName: string; message: string } | null): Promise<ChatMessage> {
   if (shouldUseBackend()) {
     try {
-      const result = await api.sendChatMessageAPI(data.message, activeUserIds);
+      const result = await api.sendChatMessageAPI(data.message, activeUserIds, replyTo);
       if (result.success && result.data) {
         const msg = (result.data as any).message || result.data;
         return msg;
@@ -1425,7 +1425,6 @@ export async function sendChatMessage(data: { messId: string; userId: string; se
     }
     showFallbackAlert();
   }
-  // Save locally and mark as unsynced
   const msg = storage.createChatMessage(data);
   storage.addUnsyncedChatMessage(msg);
   return msg;
