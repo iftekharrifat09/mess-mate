@@ -493,7 +493,7 @@ export default function CalculatorPage() {
                                     <div key={ex.id} className="flex items-center justify-between">
                                       <span>{ex.userName} (exception): <span className="font-semibold text-foreground">{formatCurrency(ex.amount)}</span></span>
                                       {isManager && (
-                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDeleteException(ex.id)}>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setDeleteTarget({ type: 'exception', id: ex.id, label: `${ex.userName}'s exception` })}>
                                           <Trash2 className="h-3 w-3 text-destructive" />
                                         </Button>
                                       )}
