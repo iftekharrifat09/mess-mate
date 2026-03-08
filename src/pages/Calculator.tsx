@@ -120,9 +120,10 @@ export default function CalculatorPage() {
   const monthlyTotal = useMemo(() => categories.reduce((s, c) => s + c.totalCost, 0), [categories]);
 
   // Summary calculations
-  const totalDeposits = useMemo(() => payments.reduce((s, p) => s + p.amount, 0), [payments]);
+  const actualTotalDeposits = useMemo(() => payments.reduce((s, p) => s + p.amount, 0), [payments]);
+  const totalDeposits = useMemo(() => monthlyTotal > 0 ? Math.min(actualTotalDeposits, monthlyTotal) : actualTotalDeposits, [actualTotalDeposits, monthlyTotal]);
   const totalBillsPaid = useMemo(() => billPayments.reduce((s, bp) => s + bp.amount, 0), [billPayments]);
-  const currentBalance = totalDeposits - totalBillsPaid;
+  const currentBalance = actualTotalDeposits - totalBillsPaid;
   const isMonthlyFullyPaid = monthlyTotal > 0 && totalBillsPaid >= monthlyTotal;
 
   // Category paid amounts
@@ -180,11 +181,21 @@ export default function CalculatorPage() {
     reload();
   };
 
-  const isDepositsCapped = monthlyTotal > 0 && totalDeposits >= monthlyTotal;
+  const isDepositsCapped = monthlyTotal > 0 && actualTotalDeposits >= monthlyTotal;
+
+  // Members who still have dues (can deposit even when capped)
+  const membersWithDues = useMemo(() => {
+    if (!isDepositsCapped) return [];
+    return members.filter(m => {
+      const due = memberDues[m.id] || 0;
+      const paid = memberPayments[m.id] || 0;
+      return due > 0 && paid < due;
+    });
+  }, [isDepositsCapped, members, memberDues, memberPayments]);
 
   // Member Deposit handlers
   const handleOpenDepositModal = () => {
-    if (isDepositsCapped) {
+    if (isDepositsCapped && membersWithDues.length === 0) {
       setDepositWarning(true);
       return;
     }
@@ -193,22 +204,28 @@ export default function CalculatorPage() {
 
   const handleSaveDeposit = async () => {
     if (!payUserId || !payAmount) return;
-    // Cap: total deposits cannot exceed monthly total
-    if (!editPayment && monthlyTotal > 0) {
-      const newTotal = totalDeposits + Number(payAmount);
-      if (newTotal > monthlyTotal) {
-        const maxAllowed = monthlyTotal - totalDeposits;
-        toast({ title: 'Deposit exceeds limit', description: `Maximum deposit allowed is ${formatCurrency(maxAllowed)}. Total deposits cannot exceed Monthly Total.`, variant: 'destructive' });
+    const amt = Number(payAmount);
+    const due = memberDues[payUserId] || 0;
+    const paid = memberPayments[payUserId] || 0;
+    const memberRemaining = Math.max(0, due - paid);
+
+    if (!editPayment && isDepositsCapped) {
+      // After cap: member can only deposit up to their remaining due
+      if (amt > memberRemaining) {
+        toast({ title: 'Deposit exceeds member due', description: `This member's remaining due is ${formatCurrency(memberRemaining)}. Cannot deposit more than that.`, variant: 'destructive' });
         return;
       }
-    }
-    // Block deposit if monthly total is fully paid and this member is also fully paid
-    if (!editPayment && isMonthlyFullyPaid) {
-      const due = memberDues[payUserId] || 0;
-      const paid = memberPayments[payUserId] || 0;
-      if (due > 0 && paid >= due) {
-        toast({ title: 'Deposit not allowed', description: 'Monthly total is fully paid and this member has already paid their dues.', variant: 'destructive' });
-        return;
+    } else if (!editPayment && monthlyTotal > 0) {
+      // Before cap: total deposits cannot exceed monthly total
+      const newTotal = actualTotalDeposits + amt;
+      if (newTotal > monthlyTotal) {
+        // Check if member has dues and the excess is within their due
+        const excessOverCap = newTotal - monthlyTotal;
+        if (excessOverCap > memberRemaining) {
+          const maxAllowed = monthlyTotal - actualTotalDeposits + memberRemaining;
+          toast({ title: 'Deposit exceeds limit', description: `Maximum deposit allowed is ${formatCurrency(Math.max(0, maxAllowed))}. Total deposits cannot exceed Monthly Total plus member's remaining due.`, variant: 'destructive' });
+          return;
+        }
       }
     }
     if (editPayment) {
@@ -686,14 +703,15 @@ export default function CalculatorPage() {
               <Select onValueChange={v => { setPayUserId(v); setPayStep(2); }}>
                 <SelectTrigger><SelectValue placeholder="Choose a member" /></SelectTrigger>
                 <SelectContent>
-                  {members.map(m => {
+                  {(isDepositsCapped ? membersWithDues : members).map(m => {
                     const due = memberDues[m.id] || 0;
                     const paid = memberPayments[m.id] || 0;
                     const isMemberPaid = due > 0 && paid >= due;
-                    const disabled = isMonthlyFullyPaid && isMemberPaid;
+                    const disabled = isDepositsCapped ? false : (isMonthlyFullyPaid && isMemberPaid);
+                    const remaining = Math.max(0, due - paid);
                     return (
                       <SelectItem key={m.id} value={m.id} disabled={disabled}>
-                        {m.fullName}{disabled ? ' (Fully Paid)' : ''}
+                        {m.fullName}{disabled ? ' (Fully Paid)' : isDepositsCapped ? ` (Due: ${formatCurrency(remaining)})` : ''}
                       </SelectItem>
                     );
                   })}
@@ -703,9 +721,17 @@ export default function CalculatorPage() {
           ) : (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">Member: <span className="font-semibold text-foreground">{members.find(m => m.id === payUserId)?.fullName}</span></p>
+              {isDepositsCapped && (() => {
+                const due = memberDues[payUserId] || 0;
+                const paid = memberPayments[payUserId] || 0;
+                const remaining = Math.max(0, due - paid);
+                return (
+                  <p className="text-xs text-warning font-medium">⚠ Monthly total reached. Max deposit: {formatCurrency(remaining)}</p>
+                );
+              })()}
               <div>
                 <Label>Amount</Label>
-                <Input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)} placeholder="500" />
+                <Input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)} placeholder="500" max={isDepositsCapped ? Math.max(0, (memberDues[payUserId] || 0) - (memberPayments[payUserId] || 0)) : undefined} />
               </div>
               <div>
                 <Label>Description</Label>
@@ -779,7 +805,7 @@ export default function CalculatorPage() {
               <Wallet className="h-5 w-5" /> Deposit Limit Reached
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Total deposits have reached the Monthly Total of <span className="font-semibold text-foreground">{formatCurrency(monthlyTotal)}</span>. No more deposits can be added as the total deposits cannot exceed the monthly total.
+              Total deposits have reached the Monthly Total of <span className="font-semibold text-foreground">{formatCurrency(monthlyTotal)}</span> and all members have paid their dues. No more deposits can be added.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
