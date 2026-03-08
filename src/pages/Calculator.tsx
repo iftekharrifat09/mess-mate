@@ -345,7 +345,6 @@ export default function CalculatorPage() {
   };
 
   const handleDeleteBillPayment = async (id: string) => {
-    setDeleteTarget(null);
     setIsDeleting(true);
     try {
       const bp = billPayments.find(b => b.id === id);
@@ -353,6 +352,7 @@ export default function CalculatorPage() {
       if (!shouldUseBackend() && bp) {
         dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Bill Payment Deleted', message: `Bill payment of ${formatCurrency(bp.amount)} for "${bp.categoryName}" has been removed` });
       }
+      setDeleteTarget(null);
       await reload();
       toast({ title: 'Bill payment deleted', variant: 'destructive' });
     } finally { setIsDeleting(false); }
