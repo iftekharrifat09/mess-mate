@@ -110,7 +110,7 @@ const gridContainerVariants = {
 
 const cellVariants = {
   hidden: { opacity: 0, scale: 0.85, y: 8 },
-  show: { opacity: 1, scale: 1, y: 0, transition: { type: 'spring', stiffness: 400, damping: 25 } },
+  show: { opacity: 1, scale: 1, y: 0, transition: { type: 'spring' as const, stiffness: 400, damping: 25 } },
 };
 
 // ─── Component ───
