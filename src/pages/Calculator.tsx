@@ -158,7 +158,7 @@ export default function CalculatorPage() {
     if (editCat) {
       await calcStore.updateCategory(editCat.id, { title: catTitle.trim(), totalCost: Number(catCost) });
       if (!shouldUseBackend()) {
-        dataService.notifyMessMembers(messId, user?.id || '', { type: 'general', title: 'Expense Category Updated', message: `Expense category "${catTitle.trim()}" has been updated` });
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Category Updated', message: `Expense category "${catTitle.trim()}" has been updated` });
       }
     } else {
       await calcStore.createCategory({ messId, monthId: activeMonthId, title: catTitle.trim(), totalCost: Number(catCost), status: 'unpaid' });
