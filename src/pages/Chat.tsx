@@ -118,13 +118,20 @@ export default function Chat() {
     };
   }, []);
 
-  // Auto-sync when backend becomes available
+  // Auto-sync when backend becomes available (silent, automatic)
   useEffect(() => {
-    if (!shouldUseBackend()) return;
-    const unsyncedMessages = getUnsyncedChatMessages();
-    if (unsyncedMessages.length > 0) {
-      syncUnsyncedChatMessages().then(() => loadMessages());
-    }
+    const doSync = async () => {
+      try {
+        const unsyncedMessages = getUnsyncedChatMessages();
+        if (unsyncedMessages.length > 0) {
+          await syncUnsyncedChatMessages();
+          await loadMessages();
+        }
+      } catch {}
+    };
+    doSync();
+    const interval = setInterval(doSync, 15000);
+    return () => clearInterval(interval);
   }, [loadMessages]);
 
   // Send typing indicator (debounced - max once per 2 seconds)
@@ -135,16 +142,6 @@ export default function Chat() {
       dataService.chatTyping();
     }
   }, []);
-
-  const handleSync = async () => {
-    setSyncing(true);
-    try {
-      await syncUnsyncedChatMessages();
-      await loadMessages();
-    } finally {
-      setSyncing(false);
-    }
-  };
 
   const handleSend = async () => {
     if (!newMessage.trim() || sending || !user) return;
