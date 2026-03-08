@@ -270,7 +270,7 @@ export default function Notes() {
                               <Button variant="ghost" size="sm" onClick={() => handleEdit(note)}>
                                 <Edit2 className="h-3 w-3" />
                               </Button>
-                              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(note.id, note.title)} disabled={deletingId === note.id}>
+                              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setDeleteTarget({ id: note.id, title: note.title })} disabled={deletingId === note.id}>
                                 {deletingId === note.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                               </Button>
                             </>
