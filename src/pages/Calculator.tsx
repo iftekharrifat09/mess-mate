@@ -337,6 +337,14 @@ export default function CalculatorPage() {
 
   const getExceptionsForCategory = (catId: string) => allExceptions.filter(e => e.categoryId === catId);
 
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <LoadingSkeleton type="table" count={4} />
+      </DashboardLayout>
+    );
+  }
+
   if (!activeMonthId) {
     return (
       <DashboardLayout>
