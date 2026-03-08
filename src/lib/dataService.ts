@@ -562,11 +562,16 @@ export async function getMealCostsByMonthId(monthId: string): Promise<MealCost[]
 }
 
 export async function createMealCost(costData: Omit<MealCost, 'id' | 'createdAt'>): Promise<MealCost> {
+  // Invalidate cache
+  if ((costData as any).monthId) {
+    apiCache.invalidate(cacheKeys.mealCosts((costData as any).monthId));
+    apiCache.invalidatePrefix('summary:');
+  }
+  
   if (shouldUseBackend()) {
     const result = await api.createMealCostAPI(costData);
     if (result.success && result.data) {
       const data = result.data as any;
-      // Backend returns { success: true, cost: {...} }
       return data.cost || data.mealCost || data;
     }
     if (result.usingLocalStorage) {
