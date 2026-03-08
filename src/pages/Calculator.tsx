@@ -120,9 +120,10 @@ export default function CalculatorPage() {
   const monthlyTotal = useMemo(() => categories.reduce((s, c) => s + c.totalCost, 0), [categories]);
 
   // Summary calculations
-  const totalDeposits = useMemo(() => payments.reduce((s, p) => s + p.amount, 0), [payments]);
+  const actualTotalDeposits = useMemo(() => payments.reduce((s, p) => s + p.amount, 0), [payments]);
+  const totalDeposits = useMemo(() => monthlyTotal > 0 ? Math.min(actualTotalDeposits, monthlyTotal) : actualTotalDeposits, [actualTotalDeposits, monthlyTotal]);
   const totalBillsPaid = useMemo(() => billPayments.reduce((s, bp) => s + bp.amount, 0), [billPayments]);
-  const currentBalance = totalDeposits - totalBillsPaid;
+  const currentBalance = actualTotalDeposits - totalBillsPaid;
   const isMonthlyFullyPaid = monthlyTotal > 0 && totalBillsPaid >= monthlyTotal;
 
   // Category paid amounts
