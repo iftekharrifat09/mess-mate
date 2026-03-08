@@ -80,6 +80,20 @@ export default function Profile() {
     toast({ title: checked ? 'Email notifications enabled' : 'Email notifications disabled', variant: 'success' });
   };
 
+  const handleToggleBrowserNotifications = async (checked: boolean) => {
+    if (!user) return;
+    if (checked) {
+      const granted = await requestBrowserNotificationPermission();
+      if (!granted) {
+        toast({ title: 'Permission denied', description: 'Please allow notifications in your browser settings', variant: 'destructive' });
+        return;
+      }
+    }
+    setBrowserNotifEnabledState(checked);
+    setBrowserNotificationsEnabled(user.id, checked);
+    toast({ title: checked ? 'Browser notifications enabled' : 'Browser notifications disabled', variant: 'success' });
+  };
+
   const handleSelectTone = (toneId: string) => {
     if (!user) return;
     setSelectedTone(toneId);
