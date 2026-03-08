@@ -582,6 +582,10 @@ export async function createMealCost(costData: Omit<MealCost, 'id' | 'createdAt'
 }
 
 export async function updateMealCost(id: string, updates: Partial<MealCost>): Promise<MealCost | undefined> {
+  // Invalidate cache
+  apiCache.invalidatePrefix('mealCosts:');
+  apiCache.invalidatePrefix('summary:');
+  
   if (shouldUseBackend()) {
     const result = await api.updateMealCostAPI(id, updates);
     if (result.success && result.data) {
