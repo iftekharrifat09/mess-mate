@@ -268,7 +268,7 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
                 {/* Chart */}
                 <div className="h-48 sm:h-56 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={dailyDiffs} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                    <ComposedChart data={dailyDiffs} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis
                         dataKey="label"
@@ -278,25 +278,45 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
                         interval="preserveStartEnd"
                       />
                       <YAxis
+                        yAxisId="taka"
                         tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }}
                         tickLine={false}
                         axisLine={{ stroke: 'hsl(var(--border))' }}
                         width={45}
                       />
+                      <YAxis
+                        yAxisId="kwh"
+                        orientation="right"
+                        tick={{ fontSize: 9, fill: '#8b5cf6' }}
+                        tickLine={false}
+                        axisLine={{ stroke: '#8b5cf6' }}
+                        width={40}
+                        label={{ value: 'kWh', angle: 90, position: 'insideRight', fontSize: 9, fill: '#8b5cf6' }}
+                      />
                       <Tooltip content={<CustomTooltip />} />
                       <ReferenceLine
+                        yAxisId="taka"
                         y={avgTaka}
                         stroke="#3b82f6"
                         strokeDasharray="6 3"
                         strokeWidth={1.5}
                         label={{ value: `Avg ৳${avgTaka}`, position: 'right', fontSize: 9, fill: '#3b82f6' }}
                       />
-                      <Bar dataKey="taka" radius={[4, 4, 0, 0]} maxBarSize={28}>
+                      <Bar dataKey="taka" yAxisId="taka" radius={[4, 4, 0, 0]} maxBarSize={28}>
                         {dailyDiffs.map((entry, i) => (
                           <Cell key={i} fill={getBarColor(entry.taka)} />
                         ))}
                       </Bar>
-                    </BarChart>
+                      <Line
+                        yAxisId="kwh"
+                        type="monotone"
+                        dataKey="cumulativeKwh"
+                        stroke="#8b5cf6"
+                        strokeWidth={2}
+                        dot={{ r: 2.5, fill: '#8b5cf6' }}
+                        name="Total kWh"
+                      />
+                    </ComposedChart>
                   </ResponsiveContainer>
                 </div>
 
