@@ -2385,6 +2385,17 @@ app.post("/api/calc-exceptions", authMiddleware, async (req, res) => {
     const { categoryId, userId, userName, amount } = req.body;
     const doc = { categoryId, userId, userName, amount };
     const result = await collections.calcExceptions.insertOne(doc);
+
+    // Get category for notification context
+    const cat = await collections.calcCategories.findOne({ _id: new ObjectId(categoryId) });
+    if (cat) {
+      await notifyMembers(cat.messId, req.userId, {
+        title: "Expense Exception Added",
+        message: `${userName} has a fixed contribution of ৳${amount} for "${cat.title}"`,
+        type: "general",
+      });
+    }
+
     res.json({ success: true, exception: { id: result.insertedId.toString(), ...doc } });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to create exception" });
