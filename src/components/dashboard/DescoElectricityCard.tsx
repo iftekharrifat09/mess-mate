@@ -177,7 +177,7 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
 
       <CardContent className="space-y-4 px-4 sm:px-6">
         {/* Balance Overview */}
-        <div className="grid grid-cols-3 gap-2 sm:gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3">
           <motion.div
             initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
             className="bg-accent/10 border border-accent/20 rounded-xl p-2.5 sm:p-3.5 text-center"
@@ -198,9 +198,22 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
             <div className="inline-flex p-2 rounded-full bg-destructive/10 mb-1.5">
               <TrendingDown className="h-4 w-4 text-destructive" />
             </div>
-            <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">This Month</p>
+            <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">This Month Cost</p>
             <p className="text-base sm:text-xl font-bold text-destructive mt-0.5">
               ৳{data.balance?.currentMonthConsumption?.toFixed(2) ?? '0.00'}
+            </p>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }}
+            className="bg-primary/10 border border-primary/20 rounded-xl p-2.5 sm:p-3.5 text-center"
+          >
+            <div className="inline-flex p-2 rounded-full bg-primary/10 mb-1.5">
+              <Zap className="h-4 w-4 text-primary" />
+            </div>
+            <p className="text-[11px] text-muted-foreground font-medium uppercase tracking-wider">Total Unit</p>
+            <p className="text-base sm:text-xl font-bold text-primary mt-0.5">
+              {dailyDiffs.reduce((sum, d) => sum + d.kwh, 0).toFixed(2)} kWh
             </p>
           </motion.div>
 
