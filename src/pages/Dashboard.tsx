@@ -71,17 +71,18 @@ export default function Dashboard() {
       });
 
       if (activeMonth) {
-        // Load calculations in parallel
-        const [mSummary, pSummary, allMembers] = await Promise.all([
-          calculateMonthSummary(activeMonth.id, user.messId),
-          calculateMemberSummary(user.id, activeMonth.id),
-          getAllMembersSummary(activeMonth.id, user.messId),
-        ]);
+        // Single fetch for all month data — no redundant API calls
+        const monthData = await fetchMonthData(activeMonth.id, user.messId);
+        const mSummary = calculateMonthSummaryFromData(activeMonth.id, monthData);
+        const pSummary = calculateMemberSummaryFromData(user.id, monthData);
+        const allMembers = getAllMembersSummaryFromData(monthData);
 
         startTransition(() => {
           setMonthSummary(mSummary);
           setPersonalSummary(pSummary);
           setMembersSummary(allMembers);
+          // Use pre-fetched members instead of separate call
+          setMembers(monthData.members);
         });
 
         // Load calc data for utility expenses
