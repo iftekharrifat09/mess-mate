@@ -87,7 +87,7 @@ export default function Chat() {
         setTimeout(scrollToBottom, 100);
       }
       prevMessageCountRef.current = msgs.length;
-      setUnsyncedCount(getUnsyncedChatMessages().length);
+      
     } catch (e) {
       console.error('Failed to load chat:', e);
     } finally {
