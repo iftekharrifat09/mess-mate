@@ -1132,6 +1132,9 @@ export async function markNotificationAsSeen(id: string): Promise<void> {
 }
 
 export async function markAllNotificationsAsSeen(userId: string): Promise<void> {
+  // Invalidate notification cache
+  apiCache.invalidate(cacheKeys.notifications(userId));
+  
   if (shouldUseBackend()) {
     const result = await api.markAllNotificationsReadAPI();
     if (result.success) {
