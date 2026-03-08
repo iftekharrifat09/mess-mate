@@ -4,7 +4,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
   Dialog,
@@ -22,10 +21,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Calendar as CalendarComponent } from '@/components/ui/calendar';
+import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import * as dataService from '@/lib/dataService';
 import { BazarDate, User } from '@/types';
-import { ShoppingCart, Plus, Edit2, Trash2, Calendar, AlertCircle, X, Loader2 } from 'lucide-react';
+import { ShoppingCart, Plus, Edit2, Trash2, Calendar, CalendarIcon, AlertCircle, X, Loader2 } from 'lucide-react';
 import { format, isToday, isFuture, isPast } from 'date-fns';
 import { Navigate } from 'react-router-dom';
 
@@ -294,15 +296,34 @@ export default function BazarDates() {
                 <div className="space-y-2">
                   <Label>{editingBazar ? 'Date' : 'Add Dates'}</Label>
                   <div className="flex gap-2">
-                    <Input
-                      type="date"
-                      value={currentDate}
-                      onChange={(e) => {
-                        setCurrentDate(e.target.value);
-                        setDateError(null);
-                      }}
-                      className="flex-1"
-                    />
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          className={cn(
+                            "flex-1 justify-start text-left font-normal",
+                            !currentDate && "text-muted-foreground"
+                          )}
+                        >
+                          <CalendarIcon className="mr-2 h-4 w-4 text-foreground" />
+                          {currentDate ? format(new Date(currentDate + 'T00:00:00'), 'PPP') : <span>Pick a date</span>}
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-auto p-0" align="start">
+                        <CalendarComponent
+                          mode="single"
+                          selected={currentDate ? new Date(currentDate + 'T00:00:00') : undefined}
+                          onSelect={(date) => {
+                            if (date) {
+                              setCurrentDate(format(date, 'yyyy-MM-dd'));
+                              setDateError(null);
+                            }
+                          }}
+                          initialFocus
+                          className={cn("p-3 pointer-events-auto")}
+                        />
+                      </PopoverContent>
+                    </Popover>
                     {!editingBazar && (
                       <Button type="button" onClick={handleAddDate} variant="outline" size="icon">
                         <Plus className="h-4 w-4" />
