@@ -1172,9 +1172,41 @@ export async function deleteMonthAndData(monthId: string): Promise<void> {
 // ============================================
 
 export async function getActivityLogsByMessId(messId: string): Promise<MessActivityLog[]> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.getActivityLogsAPI(messId);
+      if (result.success && result.data) {
+        return (result.data as any).logs || result.data as any;
+      }
+    } catch (error) {
+      console.error('Error fetching activity logs from API:', error);
+    }
+  }
   return storage.getActivityLogsByMessId(messId);
 }
 
 export async function createActivityLog(logData: Omit<MessActivityLog, 'id' | 'createdAt'>): Promise<MessActivityLog> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.createActivityLogAPI(logData);
+      if (result.success && result.data) {
+        return (result.data as any).log || result.data as any;
+      }
+    } catch (error) {
+      console.error('Error creating activity log via API:', error);
+    }
+  }
   return storage.createActivityLog(logData);
+}
+
+export async function deleteActivityLog(logId: string): Promise<boolean> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.deleteActivityLogAPI(logId);
+      if (result.success) return true;
+    } catch (error) {
+      console.error('Error deleting activity log via API:', error);
+    }
+  }
+  return storage.deleteActivityLog(logId);
 }

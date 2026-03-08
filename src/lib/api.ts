@@ -824,3 +824,19 @@ export async function updateCalcBillPaymentAPI(id: string, data: any) {
 export async function deleteCalcBillPaymentAPI(id: string) {
   return apiRequest(`/calc-bill-payments/${id}`, { method: 'DELETE' });
 }
+
+// ============================================
+// ACTIVITY LOGS
+// ============================================
+
+export async function getActivityLogsAPI(messId: string) {
+  return apiRequest(`/activity-logs/${messId}`, { method: 'GET' });
+}
+
+export async function createActivityLogAPI(data: any) {
+  return apiRequest('/activity-logs', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function deleteActivityLogAPI(id: string) {
+  return apiRequest(`/activity-logs/${id}`, { method: 'DELETE' });
+}
