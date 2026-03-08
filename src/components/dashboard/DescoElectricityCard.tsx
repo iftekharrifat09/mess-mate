@@ -405,26 +405,29 @@ function CustomTooltip({ active, payload, label }: any) {
   if (!item) return null;
 
   const slab = getSlabInfo(item.cumulativeKwh);
+  const displayTaka = item.crossedSlab ? (item.adjustedTaka ?? item.taka) : item.taka;
+  const unitRate = item.kwh > 0 ? (displayTaka / item.kwh).toFixed(2) : '0.00';
 
   return (
     <div className="rounded-lg border border-border bg-card px-3 py-2 text-xs shadow-lg">
       <p className="font-medium text-foreground mb-1">{label}</p>
-      <p className="text-muted-foreground">৳{item.taka} spent</p>
+      {item.crossedSlab ? (
+        <>
+          <p className="text-muted-foreground line-through">৳{item.taka} spent</p>
+          <p className="text-foreground font-medium">৳{displayTaka} actual spent</p>
+          <p className="text-destructive text-[10px]">-৳31.50 retroactive charge on first 50 units</p>
+        </>
+      ) : (
+        <p className="text-muted-foreground">৳{displayTaka} spent</p>
+      )}
       <p className="text-muted-foreground">{item.kwh} kWh used</p>
-      <p className="text-muted-foreground">
-        Unit rate: ৳{item.kwh > 0 ? (item.taka / item.kwh).toFixed(2) : '0.00'}/kWh
-      </p>
+      <p className="text-muted-foreground">Unit rate: ৳{unitRate}/kWh</p>
       <p className="text-[#8b5cf6] font-medium mt-0.5">
         Total consumed: {item.cumulativeKwh} kWh
       </p>
       <p className="text-muted-foreground mt-0.5">
         Slab: ৳{slab.rate}/kWh ({slab.slab} units)
       </p>
-      {slab.extraCharge > 0 && (
-        <p className="text-destructive text-[10px] mt-0.5">
-          +৳{slab.extraCharge.toFixed(2)} retroactive charge on first 50 units
-        </p>
-      )}
     </div>
   );
 }
