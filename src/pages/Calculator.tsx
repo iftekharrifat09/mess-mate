@@ -210,6 +210,10 @@ export default function CalculatorPage() {
       toast({ title: 'Amount exceeds remaining due', variant: 'destructive' });
       return;
     }
+    if (!editBillPayment && amt > currentBalance) {
+      toast({ title: 'Insufficient balance', description: `Current balance is ${formatCurrency(currentBalance)}`, variant: 'destructive' });
+      return;
+    }
     if (editBillPayment) {
       await calcStore.updateBillPayment(editBillPayment.id, { amount: amt, description: billDesc, categoryId: billCatId, categoryName: categories.find(c => c.id === billCatId)?.title || '' });
       setEditBillPayment(null);
@@ -696,14 +700,18 @@ export default function CalculatorPage() {
                 value={billAmount}
                 onChange={e => {
                   const val = Number(e.target.value);
-                  if (!editBillPayment && val > selectedBillCatDue) return;
+                  const maxAllowed = Math.min(selectedBillCatDue, currentBalance);
+                  if (!editBillPayment && val > maxAllowed) return;
                   setBillAmount(e.target.value);
                 }}
                 placeholder={billCatId ? `Due: ${formatCurrency(selectedBillCatDue)}` : 'Select a category first'}
-                max={editBillPayment ? undefined : selectedBillCatDue}
+                max={editBillPayment ? undefined : Math.min(selectedBillCatDue, currentBalance)}
               />
               {billCatId && !editBillPayment && (
-                <p className="text-xs text-muted-foreground mt-1">Max: {formatCurrency(selectedBillCatDue)}</p>
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                  <span>Category due: {formatCurrency(selectedBillCatDue)}</span>
+                  <span>Balance: {formatCurrency(currentBalance)}</span>
+                </div>
               )}
             </div>
             <div>
