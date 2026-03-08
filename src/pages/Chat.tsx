@@ -292,7 +292,6 @@ export default function Chat() {
               <h1 className="text-xl font-bold text-foreground">Mess Chat</h1>
               <p className="text-xs text-muted-foreground">
                 {messages.length} messages
-                {isOffline && <span className="text-destructive ml-1">• Offline mode</span>}
               </p>
             </div>
           </div>
