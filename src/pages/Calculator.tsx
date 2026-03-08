@@ -211,7 +211,6 @@ export default function CalculatorPage() {
   };
 
   const handleDeleteException = async (id: string) => {
-    setDeleteTarget(null);
     setIsDeleting(true);
     try {
       const exc = allExceptions.find(e => e.id === id);
@@ -220,6 +219,7 @@ export default function CalculatorPage() {
         const cat = categories.find(c => c.id === exc.categoryId);
         dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Exception Removed', message: `${exc.userName}'s exception for "${cat?.title || ''}" has been removed` });
       }
+      setDeleteTarget(null);
       await reload();
     } finally { setIsDeleting(false); }
   };
