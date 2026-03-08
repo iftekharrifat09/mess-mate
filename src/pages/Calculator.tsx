@@ -359,27 +359,27 @@ export default function CalculatorPage() {
     <DashboardLayout>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="space-y-3 md:space-y-0 md:flex md:items-center md:justify-between md:flex-wrap md:gap-4">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl gradient-primary">
-              <CalcIcon className="h-6 w-6 text-primary-foreground" />
+            <div className="p-2 md:p-2.5 rounded-xl gradient-primary shrink-0">
+              <CalcIcon className="h-5 w-5 md:h-6 md:w-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Mess Expenses</h1>
-              <p className="text-sm text-muted-foreground">Manage monthly cost categories & payments</p>
+              <h1 className="text-xl md:text-2xl font-bold text-foreground">Mess Expenses</h1>
+              <p className="text-xs md:text-sm text-muted-foreground">Manage monthly cost categories & payments</p>
             </div>
           </div>
           {isManager && (
             <div className="flex gap-2 flex-wrap">
-              <Button onClick={() => { setCatModal(true); setEditCat(null); setCatTitle(''); setCatCost(''); }}>
-                <Plus className="h-4 w-4 mr-2" /> Add Category
+              <Button size="sm" className="md:h-10 md:px-4 text-xs md:text-sm" onClick={() => { setCatModal(true); setEditCat(null); setCatTitle(''); setCatCost(''); }}>
+                <Plus className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1.5" /> Add Category
               </Button>
-              <Button variant="outline" onClick={handleOpenDepositModal}>
-                <Wallet className="h-4 w-4 mr-2" /> Member Deposit
+              <Button size="sm" variant="outline" className="md:h-10 md:px-4 text-xs md:text-sm" onClick={handleOpenDepositModal}>
+                <Wallet className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1.5" /> Deposit
               </Button>
-              <Button variant="secondary" onClick={handleOpenBillModal} className="relative overflow-hidden group transition-all duration-300 hover:shadow-lg hover:shadow-primary/25 hover:scale-105 hover:bg-primary hover:text-primary-foreground">
+              <Button size="sm" variant="secondary" className="md:h-10 md:px-4 text-xs md:text-sm relative overflow-hidden group transition-all duration-300 hover:shadow-lg hover:shadow-primary/25 hover:scale-105 hover:bg-primary hover:text-primary-foreground" onClick={handleOpenBillModal}>
                 <span className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary-foreground/10 to-primary/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
-                <CreditCard className="h-4 w-4 mr-2 transition-transform duration-300 group-hover:rotate-12" /> Pay Bill
+                <CreditCard className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1.5 transition-transform duration-300 group-hover:rotate-12" /> Pay Bill
               </Button>
             </div>
           )}
