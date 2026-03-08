@@ -28,6 +28,7 @@ import { useToast } from '@/hooks/use-toast';
 import * as dataService from '@/lib/dataService';
 import { BazarDate, User } from '@/types';
 import { ShoppingCart, Plus, Edit2, Trash2, Calendar, CalendarIcon, AlertCircle, X, Loader2 } from 'lucide-react';
+import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
 import { format, isToday, isFuture, isPast } from 'date-fns';
 import { Navigate } from 'react-router-dom';
 
