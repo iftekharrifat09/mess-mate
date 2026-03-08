@@ -196,15 +196,18 @@ export default function CalculatorPage() {
 
   const handleSaveException = async () => {
     if (!excModal || !excUserId || !excAmount) return;
-    const memberName = members.find(m => m.id === excUserId)?.fullName || '';
-    await calcStore.createException({ categoryId: excModal, userId: excUserId, userName: memberName, amount: Number(excAmount) });
-    if (!shouldUseBackend()) {
-      const cat = categories.find(c => c.id === excModal);
-      dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Exception Added', message: `${memberName} has a fixed contribution of ${formatCurrency(Number(excAmount))} for "${cat?.title || ''}"` });
-    }
-    setExcModal(null); setExcUserId(''); setExcAmount(''); setExcStep(1);
-    reload();
-    toast({ title: 'Exception added' });
+    setIsSaving(true);
+    try {
+      const memberName = members.find(m => m.id === excUserId)?.fullName || '';
+      await calcStore.createException({ categoryId: excModal, userId: excUserId, userName: memberName, amount: Number(excAmount) });
+      if (!shouldUseBackend()) {
+        const cat = categories.find(c => c.id === excModal);
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Exception Added', message: `${memberName} has a fixed contribution of ${formatCurrency(Number(excAmount))} for "${cat?.title || ''}"` });
+      }
+      setExcModal(null); setExcUserId(''); setExcAmount(''); setExcStep(1);
+      await reload();
+      toast({ title: 'Exception added' });
+    } finally { setIsSaving(false); }
   };
 
   const handleDeleteException = async (id: string) => {
