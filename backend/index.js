@@ -2338,10 +2338,22 @@ app.put("/api/calc-categories/:id", authMiddleware, async (req, res) => {
 app.delete("/api/calc-categories/:id", authMiddleware, async (req, res) => {
   try {
     const catId = req.params.id;
+    // Get category info before deleting for notification
+    const cat = await collections.calcCategories.findOne({ _id: new ObjectId(catId) });
     await Promise.all([
       collections.calcCategories.deleteOne({ _id: new ObjectId(catId) }),
       collections.calcExceptions.deleteMany({ categoryId: catId }),
     ]);
+
+    // Notify members
+    if (cat) {
+      await notifyMembers(cat.messId, req.userId, {
+        title: "Expense Category Deleted",
+        message: `Expense category "${cat.title}" has been removed`,
+        type: "general",
+      });
+    }
+
     res.json({ success: true, message: "Category deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to delete category" });
