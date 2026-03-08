@@ -497,10 +497,10 @@ export default function AboutUs() {
             <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
               <Utensils className="w-4 h-4 text-primary-foreground" />
             </div>
-            <span className="font-semibold text-foreground">Mess Manager</span>
+            <span className="font-semibold text-foreground">Mess Mate</span>
           </div>
           <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} Mess Manager. All rights reserved.
+            © {new Date().getFullYear()} Mess Mate. All rights reserved.
           </p>
         </div>
       </footer>
