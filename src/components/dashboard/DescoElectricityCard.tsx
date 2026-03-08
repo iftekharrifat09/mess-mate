@@ -9,7 +9,7 @@ import {
   Loader2, AlertCircle, Clock, BatteryCharging, Receipt
 } from 'lucide-react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine
 } from 'recharts';
 import {
   getDescoSettings, fetchAllDescoData,
@@ -25,6 +25,7 @@ interface DailyDiff {
   label: string;
   taka: number;
   kwh: number;
+  cumulativeKwh: number;
 }
 
 export default function DescoElectricityCard({ messId }: DescoElectricityCardProps) {
@@ -98,7 +99,14 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
         label: d.toLocaleDateString('en-BD', { day: 'numeric', month: 'short' }),
         taka: Math.max(0, parseFloat(taka.toFixed(2))),
         kwh: Math.max(0, parseFloat(kwh.toFixed(2))),
+        cumulativeKwh: 0,
       });
+    }
+    // Calculate cumulative kWh
+    let cumulative = 0;
+    for (const d of diffs) {
+      cumulative += d.kwh;
+      d.cumulativeKwh = parseFloat(cumulative.toFixed(2));
     }
     return diffs;
   }, [data]);
@@ -251,16 +259,17 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
               <div className="space-y-4">
                 {/* Chart */}
                 {/* Legend */}
-                <div className="flex items-center justify-center gap-3 sm:gap-4 text-[10px] sm:text-xs text-muted-foreground">
+                <div className="flex items-center justify-center gap-3 sm:gap-4 text-[10px] sm:text-xs text-muted-foreground flex-wrap">
                   <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-[#22c55e]" /> Low</span>
                   <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-[#f97316]" /> Average</span>
                   <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-[#ef4444]" /> High</span>
+                  <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-[#8b5cf6]" /> Total kWh</span>
                 </div>
 
                 {/* Chart */}
                 <div className="h-48 sm:h-56 w-full">
                   <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={dailyDiffs} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
+                    <ComposedChart data={dailyDiffs} margin={{ top: 5, right: 5, left: 0, bottom: 5 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                       <XAxis
                         dataKey="label"
@@ -270,25 +279,45 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
                         interval="preserveStartEnd"
                       />
                       <YAxis
+                        yAxisId="taka"
                         tick={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }}
                         tickLine={false}
                         axisLine={{ stroke: 'hsl(var(--border))' }}
                         width={45}
                       />
+                      <YAxis
+                        yAxisId="kwh"
+                        orientation="right"
+                        tick={{ fontSize: 9, fill: '#8b5cf6' }}
+                        tickLine={false}
+                        axisLine={{ stroke: '#8b5cf6' }}
+                        width={40}
+                        label={{ value: 'kWh', angle: 90, position: 'insideRight', fontSize: 9, fill: '#8b5cf6' }}
+                      />
                       <Tooltip content={<CustomTooltip />} />
                       <ReferenceLine
+                        yAxisId="taka"
                         y={avgTaka}
                         stroke="#3b82f6"
                         strokeDasharray="6 3"
                         strokeWidth={1.5}
                         label={{ value: `Avg ৳${avgTaka}`, position: 'right', fontSize: 9, fill: '#3b82f6' }}
                       />
-                      <Bar dataKey="taka" radius={[4, 4, 0, 0]} maxBarSize={28}>
+                      <Bar dataKey="taka" yAxisId="taka" radius={[4, 4, 0, 0]} maxBarSize={28}>
                         {dailyDiffs.map((entry, i) => (
                           <Cell key={i} fill={getBarColor(entry.taka)} />
                         ))}
                       </Bar>
-                    </BarChart>
+                      <Line
+                        yAxisId="kwh"
+                        type="monotone"
+                        dataKey="cumulativeKwh"
+                        stroke="#8b5cf6"
+                        strokeWidth={2}
+                        dot={{ r: 2.5, fill: '#8b5cf6' }}
+                        name="Total kWh"
+                      />
+                    </ComposedChart>
                   </ResponsiveContainer>
                 </div>
 
@@ -345,6 +374,9 @@ function CustomTooltip({ active, payload, label }: any) {
       <p className="text-muted-foreground">{item.kwh} kWh used</p>
       <p className="text-muted-foreground">
         Unit rate: ৳{item.kwh > 0 ? (item.taka / item.kwh).toFixed(2) : '0.00'}/kWh
+      </p>
+      <p className="text-[#8b5cf6] font-medium mt-0.5">
+        Total consumed: {item.cumulativeKwh} kWh
       </p>
     </div>
   );
