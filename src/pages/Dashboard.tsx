@@ -22,6 +22,7 @@ import * as dataService from '@/lib/dataService';
 import * as calcStore from '@/lib/calculatorStorage';
 import { Users } from 'lucide-react';
 import CalendarModal from '@/components/dashboard/CalendarModal';
+import { toBanglaDate, toBanglaDigits, toHijriDate, ENGLISH_MONTHS } from '@/lib/dateConversions';
 
 // Default empty states to show UI immediately
 const EMPTY_MONTH_SUMMARY: MonthSummary = {
@@ -156,14 +157,18 @@ export default function Dashboard() {
         className="space-y-6"
       >
         {/* Header */}
-        <div ref={headerRef} className="flex items-start justify-between">
+        <div ref={headerRef} className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-3xl font-bold text-foreground">{messName}</h1>
             <p className="text-muted-foreground">
               Welcome back, {user?.fullName}! Here's your mess overview.
             </p>
           </div>
-          <CalendarModal />
+          <div className="flex items-center gap-3">
+            {/* Today's Date Display */}
+            <TodayDateDisplay />
+            <CalendarModal />
+          </div>
         </div>
 
         {/* Main Grid */}
@@ -308,6 +313,29 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
           })}
         </div>
       )}
+    </motion.div>
+  );
+}
+
+function TodayDateDisplay() {
+  const today = new Date();
+  const bangla = toBanglaDate(today);
+  const hijri = toHijriDate(today);
+  const englishDate = `${today.getDate()} ${ENGLISH_MONTHS[today.getMonth()]} ${today.getFullYear()}`;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 10 }}
+      animate={{ opacity: 1, x: 0 }}
+      className="hidden sm:flex flex-col items-end text-right bg-card/50 backdrop-blur-sm border border-border/50 rounded-lg px-3 py-2"
+    >
+      <span className="text-xs font-medium text-foreground">{englishDate}</span>
+      <span className="text-xs font-bold text-primary">
+        {toBanglaDigits(bangla.day)} {bangla.month} {toBanglaDigits(bangla.year)}
+      </span>
+      <span className="text-xs font-bold text-gold">
+        {hijri.day} {hijri.month} {hijri.year} AH
+      </span>
     </motion.div>
   );
 }
