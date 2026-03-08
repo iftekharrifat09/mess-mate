@@ -159,7 +159,14 @@ export const cacheKeys = {
 export const invalidateMessData = (messId: string) => {
   apiCache.invalidatePrefix(`mess:${messId}`);
   apiCache.invalidatePrefix(`month:`);
+  apiCache.invalidatePrefix(`months:`);
   apiCache.invalidatePrefix(`summary:`);
+  apiCache.invalidate(cacheKeys.notices(messId));
+  apiCache.invalidate(cacheKeys.latestNotice(messId));
+  apiCache.invalidate(cacheKeys.notes(messId));
+  apiCache.invalidate(cacheKeys.bazarDates(messId));
+  apiCache.invalidate(cacheKeys.joinRequests(messId));
+  apiCache.invalidate(cacheKeys.activityLogs(messId));
 };
 
 export const invalidateMonthData = (monthId: string) => {
@@ -168,4 +175,10 @@ export const invalidateMonthData = (monthId: string) => {
   apiCache.invalidate(cacheKeys.mealCosts(monthId));
   apiCache.invalidate(cacheKeys.otherCosts(monthId));
   apiCache.invalidatePrefix(`summary:`);
+};
+
+export const invalidateUserData = (userId: string) => {
+  apiCache.invalidate(cacheKeys.user(userId));
+  apiCache.invalidate(cacheKeys.notifications(userId));
+  apiCache.invalidate(cacheKeys.userJoinRequests(userId));
 };
