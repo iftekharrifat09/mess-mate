@@ -39,6 +39,7 @@ import { Receipt, Plus, Trash2, Edit2, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/calculations';
 import { Navigate } from 'react-router-dom';
+import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
 
 export default function OtherCosts() {
   const { user, isLoading: authLoading } = useAuth();
