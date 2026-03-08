@@ -7,7 +7,7 @@
 import { shouldUseBackend, isBackendAvailable, isMongoDbConnected } from './config';
 import * as api from './api';
 import * as storage from './storage';
-import { apiCache, cacheKeys, invalidateMonthData } from './apiCache';
+import { apiCache, cacheKeys, invalidateMonthData, invalidateUserData } from './apiCache';
 import { User, Mess, Month, Meal, Deposit, MealCost, OtherCost, JoinRequest, Notice, BazarDate, Notification, Note, MessActivityLog } from '@/types';
 import { toast } from '@/hooks/use-toast';
 
