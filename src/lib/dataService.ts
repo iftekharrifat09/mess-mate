@@ -478,6 +478,12 @@ export async function getDepositsByUserAndMonth(userId: string, monthId: string)
 }
 
 export async function createDeposit(depositData: Omit<Deposit, 'id' | 'createdAt'>): Promise<Deposit> {
+  // Invalidate cache on mutation
+  if ((depositData as any).monthId) {
+    apiCache.invalidate(cacheKeys.deposits((depositData as any).monthId));
+    apiCache.invalidatePrefix('summary:');
+  }
+  
   if (shouldUseBackend()) {
     const result = await api.createDepositAPI(depositData);
     if (result.success && result.data) {
