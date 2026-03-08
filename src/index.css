@@ -45,6 +45,8 @@
     
     --info: 199 89% 48%;
     --info-foreground: 0 0% 98%;
+    
+    --gold: 40 65% 58%;
 
     /* Sidebar tokens - Light mode */
     --sidebar-background: 0 0% 98%;
@@ -100,6 +102,8 @@
     
     --info: 199 89% 48%;
     --info-foreground: 0 0% 98%;
+
+    --gold: 40 65% 58%;
 
     /* Sidebar tokens - Dark mode */
     --sidebar-background: 0 0% 5%;
