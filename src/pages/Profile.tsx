@@ -44,6 +44,7 @@ export default function Profile() {
 
   const [notificationSoundEnabled, setNotificationSoundEnabledState] = useState(true);
   const [emailNotificationEnabled, setEmailNotificationEnabledState] = useState(true);
+  const [browserNotifEnabled, setBrowserNotifEnabledState] = useState(false);
   const [selectedTone, setSelectedTone] = useState('chime');
   const [hasCustomTone, setHasCustomTone] = useState(false);
   const { previewTone } = useNotificationSound();
@@ -52,6 +53,7 @@ export default function Profile() {
     if (!user) return;
     setNotificationSoundEnabledState(getNotificationSoundEnabled(user.id));
     setEmailNotificationEnabledState(getEmailNotificationEnabled(user.id));
+    setBrowserNotifEnabledState(getBrowserNotificationsEnabled(user.id));
     setSelectedTone(getSelectedToneId(user.id));
     setHasCustomTone(!!getCustomToneData(user.id));
   }, [user]);
