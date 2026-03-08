@@ -355,7 +355,7 @@ export default function EditCalendar() {
           setIsDialogOpen(open);
           if (!open) setIsEditing(false);
         }}>
-          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto [&>button.absolute]:hidden">
             <DialogHeader>
               <div className="flex items-center justify-between">
                 <DialogTitle className="flex items-center gap-2">
