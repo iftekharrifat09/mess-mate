@@ -210,6 +210,10 @@ export default function CalculatorPage() {
       toast({ title: 'Amount exceeds remaining due', variant: 'destructive' });
       return;
     }
+    if (!editBillPayment && amt > currentBalance) {
+      toast({ title: 'Insufficient balance', description: `Current balance is ${formatCurrency(currentBalance)}`, variant: 'destructive' });
+      return;
+    }
     if (editBillPayment) {
       await calcStore.updateBillPayment(editBillPayment.id, { amount: amt, description: billDesc, categoryId: billCatId, categoryName: categories.find(c => c.id === billCatId)?.title || '' });
       setEditBillPayment(null);
