@@ -466,8 +466,8 @@ export default function CalendarModal() {
                   />
                 )}
                 {/* Ramadan crescent */}
-                {day.isRamadan && !day.isToday && (
-                  <span className="absolute top-0.5 right-0.5 text-[0.4rem] sm:text-[0.55rem] text-gold/40">☽</span>
+                {day.isRamadan && (
+                  <span className="absolute top-0.5 right-0.5 text-[0.5rem] sm:text-[0.65rem] text-gold drop-shadow-[0_0_2px_hsl(var(--gold)/0.6)]">☽</span>
                 )}
 
                 {/* English date */}
