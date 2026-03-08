@@ -453,11 +453,11 @@ export default function Profile() {
         className="space-y-6"
       >
         <div>
-          <h1 className="text-3xl font-bold text-foreground">My Profile</h1>
-          <p className="text-muted-foreground">Manage your account settings</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">My Profile</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Manage your account settings</p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2">
           {/* Basic Info Card */}
           <Card>
             <CardHeader>
