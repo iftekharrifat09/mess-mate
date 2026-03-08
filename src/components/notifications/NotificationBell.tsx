@@ -238,7 +238,7 @@ export default function NotificationBell() {
                     className={`p-3 hover:bg-muted/50 transition-colors ${!notification.seen ? 'bg-primary/5' : ''}`}
                   >
                     <div className="flex gap-2">
-                      <span className="text-lg">{getNotificationIcon(notification.type)}</span>
+                      <span className="text-lg">{getNotifIcon(notification.type)}</span>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{notification.title}</p>
                         <p className="text-xs text-muted-foreground line-clamp-2">{notification.message}</p>
