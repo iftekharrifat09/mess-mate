@@ -246,9 +246,9 @@ async function notifyMembers(messId, excludeUserId, notification) {
   if (notifications.length > 0) {
     await collections.notifications.insertMany(notifications);
 
-    // Send email notifications to verified members
+    // Send email notifications to verified members who have email notifications enabled
     for (const member of members) {
-      if (member.emailVerified) {
+      if (member.emailVerified && member.emailNotifications !== false) {
         await sendNotificationEmail(member, notification);
       }
     }
