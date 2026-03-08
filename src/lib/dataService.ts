@@ -955,6 +955,9 @@ export async function updateNotice(id: string, updates: Partial<Notice>): Promis
 }
 
 export async function deleteNotice(id: string): Promise<boolean> {
+  // Invalidate notice caches
+  apiCache.invalidatePrefix('notices:');
+  
   if (shouldUseBackend()) {
     const result = await api.deleteNoticeAPI(id);
     if (result.success) {
