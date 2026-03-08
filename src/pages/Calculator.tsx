@@ -371,6 +371,9 @@ export default function CalculatorPage() {
                 <div>
                   <p className="text-xs text-muted-foreground">Current Balance</p>
                   <p className={`text-xl font-bold ${currentBalance >= 0 ? 'text-info' : 'text-destructive'}`}>{formatCurrency(currentBalance)}</p>
+                  {isMonthlyFullyPaid && currentBalance > 0 && (
+                    <p className="text-[10px] text-muted-foreground mt-0.5">This balance will be refunded to members who overpaid</p>
+                  )}
                 </div>
               </div>
             </CardContent>
