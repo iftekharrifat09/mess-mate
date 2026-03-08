@@ -930,7 +930,7 @@ export default function CalculatorPage() {
 
       <DeleteConfirmDialog
         open={!!deleteTarget}
-        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        onOpenChange={(open) => { if (!open && !isDeleting) setDeleteTarget(null); }}
         onConfirm={() => {
           if (!deleteTarget) return;
           if (deleteTarget.type === 'category') handleDeleteCategory(deleteTarget.id);
