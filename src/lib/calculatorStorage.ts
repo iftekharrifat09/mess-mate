@@ -254,6 +254,67 @@ export async function deletePayment(id: string): Promise<void> {
   saveLocal(KEYS.PAYMENTS, getLocal<CalcPayment>(KEYS.PAYMENTS).filter(p => p.id !== id));
 }
 
+// ============= Bill Payments =============
+
+export async function getBillPayments(messId: string, monthId: string): Promise<CalcBillPayment[]> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.getCalcBillPaymentsAPI(messId, monthId);
+      if (result.success && result.data) {
+        return (result.data as any).billPayments || [];
+      }
+      if (result.usingLocalStorage) showFallbackAlert();
+    } catch (e) { console.error('Error fetching bill payments:', e); }
+  }
+  return getLocal<CalcBillPayment>(KEYS.BILL_PAYMENTS).filter(p => p.messId === messId && p.monthId === monthId);
+}
+
+export async function createBillPayment(data: Omit<CalcBillPayment, 'id' | 'createdAt'>): Promise<CalcBillPayment> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.createCalcBillPaymentAPI(data);
+      if (result.success && result.data) {
+        return (result.data as any).billPayment || result.data;
+      }
+      if (result.usingLocalStorage) showFallbackAlert();
+    } catch (e) { console.error('Error creating bill payment:', e); }
+  }
+  const all = getLocal<CalcBillPayment>(KEYS.BILL_PAYMENTS);
+  const item: CalcBillPayment = { ...data, id: genId(), createdAt: new Date().toISOString() };
+  all.push(item);
+  saveLocal(KEYS.BILL_PAYMENTS, all);
+  return item;
+}
+
+export async function updateBillPayment(id: string, updates: Partial<CalcBillPayment>): Promise<CalcBillPayment | undefined> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.updateCalcBillPaymentAPI(id, updates);
+      if (result.success && result.data) {
+        return (result.data as any).billPayment || result.data;
+      }
+      if (result.usingLocalStorage) showFallbackAlert();
+    } catch (e) { console.error('Error updating bill payment:', e); }
+  }
+  const all = getLocal<CalcBillPayment>(KEYS.BILL_PAYMENTS);
+  const idx = all.findIndex(p => p.id === id);
+  if (idx === -1) return undefined;
+  all[idx] = { ...all[idx], ...updates };
+  saveLocal(KEYS.BILL_PAYMENTS, all);
+  return all[idx];
+}
+
+export async function deleteBillPayment(id: string): Promise<void> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.deleteCalcBillPaymentAPI(id);
+      if (result.success) return;
+      if (result.usingLocalStorage) showFallbackAlert();
+    } catch (e) { console.error('Error deleting bill payment:', e); }
+  }
+  saveLocal(KEYS.BILL_PAYMENTS, getLocal<CalcBillPayment>(KEYS.BILL_PAYMENTS).filter(p => p.id !== id));
+}
+
 // ============= Calculation helpers =============
 
 export function calculateMemberDues(
@@ -279,4 +340,11 @@ export function calculateMemberDues(
   }
 
   return totalDue;
+}
+
+export function getCategoryPaidAmount(
+  billPayments: CalcBillPayment[],
+  categoryId: string
+): number {
+  return billPayments.filter(bp => bp.categoryId === categoryId).reduce((s, bp) => s + bp.amount, 0);
 }
