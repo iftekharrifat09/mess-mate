@@ -22,6 +22,7 @@ import * as dataService from '@/lib/dataService';
 import * as calcStore from '@/lib/calculatorStorage';
 import { Users } from 'lucide-react';
 import CalendarModal from '@/components/dashboard/CalendarModal';
+import { toBanglaDate, toBanglaDigits, toHijriDate, ENGLISH_MONTHS } from '@/lib/dateConversions';
 
 // Default empty states to show UI immediately
 const EMPTY_MONTH_SUMMARY: MonthSummary = {
