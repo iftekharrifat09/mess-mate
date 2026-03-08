@@ -163,7 +163,7 @@ export default function CalculatorPage() {
     } else {
       await calcStore.createCategory({ messId, monthId: activeMonthId, title: catTitle.trim(), totalCost: Number(catCost), status: 'unpaid' });
       if (!shouldUseBackend()) {
-        dataService.notifyMessMembers(messId, user?.id || '', { type: 'general', title: 'Expense Category Added', message: `New expense category "${catTitle.trim()}" added (${formatCurrency(Number(catCost))})` });
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Category Added', message: `New expense category "${catTitle.trim()}" added (${formatCurrency(Number(catCost))})` });
       }
     }
     setCatModal(false); setEditCat(null); setCatTitle(''); setCatCost('');
