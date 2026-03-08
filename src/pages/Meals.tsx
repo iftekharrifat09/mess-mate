@@ -97,15 +97,17 @@ export default function Meals() {
     
     setIsLoading(true);
     try {
-      const activeMonth = await dataService.getActiveMonth(user.messId);
+      const [activeMonth, membersData] = await Promise.all([
+        dataService.getActiveMonth(user.messId),
+        dataService.getMessMembers(user.messId),
+      ]);
+      setMembers(membersData);
       if (activeMonth) {
         const mealsData = await dataService.getMealsByMonthId(activeMonth.id);
         setMeals(mealsData.sort((a, b) => 
           new Date(b.date).getTime() - new Date(a.date).getTime()
         ));
       }
-      const membersData = await dataService.getMessMembers(user.messId);
-      setMembers(membersData);
     } catch (error) {
       console.error('Error loading meals:', error);
       toast({

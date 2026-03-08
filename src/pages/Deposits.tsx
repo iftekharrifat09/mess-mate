@@ -72,6 +72,7 @@ export default function Deposits() {
         dataService.getActiveMonth(user.messId),
         dataService.getMessMembers(user.messId),
       ]);
+      setMembers(membersData);
       
       if (activeMonth) {
         const depositsData = await dataService.getDepositsByMonthId(activeMonth.id);
@@ -79,7 +80,6 @@ export default function Deposits() {
           new Date(b.date).getTime() - new Date(a.date).getTime()
         ));
       }
-      setMembers(membersData);
     } catch (error) {
       console.error('Error loading deposits:', error);
     } finally {

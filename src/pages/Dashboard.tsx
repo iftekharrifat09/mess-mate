@@ -13,9 +13,10 @@ import NoticePopup from '@/components/notices/NoticePopup';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import { MonthSummary, MemberSummary, BazarDate, User } from '@/types';
 import { 
-  calculateMonthSummary, 
-  calculateMemberSummary, 
-  getAllMembersSummary 
+  fetchMonthData,
+  calculateMonthSummaryFromData, 
+  calculateMemberSummaryFromData, 
+  getAllMembersSummaryFromData 
 } from '@/lib/calculations';
 import * as dataService from '@/lib/dataService';
 import * as calcStore from '@/lib/calculatorStorage';
@@ -54,33 +55,32 @@ export default function Dashboard() {
     if (!user || dataLoadedRef.current) return;
     
     try {
-      // Load all primary data in a single parallel batch
-      const [mess, messMembers, activeMonth, dates] = await Promise.all([
+      // Load primary data in parallel
+      const [mess, activeMonth, dates] = await Promise.all([
         dataService.getMessById(user.messId),
-        dataService.getMessMembers(user.messId),
         dataService.getActiveMonth(user.messId),
         dataService.getBazarDatesByMessId(user.messId),
       ]);
 
-      // Set initial data immediately for faster perceived load
+      // Set initial data immediately
       startTransition(() => {
         if (mess) setMessName(mess.name);
-        setMembers(messMembers || []);
         setBazarDates(dates || []);
       });
 
       if (activeMonth) {
-        // Load calculations in parallel
-        const [mSummary, pSummary, allMembers] = await Promise.all([
-          calculateMonthSummary(activeMonth.id, user.messId),
-          calculateMemberSummary(user.id, activeMonth.id),
-          getAllMembersSummary(activeMonth.id, user.messId),
-        ]);
+        // Single fetch for all month data — no redundant API calls
+        const monthData = await fetchMonthData(activeMonth.id, user.messId);
+        const mSummary = calculateMonthSummaryFromData(activeMonth.id, monthData);
+        const pSummary = calculateMemberSummaryFromData(user.id, monthData);
+        const allMembers = getAllMembersSummaryFromData(monthData);
 
         startTransition(() => {
           setMonthSummary(mSummary);
           setPersonalSummary(pSummary);
           setMembersSummary(allMembers);
+          // Use pre-fetched members instead of separate call
+          setMembers(monthData.members);
         });
 
         // Load calc data for utility expenses

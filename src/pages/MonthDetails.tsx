@@ -48,8 +48,9 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import * as dataService from '@/lib/dataService';
 import { 
-  calculateMonthSummary, 
-  getAllMembersSummary, 
+  fetchMonthData,
+  calculateMonthSummaryFromData, 
+  getAllMembersSummaryFromData, 
   formatCurrency, 
   formatNumber 
 } from '@/lib/calculations';
@@ -121,15 +122,11 @@ export default function MonthDetails() {
       setMembers(messMembers);
       
       if (month) {
-        // Load all month data in a single parallel batch
-        const [summary, memSummary, meals, deposits, mealCosts, otherCosts] = await Promise.all([
-          calculateMonthSummary(month.id, user.messId),
-          getAllMembersSummary(month.id, user.messId),
-          dataService.getMealsByMonthId(month.id),
-          dataService.getDepositsByMonthId(month.id),
-          dataService.getMealCostsByMonthId(month.id),
-          dataService.getOtherCostsByMonthId(month.id),
-        ]);
+        // Single fetch for all month data — no redundant API calls
+        const monthData = await fetchMonthData(month.id, user.messId);
+        const summary = calculateMonthSummaryFromData(month.id, monthData);
+        const memSummary = getAllMembersSummaryFromData(monthData);
+        const { meals, deposits, mealCosts, otherCosts } = monthData;
         
         // Set summary data immediately
         startTransition(() => {
@@ -212,10 +209,9 @@ export default function MonthDetails() {
       // Load all summaries in parallel for speed
       const summaries = await Promise.all(
         inactiveMonths.map(async (month) => {
-          const [summary, mSummary] = await Promise.all([
-            calculateMonthSummary(month.id, user.messId),
-            getAllMembersSummary(month.id, user.messId),
-          ]);
+          const monthData = await fetchMonthData(month.id, user.messId);
+          const summary = calculateMonthSummaryFromData(month.id, monthData);
+          const mSummary = getAllMembersSummaryFromData(monthData);
           return { month, summary, membersSummary: mSummary };
         })
       );
