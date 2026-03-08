@@ -65,6 +65,10 @@ export default function CalculatorPage() {
   const [billDesc, setBillDesc] = useState('');
   const [editBillPayment, setEditBillPayment] = useState<CalcBillPayment | null>(null);
 
+  // Warning modal states
+  const [depositWarning, setDepositWarning] = useState(false);
+  const [billWarning, setBillWarning] = useState(false);
+
   const messId = user?.messId || '';
 
   const reload = useCallback(async () => {
