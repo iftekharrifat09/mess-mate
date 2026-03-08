@@ -22,6 +22,7 @@ import * as dataService from '@/lib/dataService';
 import { Notice } from '@/types';
 import { Megaphone, Plus, Edit2, Trash2, Calendar, Eye, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
+import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
 
 export default function Notices() {
   const { user } = useAuth();
@@ -34,6 +35,7 @@ export default function Notices() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Notice | null>(null);
 
   const isManager = user?.role === 'manager';
 
@@ -113,7 +115,7 @@ export default function Notices() {
   const handleDelete = async (notice: Notice) => {
     if (!user || deletingId) return;
     setDeletingId(notice.id);
-    
+    setDeleteTarget(null);
     try {
       await dataService.deleteNotice(notice.id);
       await dataService.notifyMessMembers(user.messId, user.id, {
@@ -267,7 +269,7 @@ export default function Notices() {
                               <Button variant="ghost" size="sm" onClick={() => handleEdit(notice)}>
                                 <Edit2 className="h-4 w-4" />
                               </Button>
-                              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(notice)} disabled={deletingId === notice.id}>
+                              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setDeleteTarget(notice)} disabled={deletingId === notice.id}>
                                 {deletingId === notice.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                               </Button>
                             </>
@@ -290,6 +292,14 @@ export default function Notices() {
           </div>
         )}
       </motion.div>
+
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
+        title={`Delete "${deleteTarget?.title}"?`}
+        description="This notice will be permanently deleted. This action cannot be undone."
+      />
     </DashboardLayout>
   );
 }

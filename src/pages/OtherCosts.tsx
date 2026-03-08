@@ -39,6 +39,7 @@ import { Receipt, Plus, Trash2, Edit2, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/calculations';
 import { Navigate } from 'react-router-dom';
+import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
 
 export default function OtherCosts() {
   const { user, isLoading: authLoading } = useAuth();
@@ -50,6 +51,7 @@ export default function OtherCosts() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     userId: '',
     amount: '',
@@ -195,6 +197,7 @@ export default function OtherCosts() {
   const handleDelete = async (costId: string) => {
     if (deletingId) return;
     setDeletingId(costId);
+    setDeleteTargetId(null);
     try {
       await dataService.deleteOtherCost(costId);
       loadData();
@@ -420,7 +423,7 @@ export default function OtherCosts() {
                                 size="sm" 
                                 variant="ghost" 
                                 className="text-destructive"
-                                onClick={() => handleDelete(cost.id)}
+                                onClick={() => setDeleteTargetId(cost.id)}
                                 disabled={deletingId === cost.id}
                               >
                                 {deletingId === cost.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
@@ -437,6 +440,14 @@ export default function OtherCosts() {
           </CardContent>
         </Card>
       </div>
+
+      <DeleteConfirmDialog
+        open={!!deleteTargetId}
+        onOpenChange={(open) => !open && setDeleteTargetId(null)}
+        onConfirm={() => deleteTargetId && handleDelete(deleteTargetId)}
+        title="Delete this cost?"
+        description="This cost entry will be permanently deleted. This action cannot be undone."
+      />
     </DashboardLayout>
   );
 }

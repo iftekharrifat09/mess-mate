@@ -22,6 +22,7 @@ import * as dataService from '@/lib/dataService';
 import { Note } from '@/types';
 import { StickyNote, Plus, Edit2, Trash2, Calendar, Eye, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
+import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
 
 export default function Notes() {
   const { user } = useAuth();
@@ -34,6 +35,7 @@ export default function Notes() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
 
   const isManager = user?.role === 'manager';
 
@@ -113,7 +115,7 @@ export default function Notes() {
   const handleDelete = async (id: string, title: string) => {
     if (!user || deletingId) return;
     setDeletingId(id);
-    
+    setDeleteTarget(null);
     try {
       await dataService.deleteNote(id);
       await dataService.notifyMessMembers(user.messId, user.id, {
@@ -268,7 +270,7 @@ export default function Notes() {
                               <Button variant="ghost" size="sm" onClick={() => handleEdit(note)}>
                                 <Edit2 className="h-3 w-3" />
                               </Button>
-                              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(note.id, note.title)} disabled={deletingId === note.id}>
+                              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setDeleteTarget({ id: note.id, title: note.title })} disabled={deletingId === note.id}>
                                 {deletingId === note.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Trash2 className="h-3 w-3" />}
                               </Button>
                             </>
@@ -293,6 +295,14 @@ export default function Notes() {
           </div>
         )}
       </motion.div>
+
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget.id, deleteTarget.title)}
+        title={`Delete "${deleteTarget?.title}"?`}
+        description="This note will be permanently deleted. This action cannot be undone."
+      />
     </DashboardLayout>
   );
 }

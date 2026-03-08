@@ -37,6 +37,7 @@ import { Wallet, Plus, Trash2, Edit2, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/calculations';
 import { Navigate } from 'react-router-dom';
+import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
 
 export default function Deposits() {
   const { user, isLoading: authLoading } = useAuth();
@@ -53,6 +54,7 @@ export default function Deposits() {
     note: '',
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const isManager = user?.role === 'manager';
@@ -171,6 +173,7 @@ export default function Deposits() {
   const handleDelete = async (depositId: string) => {
     if (deletingId) return;
     setDeletingId(depositId);
+    setDeleteTargetId(null);
     try {
       await dataService.deleteDeposit(depositId);
       loadData();
@@ -356,7 +359,7 @@ export default function Deposits() {
                                 size="sm" 
                                 variant="ghost" 
                                 className="text-destructive"
-                                onClick={() => handleDelete(deposit.id)}
+                                onClick={() => setDeleteTargetId(deposit.id)}
                                 disabled={deletingId === deposit.id}
                               >
                                 {deletingId === deposit.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
@@ -373,6 +376,14 @@ export default function Deposits() {
           </CardContent>
         </Card>
       </div>
+
+      <DeleteConfirmDialog
+        open={!!deleteTargetId}
+        onOpenChange={(open) => !open && setDeleteTargetId(null)}
+        onConfirm={() => deleteTargetId && handleDelete(deleteTargetId)}
+        title="Delete this deposit?"
+        description="This deposit will be permanently deleted. This action cannot be undone."
+      />
     </DashboardLayout>
   );
 }

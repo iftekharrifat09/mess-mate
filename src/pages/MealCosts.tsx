@@ -39,6 +39,7 @@ import { ShoppingCart, Plus, Trash2, Edit2, Wallet, Loader2 } from 'lucide-react
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/calculations';
 import { Navigate } from 'react-router-dom';
+import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
 
 export default function MealCosts() {
   const { user, isLoading: authLoading } = useAuth();
@@ -51,6 +52,7 @@ export default function MealCosts() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     userId: '',
     amount: '',
@@ -231,6 +233,7 @@ export default function MealCosts() {
   const handleDelete = async (costId: string) => {
     if (deletingId) return;
     setDeletingId(costId);
+    setDeleteTargetId(null);
     try {
       await dataService.deleteMealCost(costId);
       loadData();
@@ -457,7 +460,7 @@ export default function MealCosts() {
                                 size="sm" 
                                 variant="ghost" 
                                 className="text-destructive"
-                                onClick={() => handleDelete(cost.id)}
+                                onClick={() => setDeleteTargetId(cost.id)}
                                 disabled={deletingId === cost.id}
                               >
                                 {deletingId === cost.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
@@ -474,6 +477,14 @@ export default function MealCosts() {
           </CardContent>
         </Card>
       </motion.div>
+
+      <DeleteConfirmDialog
+        open={!!deleteTargetId}
+        onOpenChange={(open) => !open && setDeleteTargetId(null)}
+        onConfirm={() => deleteTargetId && handleDelete(deleteTargetId)}
+        title="Delete this meal cost?"
+        description="This meal cost entry will be permanently deleted. This action cannot be undone."
+      />
     </DashboardLayout>
   );
 }

@@ -23,6 +23,7 @@ import {
   CheckCircle, Users, Wallet, DollarSign, Receipt, CreditCard,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -48,6 +49,7 @@ export default function CalculatorPage() {
   const [excUserId, setExcUserId] = useState('');
   const [excAmount, setExcAmount] = useState('');
   const [excStep, setExcStep] = useState<1 | 2>(1);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: string; id: string; label: string } | null>(null);
 
   // Member Deposit modal
   const [payModal, setPayModal] = useState(false);
@@ -163,6 +165,7 @@ export default function CalculatorPage() {
   };
 
   const handleDeleteCategory = async (id: string) => {
+    setDeleteTarget(null);
     await calcStore.deleteCategory(id);
     reload();
     toast({ title: 'Category deleted', variant: 'destructive' });
@@ -177,6 +180,7 @@ export default function CalculatorPage() {
   };
 
   const handleDeleteException = async (id: string) => {
+    setDeleteTarget(null);
     await calcStore.deleteException(id);
     reload();
   };
@@ -240,6 +244,7 @@ export default function CalculatorPage() {
   };
 
   const handleDeleteDeposit = async (id: string) => {
+    setDeleteTarget(null);
     await calcStore.deletePayment(id);
     reload();
     toast({ title: 'Deposit deleted', variant: 'destructive' });
@@ -277,6 +282,7 @@ export default function CalculatorPage() {
   };
 
   const handleDeleteBillPayment = async (id: string) => {
+    setDeleteTarget(null);
     await calcStore.deleteBillPayment(id);
     reload();
     toast({ title: 'Bill payment deleted', variant: 'destructive' });
@@ -487,7 +493,7 @@ export default function CalculatorPage() {
                                     <div key={ex.id} className="flex items-center justify-between">
                                       <span>{ex.userName} (exception): <span className="font-semibold text-foreground">{formatCurrency(ex.amount)}</span></span>
                                       {isManager && (
-                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => handleDeleteException(ex.id)}>
+                                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setDeleteTarget({ type: 'exception', id: ex.id, label: `${ex.userName}'s exception` })}>
                                           <Trash2 className="h-3 w-3 text-destructive" />
                                         </Button>
                                       )}
@@ -510,7 +516,7 @@ export default function CalculatorPage() {
                               <Button variant="outline" size="sm" onClick={() => { setEditCat(cat); setCatTitle(cat.title); setCatCost(String(cat.totalCost)); setCatModal(true); }}>
                                 <Edit2 className="h-3.5 w-3.5 mr-1" /> Edit
                               </Button>
-                              <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDeleteCategory(cat.id)}>
+                              <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteTarget({ type: 'category', id: cat.id, label: `"${cat.title}"` })}>
                                 <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
                               </Button>
                               <Button variant="outline" size="sm" onClick={() => { setExcModal(cat.id); setExcStep(1); setExcUserId(''); setExcAmount(''); }}>
@@ -573,7 +579,7 @@ export default function CalculatorPage() {
                                   }}>
                                     <Edit2 className="h-4 w-4" />
                                   </Button>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteDeposit(p.id)}>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteTarget({ type: 'deposit', id: p.id, label: `${p.userName}'s deposit` })}>
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
                                 </div>
@@ -619,7 +625,7 @@ export default function CalculatorPage() {
                                   }}>
                                     <Edit2 className="h-4 w-4" />
                                   </Button>
-                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteBillPayment(bp.id)}>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteTarget({ type: 'billPayment', id: bp.id, label: `bill payment for "${bp.categoryName}"` })}>
                                     <Trash2 className="h-4 w-4" />
                                   </Button>
                                 </div>
@@ -835,6 +841,20 @@ export default function CalculatorPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          if (deleteTarget.type === 'category') handleDeleteCategory(deleteTarget.id);
+          else if (deleteTarget.type === 'exception') handleDeleteException(deleteTarget.id);
+          else if (deleteTarget.type === 'deposit') handleDeleteDeposit(deleteTarget.id);
+          else if (deleteTarget.type === 'billPayment') handleDeleteBillPayment(deleteTarget.id);
+        }}
+        title={`Delete ${deleteTarget?.label}?`}
+        description="This will be permanently deleted. This action cannot be undone."
+      />
     </DashboardLayout>
   );
 }

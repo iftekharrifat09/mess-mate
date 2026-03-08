@@ -28,6 +28,7 @@ import { useToast } from '@/hooks/use-toast';
 import * as dataService from '@/lib/dataService';
 import { BazarDate, User } from '@/types';
 import { ShoppingCart, Plus, Edit2, Trash2, Calendar, CalendarIcon, AlertCircle, X, Loader2 } from 'lucide-react';
+import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
 import { format, isToday, isFuture, isPast } from 'date-fns';
 import { Navigate } from 'react-router-dom';
 
@@ -44,6 +45,7 @@ export default function BazarDates() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<BazarDate | null>(null);
 
   const isManager = user?.role === 'manager';
 
@@ -200,6 +202,7 @@ export default function BazarDates() {
   const handleDelete = async (bazar: BazarDate) => {
     if (deletingId) return;
     setDeletingId(bazar.id);
+    setDeleteTarget(null);
     try {
       await dataService.deleteBazarDate(bazar.id);
       toast({ title: 'Bazar date deleted', variant: 'success' });
@@ -442,7 +445,7 @@ export default function BazarDates() {
                             <Button variant="ghost" size="sm" onClick={() => handleEdit(bazar)}>
                               <Edit2 className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(bazar)} disabled={deletingId === bazar.id}>
+                            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setDeleteTarget(bazar)} disabled={deletingId === bazar.id}>
                               {deletingId === bazar.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                             </Button>
                           </div>
@@ -479,7 +482,7 @@ export default function BazarDates() {
                         <p className="text-muted-foreground">{getMemberName(bazar.userId)}</p>
                         <p className="text-xs text-muted-foreground">{format(new Date(bazar.date), 'EEE, MMM d')}</p>
                       </div>
-                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(bazar)}>
+                      <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setDeleteTarget(bazar)}>
                         <Trash2 className="h-4 w-4" />
                       </Button>
                     </div>
@@ -490,6 +493,14 @@ export default function BazarDates() {
           </Card>
         </div>
       </motion.div>
+
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
+        title="Delete this bazar date?"
+        description="This bazar date entry will be permanently deleted. This action cannot be undone."
+      />
     </DashboardLayout>
   );
 }
