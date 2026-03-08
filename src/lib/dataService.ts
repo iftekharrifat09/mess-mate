@@ -1468,16 +1468,27 @@ export async function deleteChatMessageById(id: string): Promise<boolean> {
   return storage.deleteChatMessage(id);
 }
 
-export async function chatHeartbeat(): Promise<{ activeUsers: Array<{ userId: string; name: string }>; count: number }> {
+export async function chatHeartbeat(): Promise<{ activeUsers: Array<{ userId: string; name: string }>; count: number; typingUsers: Array<{ userId: string; name: string }> }> {
   if (shouldUseBackend()) {
     try {
       const result = await api.chatHeartbeatAPI();
       if (result.success && result.data) {
-        return { activeUsers: (result.data as any).activeUsers || [], count: (result.data as any).count || 0 };
+        return {
+          activeUsers: (result.data as any).activeUsers || [],
+          count: (result.data as any).count || 0,
+          typingUsers: (result.data as any).typingUsers || [],
+        };
       }
     } catch {}
   }
-  return { activeUsers: [], count: 0 };
+  return { activeUsers: [], count: 0, typingUsers: [] };
+}
+
+export async function chatTyping(): Promise<void> {
+  if (shouldUseBackend()) {
+    try { await api.chatTypingAPI(); } catch {}
+  }
+}
 }
 
 export async function chatLeave(): Promise<void> {
