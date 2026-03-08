@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, forwardRef } from 'react';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
@@ -18,10 +18,11 @@ import { syncUnsyncedChatMessages } from '@/lib/dataService';
 import { getUnsyncedChatMessages } from '@/lib/storage';
 import type { ChatMessage, ChatActiveUser, ChatReaction } from '@/types';
 import { toast } from '@/hooks/use-toast';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from 'framer-motion';
 import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
 
 const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+const SWIPE_THRESHOLD = -60;
 
 // Typing indicator bubble with bouncing dots animation
 function TypingIndicator({ names }: { names: string[] }) {
@@ -57,35 +58,39 @@ function TypingIndicator({ names }: { names: string[] }) {
 }
 
 // Emoji reaction picker popup
-function ReactionPicker({ onSelect, isOwn }: { onSelect: (emoji: string) => void; isOwn: boolean }) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.8 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.8 }}
-      className={cn(
-        'absolute bottom-full mb-1 flex items-center gap-0.5 bg-card border border-border rounded-full px-2 py-1 shadow-lg z-20',
-        isOwn ? 'right-0' : 'left-0'
-      )}
-    >
-      {REACTION_EMOJIS.map(emoji => (
-        <button
-          key={emoji}
-          onClick={() => onSelect(emoji)}
-          className="hover:scale-125 transition-transform text-lg px-0.5 cursor-pointer"
-        >
-          {emoji}
-        </button>
-      ))}
-    </motion.div>
-  );
-}
+const ReactionPicker = forwardRef<HTMLDivElement, { onSelect: (emoji: string) => void; isOwn: boolean }>(
+  ({ onSelect, isOwn }, ref) => {
+    return (
+      <motion.div
+        ref={ref}
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.8 }}
+        className={cn(
+          'absolute bottom-full mb-1 flex items-center gap-0.5 bg-card border border-border rounded-full px-2 py-1 shadow-lg z-20',
+          isOwn ? 'right-0' : 'left-0'
+        )}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {REACTION_EMOJIS.map(emoji => (
+          <button
+            key={emoji}
+            onClick={(e) => { e.stopPropagation(); onSelect(emoji); }}
+            className="hover:scale-125 transition-transform text-lg px-0.5 cursor-pointer"
+          >
+            {emoji}
+          </button>
+        ))}
+      </motion.div>
+    );
+  }
+);
+ReactionPicker.displayName = 'ReactionPicker';
 
 // Grouped reactions display below a message
 function ReactionsDisplay({ reactions, userId, onToggle }: { reactions: ChatReaction[]; userId: string; onToggle: (emoji: string) => void }) {
   if (!reactions || reactions.length === 0) return null;
 
-  // Group by emoji
   const grouped: Record<string, { count: number; users: string[]; hasOwn: boolean }> = {};
   for (const r of reactions) {
     if (!grouped[r.emoji]) grouped[r.emoji] = { count: 0, users: [], hasOwn: false };
@@ -99,7 +104,7 @@ function ReactionsDisplay({ reactions, userId, onToggle }: { reactions: ChatReac
       {Object.entries(grouped).map(([emoji, data]) => (
         <button
           key={emoji}
-          onClick={() => onToggle(emoji)}
+          onClick={(e) => { e.stopPropagation(); onToggle(emoji); }}
           title={data.users.join(', ')}
           className={cn(
             'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs border cursor-pointer transition-colors',
@@ -112,6 +117,47 @@ function ReactionsDisplay({ reactions, userId, onToggle }: { reactions: ChatReac
           {data.count > 1 && <span className="text-[10px] font-medium">{data.count}</span>}
         </button>
       ))}
+    </div>
+  );
+}
+
+// Swipeable message wrapper for mobile reply
+function SwipeableMessage({ children, onSwipeReply, isOwn }: { children: React.ReactNode; onSwipeReply: () => void; isOwn: boolean }) {
+  const x = useMotionValue(0);
+  const replyIconOpacity = useTransform(x, [-80, -40, 0], [1, 0.5, 0]);
+  const replyIconScale = useTransform(x, [-80, -40, 0], [1, 0.6, 0.3]);
+  const [swiped, setSwiped] = useState(false);
+
+  const handleDragEnd = (_: any, info: PanInfo) => {
+    if (info.offset.x < SWIPE_THRESHOLD && !swiped) {
+      setSwiped(true);
+      onSwipeReply();
+      setTimeout(() => setSwiped(false), 300);
+    }
+  };
+
+  return (
+    <div className="relative overflow-hidden">
+      {/* Reply icon revealed on swipe */}
+      <motion.div
+        className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center justify-center"
+        style={{ opacity: replyIconOpacity, scale: replyIconScale }}
+      >
+        <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+          <Reply className="h-4 w-4 text-primary" />
+        </div>
+      </motion.div>
+      <motion.div
+        drag="x"
+        dragDirectionLock
+        dragConstraints={{ left: -80, right: 0 }}
+        dragElastic={0.1}
+        onDragEnd={handleDragEnd}
+        style={{ x }}
+        className="relative z-10"
+      >
+        {children}
+      </motion.div>
     </div>
   );
 }
@@ -157,13 +203,11 @@ export default function Chat() {
 
   useEffect(() => { loadMessages(); }, [loadMessages]);
 
-  // Poll messages every 3 seconds
   useEffect(() => {
     const interval = setInterval(loadMessages, 3000);
     return () => clearInterval(interval);
   }, [loadMessages]);
 
-  // Heartbeat every 5 seconds for active presence + typing
   useEffect(() => {
     const sendHeartbeat = async () => {
       const result = await dataService.chatHeartbeat();
@@ -178,7 +222,6 @@ export default function Chat() {
     };
   }, []);
 
-  // Auto-sync (silent, automatic)
   useEffect(() => {
     const doSync = async () => {
       try {
@@ -196,11 +239,15 @@ export default function Chat() {
 
   // Close reaction picker on outside click
   useEffect(() => {
-    const handler = () => setReactionPickerMsgId(null);
-    if (reactionPickerMsgId) {
-      document.addEventListener('click', handler);
-      return () => document.removeEventListener('click', handler);
-    }
+    if (!reactionPickerMsgId) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest('[data-reaction-picker]')) {
+        setReactionPickerMsgId(null);
+      }
+    };
+    setTimeout(() => document.addEventListener('click', handler), 0);
+    return () => document.removeEventListener('click', handler);
   }, [reactionPickerMsgId]);
 
   const sendTyping = useCallback(() => {
@@ -279,12 +326,29 @@ export default function Chat() {
   };
 
   const handleReact = async (msgId: string, emoji: string) => {
+    if (!user) return;
     setReactionPickerMsgId(null);
+
+    // Optimistic update
+    setMessages(prev => prev.map(msg => {
+      if (msg.id !== msgId) return msg;
+      const reactions = [...(msg.reactions || [])];
+      const existingIdx = reactions.findIndex(r => r.userId === user.id && r.emoji === emoji);
+      if (existingIdx >= 0) {
+        reactions.splice(existingIdx, 1);
+      } else {
+        reactions.push({ emoji, userId: user.id, userName: user.fullName || 'Unknown' });
+      }
+      return { ...msg, reactions };
+    }));
+
     try {
       await dataService.reactChatMessage(msgId, emoji);
+      // Reload to get server state
       await loadMessages();
     } catch {
       toast({ title: 'Error', description: 'Failed to react', variant: 'destructive' });
+      await loadMessages(); // Revert on error
     }
   };
 
@@ -333,7 +397,11 @@ export default function Chat() {
             <Reply className="h-3.5 w-3.5 mr-2" />
             Reply
           </DropdownMenuItem>
-          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setReactionPickerMsgId(msg.id); }}>
+          <DropdownMenuItem onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setReactionPickerMsgId(prev => prev === msg.id ? null : msg.id);
+          }}>
             <SmilePlus className="h-3.5 w-3.5 mr-2" />
             React
           </DropdownMenuItem>
@@ -351,6 +419,133 @@ export default function Chat() {
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+    );
+  };
+
+  const renderMessage = (msg: ChatMessage) => {
+    const isOwn = msg.userId === user?.id;
+    const isEditing = editingId === msg.id;
+    const showReactionPicker = reactionPickerMsgId === msg.id;
+
+    const messageContent = (
+      <motion.div
+        key={msg.id}
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0 }}
+        className={cn('flex gap-2 mb-3 group px-1', isOwn ? 'flex-row-reverse' : 'flex-row')}
+      >
+        {!isOwn && (
+          <Avatar className="h-8 w-8 mt-1 flex-shrink-0">
+            <AvatarFallback className="text-xs bg-primary/10 text-primary">
+              {getInitials(msg.senderName)}
+            </AvatarFallback>
+          </Avatar>
+        )}
+        <div className={cn('max-w-[75%] min-w-[120px] flex flex-col', isOwn ? 'items-end' : 'items-start')}>
+          {!isOwn && (
+            <p className="text-xs font-medium text-muted-foreground mb-1 px-1">{msg.senderName}</p>
+          )}
+
+          {/* Reply label above the bubble (WhatsApp style) */}
+          {msg.replyTo && !isEditing && (
+            <div className={cn('flex items-center gap-1 mb-0.5 px-1', isOwn ? 'flex-row-reverse' : 'flex-row')}>
+              <Reply className="h-3 w-3 text-muted-foreground" />
+              <span className="text-[10px] text-muted-foreground">
+                {isOwn ? 'You' : msg.senderName} replied to {msg.replyTo.senderName === user?.fullName ? 'you' : msg.replyTo.senderName}
+              </span>
+            </div>
+          )}
+
+          <div className="flex items-start gap-1 relative">
+            {isOwn && !isEditing && <MessageMenu msg={msg} isOwn={isOwn} />}
+
+            <div className="relative" data-reaction-picker={showReactionPicker ? 'true' : undefined}>
+              {/* Reaction picker */}
+              <AnimatePresence>
+                {showReactionPicker && (
+                  <ReactionPicker
+                    isOwn={isOwn}
+                    onSelect={(emoji) => handleReact(msg.id, emoji)}
+                  />
+                )}
+              </AnimatePresence>
+
+              <div
+                className={cn(
+                  'rounded-2xl px-4 py-2',
+                  isOwn
+                    ? 'bg-primary text-primary-foreground rounded-tr-sm'
+                    : 'bg-muted text-foreground rounded-tl-sm'
+                )}
+                onDoubleClick={() => setReactionPickerMsgId(prev => prev === msg.id ? null : msg.id)}
+              >
+                {/* Reply quote inside bubble */}
+                {msg.replyTo && !isEditing && (
+                  <div className={cn(
+                    'mb-2 pl-3 py-1.5 rounded-lg text-xs border-l-2',
+                    isOwn
+                      ? 'border-primary-foreground/40 bg-primary-foreground/10'
+                      : 'border-primary/40 bg-primary/5'
+                  )}>
+                    <p className={cn('font-semibold text-[11px]', isOwn ? 'text-primary-foreground/80' : 'text-primary')}>
+                      {msg.replyTo.senderName}
+                    </p>
+                    <p className={cn('line-clamp-1', isOwn ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
+                      {msg.replyTo.message}
+                    </p>
+                  </div>
+                )}
+
+                {isEditing ? (
+                  <div className="flex items-center gap-2">
+                    <Input
+                      ref={editInputRef}
+                      value={editText}
+                      onChange={e => setEditText(e.target.value)}
+                      onKeyDown={handleEditKeyDown}
+                      maxLength={2000}
+                      className="h-7 text-sm bg-background text-foreground border-none rounded-lg min-w-[150px]"
+                    />
+                    <Button size="icon" className="h-6 w-6 flex-shrink-0" onClick={handleEditSave}>
+                      <Send className="h-3 w-3" />
+                    </Button>
+                    <Button size="icon" variant="ghost" className="h-6 w-6 flex-shrink-0" onClick={() => { setEditingId(null); setEditText(''); }}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ) : (
+                  <>
+                    <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
+                    <div className={cn('flex items-center gap-1 mt-1', isOwn ? 'justify-end' : 'justify-start')}>
+                      <span className={cn('text-[10px]', isOwn ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
+                        {format(new Date(msg.createdAt), 'h:mm a')}
+                        {msg.editedAt && ' • edited'}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              {/* Reactions display below the bubble */}
+              <ReactionsDisplay
+                reactions={msg.reactions || []}
+                userId={user?.id || ''}
+                onToggle={(emoji) => handleReact(msg.id, emoji)}
+              />
+            </div>
+
+            {!isOwn && !isEditing && <MessageMenu msg={msg} isOwn={isOwn} />}
+          </div>
+        </div>
+      </motion.div>
+    );
+
+    // Wrap in swipeable for mobile
+    return (
+      <SwipeableMessage key={msg.id} isOwn={isOwn} onSwipeReply={() => handleReply(msg)}>
+        {messageContent}
+      </SwipeableMessage>
     );
   };
 
@@ -407,131 +602,11 @@ export default function Chat() {
                     </span>
                   </div>
                   <AnimatePresence>
-                    {group.messages.map((msg) => {
-                      const isOwn = msg.userId === user?.id;
-                      const isEditing = editingId === msg.id;
-                      const showReactionPicker = reactionPickerMsgId === msg.id;
-
-                      return (
-                        <motion.div
-                          key={msg.id}
-                          initial={{ opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0 }}
-                          className={cn('flex gap-2 mb-3 group', isOwn ? 'flex-row-reverse' : 'flex-row')}
-                        >
-                          {!isOwn && (
-                            <Avatar className="h-8 w-8 mt-1 flex-shrink-0">
-                              <AvatarFallback className="text-xs bg-primary/10 text-primary">
-                                {getInitials(msg.senderName)}
-                              </AvatarFallback>
-                            </Avatar>
-                          )}
-                          <div className={cn('max-w-[75%] min-w-[120px] flex flex-col', isOwn ? 'items-end' : 'items-start')}>
-                            {!isOwn && (
-                              <p className="text-xs font-medium text-muted-foreground mb-1 px-1">{msg.senderName}</p>
-                            )}
-
-                            {/* Reply label above the bubble (WhatsApp style) */}
-                            {msg.replyTo && !isEditing && (
-                              <div className={cn('flex items-center gap-1 mb-0.5 px-1', isOwn ? 'flex-row-reverse' : 'flex-row')}>
-                                <Reply className="h-3 w-3 text-muted-foreground" />
-                                <span className="text-[10px] text-muted-foreground">
-                                  {isOwn ? 'You' : msg.senderName} replied to {msg.replyTo.senderName === user?.fullName ? 'you' : msg.replyTo.senderName}
-                                </span>
-                              </div>
-                            )}
-
-                            <div className="flex items-start gap-1 relative">
-                              {/* Three-dot menu on left for own messages */}
-                              {isOwn && !isEditing && <MessageMenu msg={msg} isOwn={isOwn} />}
-
-                              <div className="relative">
-                                {/* Reaction picker */}
-                                <AnimatePresence>
-                                  {showReactionPicker && (
-                                    <ReactionPicker
-                                      isOwn={isOwn}
-                                      onSelect={(emoji) => handleReact(msg.id, emoji)}
-                                    />
-                                  )}
-                                </AnimatePresence>
-
-                                <div
-                                  className={cn(
-                                    'rounded-2xl px-4 py-2',
-                                    isOwn
-                                      ? 'bg-primary text-primary-foreground rounded-tr-sm'
-                                      : 'bg-muted text-foreground rounded-tl-sm'
-                                  )}
-                                >
-                                  {/* Reply quote inside bubble */}
-                                  {msg.replyTo && !isEditing && (
-                                    <div className={cn(
-                                      'mb-2 pl-3 py-1.5 rounded-lg text-xs border-l-2',
-                                      isOwn
-                                        ? 'border-primary-foreground/40 bg-primary-foreground/10'
-                                        : 'border-primary/40 bg-primary/5'
-                                    )}>
-                                      <p className={cn('font-semibold text-[11px]', isOwn ? 'text-primary-foreground/80' : 'text-primary')}>
-                                        {msg.replyTo.senderName}
-                                      </p>
-                                      <p className={cn('line-clamp-1', isOwn ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
-                                        {msg.replyTo.message}
-                                      </p>
-                                    </div>
-                                  )}
-
-                                  {isEditing ? (
-                                    <div className="flex items-center gap-2">
-                                      <Input
-                                        ref={editInputRef}
-                                        value={editText}
-                                        onChange={e => setEditText(e.target.value)}
-                                        onKeyDown={handleEditKeyDown}
-                                        maxLength={2000}
-                                        className="h-7 text-sm bg-background text-foreground border-none rounded-lg min-w-[150px]"
-                                      />
-                                      <Button size="icon" className="h-6 w-6 flex-shrink-0" onClick={handleEditSave}>
-                                        <Send className="h-3 w-3" />
-                                      </Button>
-                                      <Button size="icon" variant="ghost" className="h-6 w-6 flex-shrink-0" onClick={() => { setEditingId(null); setEditText(''); }}>
-                                        <X className="h-3 w-3" />
-                                      </Button>
-                                    </div>
-                                  ) : (
-                                    <>
-                                      <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
-                                      <div className={cn('flex items-center gap-1 mt-1', isOwn ? 'justify-end' : 'justify-start')}>
-                                        <span className={cn('text-[10px]', isOwn ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
-                                          {format(new Date(msg.createdAt), 'h:mm a')}
-                                          {msg.editedAt && ' • edited'}
-                                        </span>
-                                      </div>
-                                    </>
-                                  )}
-                                </div>
-
-                                {/* Reactions display below the bubble */}
-                                <ReactionsDisplay
-                                  reactions={msg.reactions || []}
-                                  userId={user?.id || ''}
-                                  onToggle={(emoji) => handleReact(msg.id, emoji)}
-                                />
-                              </div>
-
-                              {/* Three-dot menu on right for other's messages */}
-                              {!isOwn && !isEditing && <MessageMenu msg={msg} isOwn={isOwn} />}
-                            </div>
-                          </div>
-                        </motion.div>
-                      );
-                    })}
+                    {group.messages.map(renderMessage)}
                   </AnimatePresence>
                 </div>
               ))}
 
-              {/* Typing indicator */}
               <AnimatePresence>
                 {typingUsers.length > 0 && (
                   <TypingIndicator names={typingUsers.map(u => u.name)} />
