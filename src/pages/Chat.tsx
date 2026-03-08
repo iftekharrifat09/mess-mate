@@ -20,7 +20,7 @@ import { getUnsyncedChatMessages } from '@/lib/storage';
 import type { ChatMessage, ChatActiveUser } from '@/types';
 import { toast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
-import { DeleteConfirmDialog } from '@/components/DeleteConfirmDialog';
+import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
 
 export default function Chat() {
   const { user } = useAuth();
