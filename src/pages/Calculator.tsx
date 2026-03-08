@@ -23,6 +23,7 @@ import {
   CheckCircle, Users, Wallet, DollarSign, Receipt, CreditCard,
 } from 'lucide-react';
 import { format } from 'date-fns';
+import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
