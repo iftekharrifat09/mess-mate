@@ -32,9 +32,17 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
+      className={isMealKing ? 'relative' : ''}
     >
-      <Card className={`shadow-card hover:shadow-card-hover transition-all ${balanceStatus.color} ${isCurrentUser ? 'ring-2 ring-primary' : ''} ${isMealKing ? 'ring-2 ring-yellow-400/60' : ''}`}
-        style={isMealKing ? { boxShadow: '0 0 20px 2px rgba(234, 179, 8, 0.15)' } : undefined}
+      {isMealKing && (
+        <>
+          {/* Animated golden glow layers */}
+          <div className="absolute -inset-[2px] rounded-xl bg-gradient-to-r from-yellow-400 via-amber-300 to-yellow-500 opacity-60 blur-sm animate-pulse pointer-events-none" />
+          <div className="absolute -inset-[1px] rounded-xl bg-gradient-to-br from-yellow-400/80 via-amber-200/40 to-yellow-500/80 pointer-events-none" />
+        </>
+      )}
+      <Card className={`relative shadow-card hover:shadow-card-hover transition-all ${balanceStatus.color} ${isCurrentUser ? 'ring-2 ring-primary' : ''} ${isMealKing ? 'border-yellow-400/50 bg-gradient-to-br from-yellow-50/30 via-card to-amber-50/20 dark:from-yellow-900/15 dark:via-card dark:to-amber-900/10' : ''}`}
+        style={isMealKing ? { boxShadow: '0 0 25px 4px rgba(234, 179, 8, 0.2), 0 0 60px 8px rgba(234, 179, 8, 0.08)' } : undefined}
       >
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
