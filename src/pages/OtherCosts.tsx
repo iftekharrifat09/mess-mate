@@ -197,6 +197,7 @@ export default function OtherCosts() {
   const handleDelete = async (costId: string) => {
     if (deletingId) return;
     setDeletingId(costId);
+    setDeleteTargetId(null);
     try {
       await dataService.deleteOtherCost(costId);
       loadData();
