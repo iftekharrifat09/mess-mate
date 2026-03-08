@@ -292,10 +292,10 @@ export default function CalendarModal() {
         >
           {/* Animated glow ring */}
           <motion.div
-            className="absolute inset-0 rounded-lg bg-gradient-to-r from-primary via-gold to-primary opacity-60 blur-md"
+            className="absolute inset-0 rounded-lg bg-gradient-to-r from-primary via-gold to-primary opacity-30 blur-sm"
             animate={{
-              scale: [1, 1.25, 1],
-              opacity: [0.5, 0.8, 0.5],
+              scale: [1, 1.15, 1],
+              opacity: [0.2, 0.4, 0.2],
             }}
             transition={{
               duration: 2.5,
