@@ -233,6 +233,7 @@ export default function MealCosts() {
   const handleDelete = async (costId: string) => {
     if (deletingId) return;
     setDeletingId(costId);
+    setDeleteTargetId(null);
     try {
       await dataService.deleteMealCost(costId);
       loadData();
