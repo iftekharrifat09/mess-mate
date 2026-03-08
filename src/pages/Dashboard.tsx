@@ -156,11 +156,14 @@ export default function Dashboard() {
         className="space-y-6"
       >
         {/* Header */}
-        <div ref={headerRef}>
-          <h1 className="text-3xl font-bold text-foreground">{messName}</h1>
-          <p className="text-muted-foreground">
-            Welcome back, {user?.fullName}! Here's your mess overview.
-          </p>
+        <div ref={headerRef} className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">{messName}</h1>
+            <p className="text-muted-foreground">
+              Welcome back, {user?.fullName}! Here's your mess overview.
+            </p>
+          </div>
+          <CalendarModal />
         </div>
 
         {/* Main Grid */}
