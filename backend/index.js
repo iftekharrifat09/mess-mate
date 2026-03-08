@@ -2538,6 +2538,15 @@ app.put("/api/calc-bill-payments/:id", authMiddleware, async (req, res) => {
     if (categoryName !== undefined) updateData.categoryName = categoryName;
     await collections.calcBillPayments.updateOne({ _id: new ObjectId(req.params.id) }, { $set: updateData });
     const doc = await collections.calcBillPayments.findOne({ _id: new ObjectId(req.params.id) });
+
+    if (doc) {
+      await notifyMembers(doc.messId, req.userId, {
+        title: "Bill Payment Updated",
+        message: `Bill payment for "${doc.categoryName}" updated to ৳${doc.amount}`,
+        type: "general",
+      });
+    }
+
     res.json({ success: true, billPayment: transformDoc(doc) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to update bill payment" });
