@@ -8,6 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -63,6 +64,10 @@ export default function CalculatorPage() {
   const [billAmount, setBillAmount] = useState('');
   const [billDesc, setBillDesc] = useState('');
   const [editBillPayment, setEditBillPayment] = useState<CalcBillPayment | null>(null);
+
+  // Warning modal states
+  const [depositWarning, setDepositWarning] = useState(false);
+  const [billWarning, setBillWarning] = useState(false);
 
   const messId = user?.messId || '';
 
@@ -175,13 +180,28 @@ export default function CalculatorPage() {
     reload();
   };
 
+  const isDepositsCapped = monthlyTotal > 0 && totalDeposits >= monthlyTotal;
+
   // Member Deposit handlers
   const handleOpenDepositModal = () => {
+    if (isDepositsCapped) {
+      setDepositWarning(true);
+      return;
+    }
     setPayModal(true); setPayStep(1); setPayUserId(''); setPayAmount(''); setPayDesc(''); setEditPayment(null);
   };
 
   const handleSaveDeposit = async () => {
     if (!payUserId || !payAmount) return;
+    // Cap: total deposits cannot exceed monthly total
+    if (!editPayment && monthlyTotal > 0) {
+      const newTotal = totalDeposits + Number(payAmount);
+      if (newTotal > monthlyTotal) {
+        const maxAllowed = monthlyTotal - totalDeposits;
+        toast({ title: 'Deposit exceeds limit', description: `Maximum deposit allowed is ${formatCurrency(maxAllowed)}. Total deposits cannot exceed Monthly Total.`, variant: 'destructive' });
+        return;
+      }
+    }
     // Block deposit if monthly total is fully paid and this member is also fully paid
     if (!editPayment && isMonthlyFullyPaid) {
       const due = memberDues[payUserId] || 0;
@@ -210,6 +230,10 @@ export default function CalculatorPage() {
 
   // Pay Bill handlers
   const handleOpenBillModal = () => {
+    if (unpaidCategories.length === 0) {
+      setBillWarning(true);
+      return;
+    }
     setBillModal(true); setBillCatId(''); setBillAmount(''); setBillDesc(''); setEditBillPayment(null);
   };
 
@@ -746,6 +770,42 @@ export default function CalculatorPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Deposit Warning Modal */}
+      <AlertDialog open={depositWarning} onOpenChange={setDepositWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-warning">
+              <Wallet className="h-5 w-5" /> Deposit Limit Reached
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Total deposits have reached the Monthly Total of <span className="font-semibold text-foreground">{formatCurrency(monthlyTotal)}</span>. No more deposits can be added as the total deposits cannot exceed the monthly total.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction>Understood</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* No Unpaid Categories Warning Modal */}
+      <AlertDialog open={billWarning} onOpenChange={setBillWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-warning">
+              <CheckCircle className="h-5 w-5" /> No Bills to Pay
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {categories.length === 0
+                ? 'There are no expense categories created yet. Please add a category first before paying bills.'
+                : 'All expense categories have been fully paid. There are no remaining bills to pay.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction>Understood</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }
