@@ -61,8 +61,7 @@ export default function Chat() {
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [unsyncedCount, setUnsyncedCount] = useState(0);
-  const [syncing, setSyncing] = useState(false);
+  
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [activeUsers, setActiveUsers] = useState<ChatActiveUser[]>([]);
