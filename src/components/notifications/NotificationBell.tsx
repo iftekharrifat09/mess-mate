@@ -11,18 +11,67 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/AuthContext';
 import * as dataService from '@/lib/dataService';
 import { getNotificationSoundEnabled } from '@/lib/preferences';
-import { Notification } from '@/types';
+import { getBrowserNotificationsEnabled } from '@/lib/browserNotifications';
+import type { Notification as AppNotification } from '@/types';
 import { format } from 'date-fns';
 import { Trash2, Check, CheckCheck } from 'lucide-react';
 import { useNotificationSound } from '@/hooks/useNotificationSound';
+import { toast as showToast } from '@/hooks/use-toast';
+
+const NOTIF_ICONS: Record<string, string> = {
+  meal: '🍽️',
+  deposit: '💰',
+  cost: '💳',
+  notice: '📢',
+  bazar: '🛒',
+  mess_update: '🏠',
+  join_request: '👋',
+};
+
+function getNotifIcon(type: AppNotification['type']) {
+  return NOTIF_ICONS[type] || '🔔';
+}
+
+// Request browser notification permission
+export async function requestBrowserNotificationPermission(): Promise<boolean> {
+  if (!('Notification' in window)) return false;
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') return false;
+  const result = await Notification.requestPermission();
+  return result === 'granted';
+}
+
+// Send a browser push notification
+function sendBrowserNotification(title: string, body: string, icon?: string) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    const notif = new Notification(title, {
+      body,
+      icon: icon || '/favicon.ico',
+      badge: '/favicon.ico',
+      tag: `mess-notif-${Date.now()}`,
+      silent: true, // We handle sound ourselves
+    });
+    // Auto-close after 5 seconds
+    setTimeout(() => notif.close(), 5000);
+    // Focus the tab when clicked
+    notif.onclick = () => {
+      window.focus();
+      notif.close();
+    };
+  } catch (e) {
+    console.warn('Browser notification failed:', e);
+  }
+}
 
 export default function NotificationBell() {
   const { user } = useAuth();
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [notifications, setNotifications] = useState<AppNotification[]>([]);
   const [unseenCount, setUnseenCount] = useState(0);
   const [isOpen, setIsOpen] = useState(false);
   const { playNotificationSound, primeNotificationSound } = useNotificationSound();
   const prevUnseenCountRef = useRef<number>(0);
+  const prevNotifIdsRef = useRef<Set<string>>(new Set());
   const hasLoadedOnceRef = useRef(false);
 
   const loadNotifications = useCallback(async () => {
@@ -33,15 +82,37 @@ export default function NotificationBell() {
 
       const count = await dataService.getUnseenNotificationsCount(user.id);
 
-      // Skip sound on the very first load only; afterwards play on any increase (even 0 -> 1)
-      if (
-        hasLoadedOnceRef.current &&
-        count > prevUnseenCountRef.current &&
-        getNotificationSoundEnabled(user.id)
-      ) {
-        playNotificationSound(user.id);
+      // Detect truly new notifications (not just unseen count change)
+      if (hasLoadedOnceRef.current && count > prevUnseenCountRef.current) {
+        // Find new notification items
+        const prevIds = prevNotifIdsRef.current;
+        const newNotifs = notifs.filter(n => !n.seen && !prevIds.has(n.id));
+
+        // Play sound
+        if (getNotificationSoundEnabled(user.id)) {
+          playNotificationSound(user.id);
+        }
+
+        // Send browser push notifications + in-app toasts for each new notification
+        for (const n of newNotifs) {
+          // Browser notification (if enabled and permission granted)
+          if (getBrowserNotificationsEnabled(user.id)) {
+            sendBrowserNotification(
+              n.title,
+              n.message,
+            );
+          }
+
+          // In-app toast
+          showToast({
+            title: `${getNotifIcon(n.type)} ${n.title}`,
+            description: n.message,
+          });
+        }
       }
 
+      // Update tracked IDs
+      prevNotifIdsRef.current = new Set(notifs.map(n => n.id));
       prevUnseenCountRef.current = count;
       hasLoadedOnceRef.current = true;
       setUnseenCount(count);
@@ -102,19 +173,6 @@ export default function NotificationBell() {
       loadNotifications();
     } catch (error) {
       console.error('Error deleting all notifications:', error);
-    }
-  };
-
-  const getNotificationIcon = (type: Notification['type']) => {
-    switch (type) {
-      case 'meal': return '🍽️';
-      case 'deposit': return '💰';
-      case 'cost': return '💳';
-      case 'notice': return '📢';
-      case 'bazar': return '🛒';
-      case 'mess_update': return '🏠';
-      case 'join_request': return '👋';
-      default: return '🔔';
     }
   };
 
@@ -180,7 +238,7 @@ export default function NotificationBell() {
                     className={`p-3 hover:bg-muted/50 transition-colors ${!notification.seen ? 'bg-primary/5' : ''}`}
                   >
                     <div className="flex gap-2">
-                      <span className="text-lg">{getNotificationIcon(notification.type)}</span>
+                      <span className="text-lg">{getNotifIcon(notification.type)}</span>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{notification.title}</p>
                         <p className="text-xs text-muted-foreground line-clamp-2">{notification.message}</p>

@@ -25,6 +25,8 @@ import {
   getCustomToneData, setCustomToneData, removeCustomTone,
 } from '@/lib/notificationTones';
 import { useNotificationSound } from '@/hooks/useNotificationSound';
+import { getBrowserNotificationsEnabled, setBrowserNotificationsEnabled } from '@/lib/browserNotifications';
+import { requestBrowserNotificationPermission } from '@/components/notifications/NotificationBell';
 import {
   updateProfileAPI,
   sendOtpAPI,
@@ -33,7 +35,7 @@ import {
   requestEmailChangeAPI,
   confirmEmailChangeAPI,
 } from '@/lib/api';
-import { User, Phone, Mail, Check, X, Edit2, Shield, Lock, KeyRound, Volume2, Loader2, MailCheck, Play, Upload, Trash2, Music } from 'lucide-react';
+import { User, Phone, Mail, Check, X, Edit2, Shield, Lock, KeyRound, Volume2, Loader2, MailCheck, Play, Upload, Trash2, Music, BellRing } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Profile() {
@@ -42,6 +44,7 @@ export default function Profile() {
 
   const [notificationSoundEnabled, setNotificationSoundEnabledState] = useState(true);
   const [emailNotificationEnabled, setEmailNotificationEnabledState] = useState(true);
+  const [browserNotifEnabled, setBrowserNotifEnabledState] = useState(false);
   const [selectedTone, setSelectedTone] = useState('chime');
   const [hasCustomTone, setHasCustomTone] = useState(false);
   const { previewTone } = useNotificationSound();
@@ -50,6 +53,7 @@ export default function Profile() {
     if (!user) return;
     setNotificationSoundEnabledState(getNotificationSoundEnabled(user.id));
     setEmailNotificationEnabledState(getEmailNotificationEnabled(user.id));
+    setBrowserNotifEnabledState(getBrowserNotificationsEnabled(user.id));
     setSelectedTone(getSelectedToneId(user.id));
     setHasCustomTone(!!getCustomToneData(user.id));
   }, [user]);
@@ -74,6 +78,20 @@ export default function Profile() {
     }
 
     toast({ title: checked ? 'Email notifications enabled' : 'Email notifications disabled', variant: 'success' });
+  };
+
+  const handleToggleBrowserNotifications = async (checked: boolean) => {
+    if (!user) return;
+    if (checked) {
+      const granted = await requestBrowserNotificationPermission();
+      if (!granted) {
+        toast({ title: 'Permission denied', description: 'Please allow notifications in your browser settings', variant: 'destructive' });
+        return;
+      }
+    }
+    setBrowserNotifEnabledState(checked);
+    setBrowserNotificationsEnabled(user.id, checked);
+    toast({ title: checked ? 'Browser notifications enabled' : 'Browser notifications disabled', variant: 'success' });
   };
 
   const handleSelectTone = (toneId: string) => {
@@ -602,6 +620,19 @@ export default function Profile() {
                   </p>
                 </div>
                 <Switch checked={emailNotificationEnabled} onCheckedChange={handleToggleEmailNotification} />
+              </div>
+
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-1">
+                  <p className="font-medium flex items-center gap-2">
+                    <BellRing className="h-4 w-4 text-muted-foreground" />
+                    Browser notifications
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Get push alerts even when the tab is in background
+                  </p>
+                </div>
+                <Switch checked={browserNotifEnabled} onCheckedChange={handleToggleBrowserNotifications} />
               </div>
 
               {/* Notification Tone Picker */}
