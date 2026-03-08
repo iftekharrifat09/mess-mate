@@ -2442,6 +2442,13 @@ app.post("/api/calc-payments", authMiddleware, async (req, res) => {
     const { userId, userName, amount, description, messId, monthId } = req.body;
     const doc = { userId, userName, amount, description, messId: messId || req.user.messId, monthId, createdAt: new Date() };
     const result = await collections.calcPayments.insertOne(doc);
+
+    await notifyMembers(doc.messId, req.userId, {
+      title: "Member Deposit Recorded",
+      message: `${userName} deposited ৳${amount}${description ? ` - ${description}` : ""}`,
+      type: "general",
+    });
+
     res.json({ success: true, payment: { id: result.insertedId.toString(), ...doc } });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to create payment" });
