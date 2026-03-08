@@ -25,8 +25,7 @@ import {
   getCustomToneData, setCustomToneData, removeCustomTone,
 } from '@/lib/notificationTones';
 import { useNotificationSound } from '@/hooks/useNotificationSound';
-import { getBrowserNotificationsEnabled, setBrowserNotificationsEnabled } from '@/lib/browserNotifications';
-import { requestBrowserNotificationPermission } from '@/components/notifications/NotificationBell';
+import { getBrowserNotificationsEnabled, setBrowserNotificationsEnabled, requestBrowserNotificationPermission } from '@/lib/browserNotifications';
 import {
   updateProfileAPI,
   sendOtpAPI,
