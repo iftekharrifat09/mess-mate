@@ -9,7 +9,7 @@ import {
   Loader2, AlertCircle, Clock, BatteryCharging, Receipt
 } from 'lucide-react';
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine
+  ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, ReferenceLine
 } from 'recharts';
 import {
   getDescoSettings, fetchAllDescoData,
