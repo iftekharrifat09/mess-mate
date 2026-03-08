@@ -253,11 +253,18 @@ export default function CalculatorPage() {
         }
       }
     }
+    const memberName = members.find(m => m.id === payUserId)?.fullName || '';
     if (editPayment) {
       await calcStore.updatePayment(editPayment.id, { amount: Number(payAmount), description: payDesc });
+      if (!shouldUseBackend()) {
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'general', title: 'Deposit Updated', message: `${memberName}'s deposit has been updated to ${formatCurrency(Number(payAmount))}` });
+      }
       setEditPayment(null);
     } else {
-      await calcStore.createPayment({ messId, monthId: activeMonthId, userId: payUserId, userName: members.find(m => m.id === payUserId)?.fullName || '', amount: Number(payAmount), description: payDesc });
+      await calcStore.createPayment({ messId, monthId: activeMonthId, userId: payUserId, userName: memberName, amount: Number(payAmount), description: payDesc });
+      if (!shouldUseBackend()) {
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'general', title: 'Member Deposit Recorded', message: `${memberName} deposited ${formatCurrency(Number(payAmount))}${payDesc ? ` - ${payDesc}` : ''}` });
+      }
     }
     setPayModal(false); setPayUserId(''); setPayAmount(''); setPayDesc(''); setPayStep(1);
     reload();
