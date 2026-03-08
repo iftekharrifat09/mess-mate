@@ -2877,8 +2877,10 @@ app.get("/api/desco/alert-status", authMiddleware, async (req, res) => {
 // CHAT API
 // ============================================
 
-// In-memory active chat users: { messId -> { userId -> lastPing timestamp } }
+// In-memory active chat users: { messId -> { userId -> { timestamp, name } } }
 const activeChatUsers = new Map();
+// In-memory typing indicators: { messId -> { userId -> { timestamp, name } } }
+const typingUsers = new Map();
 
 // Heartbeat - mark user as active on chat page
 app.post("/api/chat/heartbeat", authMiddleware, async (req, res) => {
