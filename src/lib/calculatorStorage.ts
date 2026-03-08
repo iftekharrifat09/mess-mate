@@ -31,10 +31,22 @@ export interface CalcPayment {
   createdAt: string;
 }
 
+export interface CalcBillPayment {
+  id: string;
+  messId: string;
+  monthId: string;
+  categoryId: string;
+  categoryName: string;
+  amount: number;
+  description: string;
+  createdAt: string;
+}
+
 const KEYS = {
   CATEGORIES: 'mess_calc_categories',
   EXCEPTIONS: 'mess_calc_exceptions',
   PAYMENTS: 'mess_calc_payments',
+  BILL_PAYMENTS: 'mess_calc_bill_payments',
 };
 
 // Helper to show localStorage fallback alert - debounced
