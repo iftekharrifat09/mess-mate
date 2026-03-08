@@ -282,6 +282,7 @@ export default function CalculatorPage() {
   };
 
   const handleDeleteBillPayment = async (id: string) => {
+    setDeleteTarget(null);
     await calcStore.deleteBillPayment(id);
     reload();
     toast({ title: 'Bill payment deleted', variant: 'destructive' });
