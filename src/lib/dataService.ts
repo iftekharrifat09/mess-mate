@@ -38,16 +38,23 @@ export async function getUsers(): Promise<User[]> {
 }
 
 export async function getUserById(id: string): Promise<User | undefined> {
+  if (!id) return undefined;
+  
+  // Check cache first
+  const cacheKey = cacheKeys.user(id);
+  const cached = apiCache.get<User>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     try {
       const result = await api.getUserByIdAPI(id);
       if (result.success && result.data) {
         const data = result.data as any;
         const user = data.user || data;
-        // Ensure fullName is set (backend might only return 'name')
         if (user && !user.fullName && user.name) {
           user.fullName = user.name;
         }
+        if (user) apiCache.set(cacheKey, user, apiCache.getTTL('default'));
         return user;
       }
     } catch (error) {
