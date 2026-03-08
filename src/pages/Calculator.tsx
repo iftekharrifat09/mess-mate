@@ -359,81 +359,81 @@ export default function CalculatorPage() {
     <DashboardLayout>
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between flex-wrap gap-4">
+        <div className="space-y-3 md:space-y-0 md:flex md:items-center md:justify-between md:flex-wrap md:gap-4">
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl gradient-primary">
-              <CalcIcon className="h-6 w-6 text-primary-foreground" />
+            <div className="p-2 md:p-2.5 rounded-xl gradient-primary shrink-0">
+              <CalcIcon className="h-5 w-5 md:h-6 md:w-6 text-primary-foreground" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-foreground">Mess Expenses</h1>
-              <p className="text-sm text-muted-foreground">Manage monthly cost categories & payments</p>
+              <h1 className="text-xl md:text-2xl font-bold text-foreground">Mess Expenses</h1>
+              <p className="text-xs md:text-sm text-muted-foreground">Manage monthly cost categories & payments</p>
             </div>
           </div>
           {isManager && (
             <div className="flex gap-2 flex-wrap">
-              <Button onClick={() => { setCatModal(true); setEditCat(null); setCatTitle(''); setCatCost(''); }}>
-                <Plus className="h-4 w-4 mr-2" /> Add Category
+              <Button size="sm" className="md:h-10 md:px-4 text-xs md:text-sm" onClick={() => { setCatModal(true); setEditCat(null); setCatTitle(''); setCatCost(''); }}>
+                <Plus className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1.5" /> Add Category
               </Button>
-              <Button variant="outline" onClick={handleOpenDepositModal}>
-                <Wallet className="h-4 w-4 mr-2" /> Member Deposit
+              <Button size="sm" variant="outline" className="md:h-10 md:px-4 text-xs md:text-sm" onClick={handleOpenDepositModal}>
+                <Wallet className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1.5" /> Deposit
               </Button>
-              <Button variant="secondary" onClick={handleOpenBillModal} className="relative overflow-hidden group transition-all duration-300 hover:shadow-lg hover:shadow-primary/25 hover:scale-105 hover:bg-primary hover:text-primary-foreground">
+              <Button size="sm" variant="secondary" className="md:h-10 md:px-4 text-xs md:text-sm relative overflow-hidden group transition-all duration-300 hover:shadow-lg hover:shadow-primary/25 hover:scale-105 hover:bg-primary hover:text-primary-foreground" onClick={handleOpenBillModal}>
                 <span className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary-foreground/10 to-primary/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
-                <CreditCard className="h-4 w-4 mr-2 transition-transform duration-300 group-hover:rotate-12" /> Pay Bill
+                <CreditCard className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1.5 transition-transform duration-300 group-hover:rotate-12" /> Pay Bill
               </Button>
             </div>
           )}
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-3 md:gap-4">
           <Card className="shadow-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary/10"><DollarSign className="h-5 w-5 text-primary" /></div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Monthly Total</p>
-                  <div className="flex items-center gap-2">
-                    <p className="text-xl font-bold">{formatCurrency(monthlyTotal)}</p>
-                    {isMonthlyFullyPaid && <Badge className="bg-success text-success-foreground text-xs">Paid</Badge>}
+            <CardContent className="p-4 md:pt-6 md:p-6">
+              <div className="flex items-center gap-2.5 md:gap-3">
+                <div className="p-2 md:p-2.5 rounded-lg bg-primary/10 shrink-0"><DollarSign className="h-4 w-4 md:h-5 md:w-5 text-primary" /></div>
+                <div className="min-w-0">
+                  <p className="text-[11px] md:text-xs text-muted-foreground">Monthly Total</p>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="text-lg md:text-xl font-bold truncate">{formatCurrency(monthlyTotal)}</p>
+                    {isMonthlyFullyPaid && <Badge className="bg-success text-success-foreground text-[10px] md:text-xs px-1.5">Paid</Badge>}
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card className="shadow-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-success/10"><Wallet className="h-5 w-5 text-success" /></div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Total Deposits</p>
-                  <p className="text-xl font-bold text-success">{formatCurrency(totalDeposits)}</p>
+            <CardContent className="p-4 md:pt-6 md:p-6">
+              <div className="flex items-center gap-2.5 md:gap-3">
+                <div className="p-2 md:p-2.5 rounded-lg bg-success/10 shrink-0"><Wallet className="h-4 w-4 md:h-5 md:w-5 text-success" /></div>
+                <div className="min-w-0">
+                  <p className="text-[11px] md:text-xs text-muted-foreground">Total Deposits</p>
+                  <p className="text-lg md:text-xl font-bold text-success truncate">{formatCurrency(totalDeposits)}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card className="shadow-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-destructive/10"><Receipt className="h-5 w-5 text-destructive" /></div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Total Paid</p>
-                  <p className="text-xl font-bold text-destructive">{formatCurrency(totalBillsPaid)}</p>
+            <CardContent className="p-4 md:pt-6 md:p-6">
+              <div className="flex items-center gap-2.5 md:gap-3">
+                <div className="p-2 md:p-2.5 rounded-lg bg-destructive/10 shrink-0"><Receipt className="h-4 w-4 md:h-5 md:w-5 text-destructive" /></div>
+                <div className="min-w-0">
+                  <p className="text-[11px] md:text-xs text-muted-foreground">Total Paid</p>
+                  <p className="text-lg md:text-xl font-bold text-destructive truncate">{formatCurrency(totalBillsPaid)}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card className="shadow-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${currentBalance >= 0 ? 'bg-info/10' : 'bg-destructive/10'}`}>
-                  <CalcIcon className={`h-5 w-5 ${currentBalance >= 0 ? 'text-info' : 'text-destructive'}`} />
+            <CardContent className="p-4 md:pt-6 md:p-6">
+              <div className="flex items-center gap-2.5 md:gap-3">
+                <div className={`p-2 md:p-2.5 rounded-lg shrink-0 ${currentBalance >= 0 ? 'bg-info/10' : 'bg-destructive/10'}`}>
+                  <CalcIcon className={`h-4 w-4 md:h-5 md:w-5 ${currentBalance >= 0 ? 'text-info' : 'text-destructive'}`} />
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Current Balance</p>
-                  <p className={`text-xl font-bold ${currentBalance >= 0 ? 'text-info' : 'text-destructive'}`}>{formatCurrency(currentBalance)}</p>
+                <div className="min-w-0">
+                  <p className="text-[11px] md:text-xs text-muted-foreground">Current Balance</p>
+                  <p className={`text-lg md:text-xl font-bold truncate ${currentBalance >= 0 ? 'text-info' : 'text-destructive'}`}>{formatCurrency(currentBalance)}</p>
                   {isMonthlyFullyPaid && currentBalance > 0 && (
-                    <p className="text-[10px] text-muted-foreground mt-0.5">This balance will be refunded to members who overpaid</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">Refund pending</p>
                   )}
                 </div>
               </div>
@@ -567,15 +567,15 @@ export default function CalculatorPage() {
                           )}
 
                           {isManager && (
-                            <div className="flex gap-2 pt-2 border-t border-border">
-                              <Button variant="outline" size="sm" onClick={() => { setEditCat(cat); setCatTitle(cat.title); setCatCost(String(cat.totalCost)); setCatModal(true); }}>
-                                <Edit2 className="h-3.5 w-3.5 mr-1" /> Edit
+                            <div className="flex gap-1.5 md:gap-2 pt-2 border-t border-border flex-wrap">
+                              <Button variant="outline" size="sm" className="h-7 md:h-9 text-xs md:text-sm px-2 md:px-3" onClick={() => { setEditCat(cat); setCatTitle(cat.title); setCatCost(String(cat.totalCost)); setCatModal(true); }}>
+                                <Edit2 className="h-3 w-3 md:h-3.5 md:w-3.5 mr-1" /> Edit
                               </Button>
-                              <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteTarget({ type: 'category', id: cat.id, label: `"${cat.title}"` })}>
-                                <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
+                              <Button variant="outline" size="sm" className="h-7 md:h-9 text-xs md:text-sm px-2 md:px-3 text-destructive hover:text-destructive" onClick={() => setDeleteTarget({ type: 'category', id: cat.id, label: `"${cat.title}"` })}>
+                                <Trash2 className="h-3 w-3 md:h-3.5 md:w-3.5 mr-1" /> Delete
                               </Button>
-                              <Button variant="outline" size="sm" onClick={() => { setExcModal(cat.id); setExcStep(1); setExcUserId(''); setExcAmount(''); }}>
-                                <UserPlus className="h-3.5 w-3.5 mr-1" /> Exception
+                              <Button variant="outline" size="sm" className="h-7 md:h-9 text-xs md:text-sm px-2 md:px-3" onClick={() => { setExcModal(cat.id); setExcStep(1); setExcUserId(''); setExcAmount(''); }}>
+                                <UserPlus className="h-3 w-3 md:h-3.5 md:w-3.5 mr-1" /> Exception
                               </Button>
                             </div>
                           )}
@@ -594,11 +594,11 @@ export default function CalculatorPage() {
           <CardContent className="pt-6">
             <Tabs defaultValue="deposits">
               <TabsList className="w-full grid grid-cols-2">
-                <TabsTrigger value="deposits">
-                  <Wallet className="h-4 w-4 mr-2" /> Deposits ({payments.length})
+                <TabsTrigger value="deposits" className="text-xs md:text-sm">
+                  <Wallet className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1 md:mr-2" /> Deposits ({payments.length})
                 </TabsTrigger>
-                <TabsTrigger value="records">
-                  <Receipt className="h-4 w-4 mr-2" /> Payment Records ({billPayments.length})
+                <TabsTrigger value="records" className="text-xs md:text-sm">
+                  <Receipt className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1 md:mr-2" /> Records ({billPayments.length})
                 </TabsTrigger>
               </TabsList>
 
