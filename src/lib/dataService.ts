@@ -1158,6 +1158,9 @@ export async function deleteNotification(id: string): Promise<boolean> {
 }
 
 export async function deleteAllNotifications(userId: string): Promise<void> {
+  // Invalidate notification cache
+  apiCache.invalidate(cacheKeys.notifications(userId));
+  
   if (shouldUseBackend()) {
     const result = await api.deleteAllNotificationsAPI();
     if (result.success) {
