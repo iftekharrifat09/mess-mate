@@ -804,6 +804,10 @@ export async function deleteJoinRequest(id: string): Promise<boolean> {
 }
 
 export async function approveJoinRequest(id: string): Promise<boolean> {
+  // Invalidate caches
+  apiCache.invalidatePrefix('joinRequests:');
+  apiCache.invalidatePrefix('mess:');
+  
   if (shouldUseBackend()) {
     const result = await api.approveJoinRequestAPI(id);
     if (result.success) {
@@ -813,7 +817,6 @@ export async function approveJoinRequest(id: string): Promise<boolean> {
       showFallbackAlert();
     }
   }
-  // For localStorage, use the comprehensive approve function that updates user too
   const result = storage.approveJoinRequestAndUpdateUser(id);
   return result.success;
 }
