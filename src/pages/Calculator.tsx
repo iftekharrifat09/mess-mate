@@ -193,6 +193,15 @@ export default function CalculatorPage() {
 
   const handleSaveDeposit = async () => {
     if (!payUserId || !payAmount) return;
+    // Cap: total deposits cannot exceed monthly total
+    if (!editPayment && monthlyTotal > 0) {
+      const newTotal = totalDeposits + Number(payAmount);
+      if (newTotal > monthlyTotal) {
+        const maxAllowed = monthlyTotal - totalDeposits;
+        toast({ title: 'Deposit exceeds limit', description: `Maximum deposit allowed is ${formatCurrency(maxAllowed)}. Total deposits cannot exceed Monthly Total.`, variant: 'destructive' });
+        return;
+      }
+    }
     // Block deposit if monthly total is fully paid and this member is also fully paid
     if (!editPayment && isMonthlyFullyPaid) {
       const due = memberDues[payUserId] || 0;
