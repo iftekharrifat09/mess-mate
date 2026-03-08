@@ -6,7 +6,7 @@
  * Setup Instructions:
  * 1. Create a new folder and copy this file
  * 2. Run: npm init -y
- * 3. Run: npm install express mongodb cors bcryptjs jsonwebtoken nodemailer dotenv
+ * 3. Run: npm install express mongodb cors bcryptjs jsonwebtoken nodemailer dotenv node-fetch@2
  * 4. Create a .env file with:
  *    - MONGO_URI=your_mongodb_atlas_connection_string
  *    - JWT_SECRET=your_jwt_secret_key
@@ -14,6 +14,12 @@
  *    - EMAIL_PASS=your_gmail_app_password
  *    - PORT=5000
  * 5. Run: node index.js
+ * 
+ * DESCO Low Balance Email Feature:
+ * - Automatically checks DESCO prepaid balance every 30 minutes
+ * - Sends email alerts to all mess members when balance <= ৳100
+ * - Emails are sent every 12 hours maximum to avoid spam
+ * - Requires descoAccountNo to be configured in mess settings
  */
 
 const express = require("express");
@@ -22,6 +28,7 @@ const cors = require("cors");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
+const fetch = require("node-fetch");
 require("dotenv").config();
 
 const app = express();
@@ -2639,6 +2646,231 @@ app.delete("/api/activity-logs/:id", authenticateToken, async (req, res) => {
 });
 
 // ============================================
+// DESCO LOW BALANCE EMAIL SCHEDULER
+// ============================================
+
+// Track last sent time per mess to avoid spamming
+const descoAlertLastSent = new Map();
+const DESCO_ALERT_INTERVAL = 12 * 60 * 60 * 1000; // 12 hours in milliseconds
+const LOW_BALANCE_THRESHOLD = 100;
+
+// DESCO API helper
+async function fetchDescoBalance(accountNo, apiType = 'tkdes') {
+  try {
+    const baseUrl = apiType === 'web' 
+      ? 'https://prepaid.desco.org.bd' 
+      : 'https://tkdes.desco.org.bd';
+    
+    const response = await fetch(`${baseUrl}/api/tkdes/customer/getBalance?accountNo=${accountNo}`);
+    if (!response.ok) return null;
+    
+    const data = await response.json();
+    return data?.balance ?? null;
+  } catch (error) {
+    console.error(`❌ DESCO API Error for ${accountNo}:`, error.message);
+    return null;
+  }
+}
+
+// Send low balance warning email to all mess members
+async function sendDescoLowBalanceEmail(mess, balance, members) {
+  const subject = `⚠️ URGENT: DESCO Electricity Balance Low - ৳${balance.toFixed(2)}`;
+  const htmlContent = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%); padding: 20px; text-align: center;">
+        <h1 style="color: white; margin: 0;">⚡ Low Balance Alert</h1>
+      </div>
+      <div style="padding: 30px; background: #fef2f2; border: 2px solid #fecaca;">
+        <h2 style="color: #dc2626; margin-top: 0;">DESCO Prepaid Balance Critical!</h2>
+        <div style="background: white; border-radius: 12px; padding: 20px; text-align: center; margin: 20px 0; border: 1px solid #fecaca;">
+          <p style="color: #6b7280; margin: 0; font-size: 14px;">Current Balance</p>
+          <p style="color: #dc2626; font-size: 36px; font-weight: bold; margin: 10px 0;">৳${balance.toFixed(2)}</p>
+          <p style="color: #dc2626; font-size: 12px; margin: 0;">⚠️ BELOW ৳${LOW_BALANCE_THRESHOLD} THRESHOLD</p>
+        </div>
+        <p style="color: #4b5563; font-size: 16px; line-height: 1.6;">
+          The DESCO prepaid electricity balance for <strong>${mess.name}</strong> is critically low. 
+          Please recharge immediately to avoid power disconnection.
+        </p>
+        <div style="background: #fee2e2; border-radius: 8px; padding: 15px; margin: 20px 0;">
+          <p style="color: #991b1b; margin: 0; font-size: 14px;">
+            <strong>Account Number:</strong> ${mess.descoAccountNo}<br>
+            <strong>Mess Name:</strong> ${mess.name}
+          </p>
+        </div>
+        <p style="color: #6b7280; font-size: 14px;">
+          This is an automated alert. You will receive another reminder in 12 hours if the balance remains low.
+        </p>
+      </div>
+      <div style="background: #1f2937; padding: 20px; text-align: center;">
+        <p style="color: #9ca3af; margin: 0; font-size: 12px;">© ${new Date().getFullYear()} Mess Manager. All rights reserved.</p>
+      </div>
+    </div>
+  `;
+
+  let sentCount = 0;
+  for (const member of members) {
+    if (member.email && member.emailVerified && member.emailNotifications !== false) {
+      try {
+        await transporter.sendMail({
+          from: process.env.EMAIL_USER,
+          to: member.email,
+          subject,
+          html: htmlContent,
+        });
+        sentCount++;
+        console.log(`✅ DESCO alert sent to ${member.email}`);
+      } catch (error) {
+        console.error(`❌ Failed to send DESCO alert to ${member.email}:`, error.message);
+      }
+    }
+  }
+  return sentCount;
+}
+
+// Check all messes for low DESCO balance and send alerts
+async function checkDescoBalancesAndAlert() {
+  console.log('🔍 Checking DESCO balances for all messes...');
+  
+  try {
+    // Get all messes with DESCO account configured
+    const messes = await collections.messes.find({ 
+      descoAccountNo: { $exists: true, $ne: '' } 
+    }).toArray();
+
+    for (const mess of messes) {
+      const messId = mess._id.toString();
+      const lastSent = descoAlertLastSent.get(messId) || 0;
+      const now = Date.now();
+
+      // Skip if alert was sent within last 12 hours
+      if (now - lastSent < DESCO_ALERT_INTERVAL) {
+        continue;
+      }
+
+      // Fetch current balance
+      const balance = await fetchDescoBalance(mess.descoAccountNo, mess.descoApiType);
+      
+      if (balance === null) {
+        console.log(`⚠️ Could not fetch balance for mess ${mess.name} (${mess.descoAccountNo})`);
+        continue;
+      }
+
+      console.log(`💡 ${mess.name}: Balance ৳${balance.toFixed(2)}`);
+
+      // Check if below threshold
+      if (balance <= LOW_BALANCE_THRESHOLD) {
+        // Get all members of this mess
+        const members = await collections.users.find({ messId }).toArray();
+        
+        // Send emails
+        const sentCount = await sendDescoLowBalanceEmail(mess, balance, members);
+        
+        if (sentCount > 0) {
+          descoAlertLastSent.set(messId, now);
+          console.log(`📧 Sent ${sentCount} low balance alerts for ${mess.name}`);
+
+          // Also create in-app notifications
+          const notification = {
+            type: 'desco_low_balance',
+            title: '⚡ DESCO Balance Critical',
+            message: `Electricity balance is ৳${balance.toFixed(2)}. Please recharge immediately!`,
+          };
+
+          for (const member of members) {
+            await collections.notifications.insertOne({
+              userId: member._id.toString(),
+              messId,
+              ...notification,
+              seen: false,
+              createdAt: new Date(),
+            });
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.error('❌ DESCO balance check error:', error);
+  }
+}
+
+// Schedule DESCO balance check every 30 minutes
+// (This allows quick detection while respecting the 12-hour email limit)
+let descoCheckInterval;
+
+function startDescoBalanceMonitor() {
+  // Initial check after 1 minute (to allow server startup)
+  setTimeout(() => {
+    checkDescoBalancesAndAlert();
+  }, 60 * 1000);
+
+  // Then check every 30 minutes
+  descoCheckInterval = setInterval(() => {
+    checkDescoBalancesAndAlert();
+  }, 30 * 60 * 1000);
+
+  console.log('⚡ DESCO balance monitor started (checks every 30 mins, emails every 12 hours)');
+}
+
+// Manual trigger endpoint for testing
+app.post("/api/desco/check-balance-alerts", authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== 'manager') {
+      return res.status(403).json({ success: false, error: "Only managers can trigger balance checks" });
+    }
+    
+    // Force check for this user's mess
+    const mess = await collections.messes.findOne({ _id: new ObjectId(req.user.messId) });
+    if (!mess || !mess.descoAccountNo) {
+      return res.status(400).json({ success: false, error: "No DESCO account configured" });
+    }
+
+    const balance = await fetchDescoBalance(mess.descoAccountNo, mess.descoApiType);
+    if (balance === null) {
+      return res.status(500).json({ success: false, error: "Failed to fetch DESCO balance" });
+    }
+
+    const result = {
+      balance,
+      isLow: balance <= LOW_BALANCE_THRESHOLD,
+      threshold: LOW_BALANCE_THRESHOLD,
+    };
+
+    if (balance <= LOW_BALANCE_THRESHOLD) {
+      const members = await collections.users.find({ messId: req.user.messId }).toArray();
+      const sentCount = await sendDescoLowBalanceEmail(mess, balance, members);
+      descoAlertLastSent.set(req.user.messId, Date.now());
+      result.emailsSent = sentCount;
+    }
+
+    res.json({ success: true, ...result });
+  } catch (error) {
+    console.error("DESCO check error:", error);
+    res.status(500).json({ success: false, error: "Failed to check DESCO balance" });
+  }
+});
+
+// Get DESCO alert status
+app.get("/api/desco/alert-status", authMiddleware, async (req, res) => {
+  try {
+    const messId = req.user.messId;
+    const lastSent = descoAlertLastSent.get(messId) || 0;
+    const nextAlertIn = lastSent > 0 
+      ? Math.max(0, DESCO_ALERT_INTERVAL - (Date.now() - lastSent))
+      : 0;
+
+    res.json({
+      success: true,
+      lastAlertSent: lastSent > 0 ? new Date(lastSent).toISOString() : null,
+      nextAlertIn: Math.round(nextAlertIn / 1000 / 60), // in minutes
+      threshold: LOW_BALANCE_THRESHOLD,
+      interval: DESCO_ALERT_INTERVAL / 1000 / 60 / 60, // in hours
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to get alert status" });
+  }
+});
+
+// ============================================
 // START SERVER
 // ============================================
 
@@ -2648,6 +2880,9 @@ async function startServer() {
   app.listen(PORT, () => {
     console.log(`🚀 Server running on port ${PORT}`);
     console.log(`📡 API available at http://localhost:${PORT}`);
+    
+    // Start DESCO balance monitor after server is up
+    startDescoBalanceMonitor();
   });
 }
 
