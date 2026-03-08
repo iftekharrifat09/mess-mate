@@ -46,6 +46,7 @@ export default function Profile() {
   const [browserNotifEnabled, setBrowserNotifEnabledState] = useState(false);
   const [selectedTone, setSelectedTone] = useState('chime');
   const [hasCustomTone, setHasCustomTone] = useState(false);
+  const browserPermissionRequestInFlightRef = useRef(false);
   const { previewTone } = useNotificationSound();
 
   useEffect(() => {
