@@ -302,11 +302,18 @@ export default function CalculatorPage() {
       toast({ title: 'Insufficient balance', description: `Current balance is ${formatCurrency(currentBalance)}`, variant: 'destructive' });
       return;
     }
+    const catName = categories.find(c => c.id === billCatId)?.title || '';
     if (editBillPayment) {
-      await calcStore.updateBillPayment(editBillPayment.id, { amount: amt, description: billDesc, categoryId: billCatId, categoryName: categories.find(c => c.id === billCatId)?.title || '' });
+      await calcStore.updateBillPayment(editBillPayment.id, { amount: amt, description: billDesc, categoryId: billCatId, categoryName: catName });
+      if (!shouldUseBackend()) {
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'general', title: 'Bill Payment Updated', message: `Bill payment for "${catName}" updated to ${formatCurrency(amt)}` });
+      }
       setEditBillPayment(null);
     } else {
-      await calcStore.createBillPayment({ messId, monthId: activeMonthId, categoryId: billCatId, categoryName: categories.find(c => c.id === billCatId)?.title || '', amount: amt, description: billDesc });
+      await calcStore.createBillPayment({ messId, monthId: activeMonthId, categoryId: billCatId, categoryName: catName, amount: amt, description: billDesc });
+      if (!shouldUseBackend()) {
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'general', title: 'Bill Payment Recorded', message: `${formatCurrency(amt)} paid for "${catName}"${billDesc ? ` - ${billDesc}` : ''}` });
+      }
     }
     setBillModal(false); setBillCatId(''); setBillAmount(''); setBillDesc('');
     reload();
