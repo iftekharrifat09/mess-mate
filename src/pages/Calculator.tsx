@@ -21,7 +21,7 @@ import { CalcCategory, CalcException, CalcPayment, CalcBillPayment } from '@/lib
 import { formatCurrency } from '@/lib/calculations';
 import {
   Plus, Edit2, Trash2, UserPlus, Calculator as CalcIcon,
-  CheckCircle, Users, Wallet, DollarSign, Receipt, CreditCard,
+  CheckCircle, Users, Wallet, DollarSign, Receipt, CreditCard, Loader2,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
