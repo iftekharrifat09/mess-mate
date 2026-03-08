@@ -2415,6 +2415,55 @@ app.delete("/api/calc-payments/:id", authMiddleware, async (req, res) => {
   }
 });
 
+// --- Bill Payments ---
+app.get("/api/calc-bill-payments", authMiddleware, async (req, res) => {
+  try {
+    const messId = req.query.messId || req.user.messId;
+    const monthId = req.query.monthId;
+    if (!monthId) return res.status(400).json({ success: false, error: "monthId required" });
+    const billPayments = await collections.calcBillPayments.find({ messId, monthId }).sort({ createdAt: -1 }).toArray();
+    res.json({ success: true, billPayments: transformDocs(billPayments) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to get bill payments" });
+  }
+});
+
+app.post("/api/calc-bill-payments", authMiddleware, async (req, res) => {
+  try {
+    const { categoryId, categoryName, amount, description, messId, monthId } = req.body;
+    const doc = { categoryId, categoryName, amount, description, messId: messId || req.user.messId, monthId, createdAt: new Date() };
+    const result = await collections.calcBillPayments.insertOne(doc);
+    res.json({ success: true, billPayment: { id: result.insertedId.toString(), ...doc } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to create bill payment" });
+  }
+});
+
+app.put("/api/calc-bill-payments/:id", authMiddleware, async (req, res) => {
+  try {
+    const { amount, description, categoryId, categoryName } = req.body;
+    const updateData = {};
+    if (amount !== undefined) updateData.amount = amount;
+    if (description !== undefined) updateData.description = description;
+    if (categoryId !== undefined) updateData.categoryId = categoryId;
+    if (categoryName !== undefined) updateData.categoryName = categoryName;
+    await collections.calcBillPayments.updateOne({ _id: new ObjectId(req.params.id) }, { $set: updateData });
+    const doc = await collections.calcBillPayments.findOne({ _id: new ObjectId(req.params.id) });
+    res.json({ success: true, billPayment: transformDoc(doc) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to update bill payment" });
+  }
+});
+
+app.delete("/api/calc-bill-payments/:id", authMiddleware, async (req, res) => {
+  try {
+    await collections.calcBillPayments.deleteOne({ _id: new ObjectId(req.params.id) });
+    res.json({ success: true, message: "Bill payment deleted" });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to delete bill payment" });
+  }
+});
+
 // ============================================
 // START SERVER
 // ============================================
