@@ -485,7 +485,6 @@ export default function Chat() {
           </div>
           <p className="text-[10px] text-muted-foreground mt-1 text-right">
             {newMessage.length}/2000
-            {isOffline && ' • Messages will sync when online'}
           </p>
         </div>
       </div>
