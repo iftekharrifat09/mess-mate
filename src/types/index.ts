@@ -104,7 +104,7 @@ export interface Notification {
   id: string;
   userId: string;
   messId: string;
-  type: 'meal' | 'deposit' | 'cost' | 'notice' | 'bazar' | 'mess_update' | 'join_request';
+  type: 'meal' | 'deposit' | 'cost' | 'notice' | 'bazar' | 'mess_update' | 'join_request' | 'chat';
   title: string;
   message: string;
   seen: boolean;
