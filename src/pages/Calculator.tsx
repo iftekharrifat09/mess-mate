@@ -15,6 +15,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
 import { User } from '@/types';
 import * as dataService from '@/lib/dataService';
+import { shouldUseBackend } from '@/lib/config';
 import * as calcStore from '@/lib/calculatorStorage';
 import { CalcCategory, CalcException, CalcPayment, CalcBillPayment } from '@/lib/calculatorStorage';
 import { formatCurrency } from '@/lib/calculations';
@@ -156,8 +157,14 @@ export default function CalculatorPage() {
     if (!catTitle.trim() || !catCost) return;
     if (editCat) {
       await calcStore.updateCategory(editCat.id, { title: catTitle.trim(), totalCost: Number(catCost) });
+      if (!shouldUseBackend()) {
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Category Updated', message: `Expense category "${catTitle.trim()}" has been updated` });
+      }
     } else {
       await calcStore.createCategory({ messId, monthId: activeMonthId, title: catTitle.trim(), totalCost: Number(catCost), status: 'unpaid' });
+      if (!shouldUseBackend()) {
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Category Added', message: `New expense category "${catTitle.trim()}" added (${formatCurrency(Number(catCost))})` });
+      }
     }
     setCatModal(false); setEditCat(null); setCatTitle(''); setCatCost('');
     reload();
@@ -166,14 +173,23 @@ export default function CalculatorPage() {
 
   const handleDeleteCategory = async (id: string) => {
     setDeleteTarget(null);
+    const cat = categories.find(c => c.id === id);
     await calcStore.deleteCategory(id);
+    if (!shouldUseBackend() && cat) {
+      dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Category Deleted', message: `Expense category "${cat.title}" has been removed` });
+    }
     reload();
     toast({ title: 'Category deleted', variant: 'destructive' });
   };
 
   const handleSaveException = async () => {
     if (!excModal || !excUserId || !excAmount) return;
-    await calcStore.createException({ categoryId: excModal, userId: excUserId, userName: members.find(m => m.id === excUserId)?.fullName || '', amount: Number(excAmount) });
+    const memberName = members.find(m => m.id === excUserId)?.fullName || '';
+    await calcStore.createException({ categoryId: excModal, userId: excUserId, userName: memberName, amount: Number(excAmount) });
+    if (!shouldUseBackend()) {
+      const cat = categories.find(c => c.id === excModal);
+      dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Exception Added', message: `${memberName} has a fixed contribution of ${formatCurrency(Number(excAmount))} for "${cat?.title || ''}"` });
+    }
     setExcModal(null); setExcUserId(''); setExcAmount(''); setExcStep(1);
     reload();
     toast({ title: 'Exception added' });
@@ -181,7 +197,12 @@ export default function CalculatorPage() {
 
   const handleDeleteException = async (id: string) => {
     setDeleteTarget(null);
+    const exc = allExceptions.find(e => e.id === id);
     await calcStore.deleteException(id);
+    if (!shouldUseBackend() && exc) {
+      const cat = categories.find(c => c.id === exc.categoryId);
+      dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Exception Removed', message: `${exc.userName}'s exception for "${cat?.title || ''}" has been removed` });
+    }
     reload();
   };
 
@@ -232,11 +253,18 @@ export default function CalculatorPage() {
         }
       }
     }
+    const memberName = members.find(m => m.id === payUserId)?.fullName || '';
     if (editPayment) {
       await calcStore.updatePayment(editPayment.id, { amount: Number(payAmount), description: payDesc });
+      if (!shouldUseBackend()) {
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'deposit', title: 'Deposit Updated', message: `${memberName}'s deposit has been updated to ${formatCurrency(Number(payAmount))}` });
+      }
       setEditPayment(null);
     } else {
-      await calcStore.createPayment({ messId, monthId: activeMonthId, userId: payUserId, userName: members.find(m => m.id === payUserId)?.fullName || '', amount: Number(payAmount), description: payDesc });
+      await calcStore.createPayment({ messId, monthId: activeMonthId, userId: payUserId, userName: memberName, amount: Number(payAmount), description: payDesc });
+      if (!shouldUseBackend()) {
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'deposit', title: 'Member Deposit Recorded', message: `${memberName} deposited ${formatCurrency(Number(payAmount))}${payDesc ? ` - ${payDesc}` : ''}` });
+      }
     }
     setPayModal(false); setPayUserId(''); setPayAmount(''); setPayDesc(''); setPayStep(1);
     reload();
@@ -245,7 +273,11 @@ export default function CalculatorPage() {
 
   const handleDeleteDeposit = async (id: string) => {
     setDeleteTarget(null);
+    const dep = payments.find(p => p.id === id);
     await calcStore.deletePayment(id);
+    if (!shouldUseBackend() && dep) {
+      dataService.notifyMessMembers(messId, user?.id || '', { type: 'deposit', title: 'Deposit Deleted', message: `${dep.userName}'s deposit of ${formatCurrency(dep.amount)} has been removed` });
+    }
     reload();
     toast({ title: 'Deposit deleted', variant: 'destructive' });
   };
@@ -270,11 +302,18 @@ export default function CalculatorPage() {
       toast({ title: 'Insufficient balance', description: `Current balance is ${formatCurrency(currentBalance)}`, variant: 'destructive' });
       return;
     }
+    const catName = categories.find(c => c.id === billCatId)?.title || '';
     if (editBillPayment) {
-      await calcStore.updateBillPayment(editBillPayment.id, { amount: amt, description: billDesc, categoryId: billCatId, categoryName: categories.find(c => c.id === billCatId)?.title || '' });
+      await calcStore.updateBillPayment(editBillPayment.id, { amount: amt, description: billDesc, categoryId: billCatId, categoryName: catName });
+      if (!shouldUseBackend()) {
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Bill Payment Updated', message: `Bill payment for "${catName}" updated to ${formatCurrency(amt)}` });
+      }
       setEditBillPayment(null);
     } else {
-      await calcStore.createBillPayment({ messId, monthId: activeMonthId, categoryId: billCatId, categoryName: categories.find(c => c.id === billCatId)?.title || '', amount: amt, description: billDesc });
+      await calcStore.createBillPayment({ messId, monthId: activeMonthId, categoryId: billCatId, categoryName: catName, amount: amt, description: billDesc });
+      if (!shouldUseBackend()) {
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Bill Payment Recorded', message: `${formatCurrency(amt)} paid for "${catName}"${billDesc ? ` - ${billDesc}` : ''}` });
+      }
     }
     setBillModal(false); setBillCatId(''); setBillAmount(''); setBillDesc('');
     reload();
@@ -283,7 +322,11 @@ export default function CalculatorPage() {
 
   const handleDeleteBillPayment = async (id: string) => {
     setDeleteTarget(null);
+    const bp = billPayments.find(b => b.id === id);
     await calcStore.deleteBillPayment(id);
+    if (!shouldUseBackend() && bp) {
+      dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Bill Payment Deleted', message: `Bill payment of ${formatCurrency(bp.amount)} for "${bp.categoryName}" has been removed` });
+    }
     reload();
     toast({ title: 'Bill payment deleted', variant: 'destructive' });
   };

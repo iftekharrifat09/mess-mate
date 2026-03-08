@@ -2296,6 +2296,14 @@ app.post("/api/calc-categories", authMiddleware, async (req, res) => {
     const { title, totalCost, status, messId, monthId } = req.body;
     const doc = { title, totalCost, status: status || "unpaid", messId: messId || req.user.messId, monthId, createdAt: new Date() };
     const result = await collections.calcCategories.insertOne(doc);
+
+    // Notify members
+    await notifyMembers(doc.messId, req.userId, {
+      title: "Expense Category Added",
+      message: `New expense category "${title}" added (৳${totalCost})`,
+      type: "general",
+    });
+
     res.json({ success: true, category: { id: result.insertedId.toString(), ...doc } });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to create category" });
@@ -2311,6 +2319,16 @@ app.put("/api/calc-categories/:id", authMiddleware, async (req, res) => {
     if (status !== undefined) updateData.status = status;
     await collections.calcCategories.updateOne({ _id: new ObjectId(req.params.id) }, { $set: updateData });
     const doc = await collections.calcCategories.findOne({ _id: new ObjectId(req.params.id) });
+
+    // Notify members
+    if (doc) {
+      await notifyMembers(doc.messId, req.userId, {
+        title: "Expense Category Updated",
+        message: `Expense category "${doc.title}" has been updated`,
+        type: "general",
+      });
+    }
+
     res.json({ success: true, category: transformDoc(doc) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to update category" });
@@ -2320,10 +2338,22 @@ app.put("/api/calc-categories/:id", authMiddleware, async (req, res) => {
 app.delete("/api/calc-categories/:id", authMiddleware, async (req, res) => {
   try {
     const catId = req.params.id;
+    // Get category info before deleting for notification
+    const cat = await collections.calcCategories.findOne({ _id: new ObjectId(catId) });
     await Promise.all([
       collections.calcCategories.deleteOne({ _id: new ObjectId(catId) }),
       collections.calcExceptions.deleteMany({ categoryId: catId }),
     ]);
+
+    // Notify members
+    if (cat) {
+      await notifyMembers(cat.messId, req.userId, {
+        title: "Expense Category Deleted",
+        message: `Expense category "${cat.title}" has been removed`,
+        type: "general",
+      });
+    }
+
     res.json({ success: true, message: "Category deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to delete category" });
@@ -2355,6 +2385,17 @@ app.post("/api/calc-exceptions", authMiddleware, async (req, res) => {
     const { categoryId, userId, userName, amount } = req.body;
     const doc = { categoryId, userId, userName, amount };
     const result = await collections.calcExceptions.insertOne(doc);
+
+    // Get category for notification context
+    const cat = await collections.calcCategories.findOne({ _id: new ObjectId(categoryId) });
+    if (cat) {
+      await notifyMembers(cat.messId, req.userId, {
+        title: "Expense Exception Added",
+        message: `${userName} has a fixed contribution of ৳${amount} for "${cat.title}"`,
+        type: "general",
+      });
+    }
+
     res.json({ success: true, exception: { id: result.insertedId.toString(), ...doc } });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to create exception" });
@@ -2363,7 +2404,20 @@ app.post("/api/calc-exceptions", authMiddleware, async (req, res) => {
 
 app.delete("/api/calc-exceptions/:id", authMiddleware, async (req, res) => {
   try {
+    const exc = await collections.calcExceptions.findOne({ _id: new ObjectId(req.params.id) });
     await collections.calcExceptions.deleteOne({ _id: new ObjectId(req.params.id) });
+
+    if (exc) {
+      const cat = await collections.calcCategories.findOne({ _id: new ObjectId(exc.categoryId) });
+      if (cat) {
+        await notifyMembers(cat.messId, req.userId, {
+          title: "Expense Exception Removed",
+          message: `${exc.userName}'s exception for "${cat.title}" has been removed`,
+          type: "general",
+        });
+      }
+    }
+
     res.json({ success: true, message: "Exception deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to delete exception" });
@@ -2388,6 +2442,13 @@ app.post("/api/calc-payments", authMiddleware, async (req, res) => {
     const { userId, userName, amount, description, messId, monthId } = req.body;
     const doc = { userId, userName, amount, description, messId: messId || req.user.messId, monthId, createdAt: new Date() };
     const result = await collections.calcPayments.insertOne(doc);
+
+    await notifyMembers(doc.messId, req.userId, {
+      title: "Member Deposit Recorded",
+      message: `${userName} deposited ৳${amount}${description ? ` - ${description}` : ""}`,
+      type: "general",
+    });
+
     res.json({ success: true, payment: { id: result.insertedId.toString(), ...doc } });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to create payment" });
@@ -2402,6 +2463,15 @@ app.put("/api/calc-payments/:id", authMiddleware, async (req, res) => {
     if (description !== undefined) updateData.description = description;
     await collections.calcPayments.updateOne({ _id: new ObjectId(req.params.id) }, { $set: updateData });
     const doc = await collections.calcPayments.findOne({ _id: new ObjectId(req.params.id) });
+
+    if (doc) {
+      await notifyMembers(doc.messId, req.userId, {
+        title: "Deposit Updated",
+        message: `${doc.userName}'s deposit has been updated to ৳${doc.amount}`,
+        type: "general",
+      });
+    }
+
     res.json({ success: true, payment: transformDoc(doc) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to update payment" });
@@ -2410,7 +2480,17 @@ app.put("/api/calc-payments/:id", authMiddleware, async (req, res) => {
 
 app.delete("/api/calc-payments/:id", authMiddleware, async (req, res) => {
   try {
+    const doc = await collections.calcPayments.findOne({ _id: new ObjectId(req.params.id) });
     await collections.calcPayments.deleteOne({ _id: new ObjectId(req.params.id) });
+
+    if (doc) {
+      await notifyMembers(doc.messId, req.userId, {
+        title: "Deposit Deleted",
+        message: `${doc.userName}'s deposit of ৳${doc.amount} has been removed`,
+        type: "general",
+      });
+    }
+
     res.json({ success: true, message: "Payment deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to delete payment" });
@@ -2435,6 +2515,13 @@ app.post("/api/calc-bill-payments", authMiddleware, async (req, res) => {
     const { categoryId, categoryName, amount, description, messId, monthId } = req.body;
     const doc = { categoryId, categoryName, amount, description, messId: messId || req.user.messId, monthId, createdAt: new Date() };
     const result = await collections.calcBillPayments.insertOne(doc);
+
+    await notifyMembers(doc.messId, req.userId, {
+      title: "Bill Payment Recorded",
+      message: `৳${amount} paid for "${categoryName}"${description ? ` - ${description}` : ""}`,
+      type: "general",
+    });
+
     res.json({ success: true, billPayment: { id: result.insertedId.toString(), ...doc } });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to create bill payment" });
@@ -2451,6 +2538,15 @@ app.put("/api/calc-bill-payments/:id", authMiddleware, async (req, res) => {
     if (categoryName !== undefined) updateData.categoryName = categoryName;
     await collections.calcBillPayments.updateOne({ _id: new ObjectId(req.params.id) }, { $set: updateData });
     const doc = await collections.calcBillPayments.findOne({ _id: new ObjectId(req.params.id) });
+
+    if (doc) {
+      await notifyMembers(doc.messId, req.userId, {
+        title: "Bill Payment Updated",
+        message: `Bill payment for "${doc.categoryName}" updated to ৳${doc.amount}`,
+        type: "general",
+      });
+    }
+
     res.json({ success: true, billPayment: transformDoc(doc) });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to update bill payment" });
@@ -2459,7 +2555,17 @@ app.put("/api/calc-bill-payments/:id", authMiddleware, async (req, res) => {
 
 app.delete("/api/calc-bill-payments/:id", authMiddleware, async (req, res) => {
   try {
+    const doc = await collections.calcBillPayments.findOne({ _id: new ObjectId(req.params.id) });
     await collections.calcBillPayments.deleteOne({ _id: new ObjectId(req.params.id) });
+
+    if (doc) {
+      await notifyMembers(doc.messId, req.userId, {
+        title: "Bill Payment Deleted",
+        message: `Bill payment of ৳${doc.amount} for "${doc.categoryName}" has been removed`,
+        type: "general",
+      });
+    }
+
     res.json({ success: true, message: "Bill payment deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to delete bill payment" });
