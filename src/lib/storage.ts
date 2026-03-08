@@ -15,6 +15,8 @@ const STORAGE_KEYS = {
   NOTIFICATIONS: 'mess_manager_notifications',
   NOTES: 'mess_manager_notes',
   ACTIVITY_LOGS: 'mess_manager_activity_logs',
+  CHAT_MESSAGES: 'mess_manager_chat_messages',
+  CHAT_UNSYNCED: 'mess_manager_chat_unsynced',
 };
 
 function getFromStorage<T>(key: string, defaultValue: T[] = []): T[] {
