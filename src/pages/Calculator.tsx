@@ -700,14 +700,18 @@ export default function CalculatorPage() {
                 value={billAmount}
                 onChange={e => {
                   const val = Number(e.target.value);
-                  if (!editBillPayment && val > selectedBillCatDue) return;
+                  const maxAllowed = Math.min(selectedBillCatDue, currentBalance);
+                  if (!editBillPayment && val > maxAllowed) return;
                   setBillAmount(e.target.value);
                 }}
                 placeholder={billCatId ? `Due: ${formatCurrency(selectedBillCatDue)}` : 'Select a category first'}
-                max={editBillPayment ? undefined : selectedBillCatDue}
+                max={editBillPayment ? undefined : Math.min(selectedBillCatDue, currentBalance)}
               />
               {billCatId && !editBillPayment && (
-                <p className="text-xs text-muted-foreground mt-1">Max: {formatCurrency(selectedBillCatDue)}</p>
+                <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                  <span>Category due: {formatCurrency(selectedBillCatDue)}</span>
+                  <span>Balance: {formatCurrency(currentBalance)}</span>
+                </div>
               )}
             </div>
             <div>
