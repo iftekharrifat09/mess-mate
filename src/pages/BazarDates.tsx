@@ -202,6 +202,7 @@ export default function BazarDates() {
   const handleDelete = async (bazar: BazarDate) => {
     if (deletingId) return;
     setDeletingId(bazar.id);
+    setDeleteTarget(null);
     try {
       await dataService.deleteBazarDate(bazar.id);
       toast({ title: 'Bazar date deleted', variant: 'success' });
