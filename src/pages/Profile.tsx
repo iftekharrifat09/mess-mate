@@ -601,47 +601,47 @@ export default function Profile() {
 
           {/* Preferences Card */}
           <Card className="md:col-span-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+            <CardHeader className="px-4 sm:px-6">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
                 <Volume2 className="h-5 w-5 text-primary" />
                 Preferences
               </CardTitle>
-              <CardDescription>Customize your experience</CardDescription>
+              <CardDescription className="text-xs sm:text-sm">Customize your experience</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <div className="space-y-1">
-                  <p className="font-medium">Notification sound</p>
-                  <p className="text-sm text-muted-foreground">
+            <CardContent className="space-y-3 sm:space-y-4 px-4 sm:px-6">
+              <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                <div className="space-y-0.5 min-w-0">
+                  <p className="text-sm font-medium">Notification sound</p>
+                  <p className="text-xs text-muted-foreground">
                     Play a sound when new notifications arrive
                   </p>
                 </div>
-                <Switch checked={notificationSoundEnabled} onCheckedChange={handleToggleNotificationSound} />
+                <Switch checked={notificationSoundEnabled} onCheckedChange={handleToggleNotificationSound} className="shrink-0" />
               </div>
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <div className="space-y-1">
-                  <p className="font-medium flex items-center gap-2">
+              <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                <div className="space-y-0.5 min-w-0">
+                  <p className="text-sm font-medium flex items-center gap-2">
                     <MailCheck className="h-4 w-4 text-muted-foreground" />
                     Email notifications
                   </p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     Receive email alerts for mess activities
                   </p>
                 </div>
-                <Switch checked={emailNotificationEnabled} onCheckedChange={handleToggleEmailNotification} />
+                <Switch checked={emailNotificationEnabled} onCheckedChange={handleToggleEmailNotification} className="shrink-0" />
               </div>
 
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <div className="space-y-1">
-                  <p className="font-medium flex items-center gap-2">
+              <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                <div className="space-y-0.5 min-w-0">
+                  <p className="text-sm font-medium flex items-center gap-2">
                     <BellRing className="h-4 w-4 text-muted-foreground" />
                     Browser notifications
                   </p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     Get push alerts even when the tab is in background
                   </p>
                 </div>
-                <Switch checked={browserNotifEnabled} onCheckedChange={handleToggleBrowserNotifications} />
+                <Switch checked={browserNotifEnabled} onCheckedChange={handleToggleBrowserNotifications} className="shrink-0" />
               </div>
 
               {/* Notification Tone Picker */}
@@ -653,15 +653,15 @@ export default function Profile() {
                   className="space-y-3 pt-2"
                 >
                   <div className="space-y-1">
-                    <p className="font-medium flex items-center gap-2">
+                    <p className="text-sm font-medium flex items-center gap-2">
                       <Music className="h-4 w-4 text-muted-foreground" />
                       Notification tone
                     </p>
-                    <p className="text-sm text-muted-foreground">Choose a tone or upload your own</p>
+                    <p className="text-xs text-muted-foreground">Choose a tone or upload your own</p>
                   </div>
 
                   {/* Built-in tones */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                     {BUILT_IN_TONES.map((tone) => (
                       <button
                         key={tone.id}
