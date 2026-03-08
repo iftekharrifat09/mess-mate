@@ -703,14 +703,15 @@ export default function CalculatorPage() {
               <Select onValueChange={v => { setPayUserId(v); setPayStep(2); }}>
                 <SelectTrigger><SelectValue placeholder="Choose a member" /></SelectTrigger>
                 <SelectContent>
-                  {members.map(m => {
+                  {(isDepositsCapped ? membersWithDues : members).map(m => {
                     const due = memberDues[m.id] || 0;
                     const paid = memberPayments[m.id] || 0;
                     const isMemberPaid = due > 0 && paid >= due;
-                    const disabled = isMonthlyFullyPaid && isMemberPaid;
+                    const disabled = isDepositsCapped ? false : (isMonthlyFullyPaid && isMemberPaid);
+                    const remaining = Math.max(0, due - paid);
                     return (
                       <SelectItem key={m.id} value={m.id} disabled={disabled}>
-                        {m.fullName}{disabled ? ' (Fully Paid)' : ''}
+                        {m.fullName}{disabled ? ' (Fully Paid)' : isDepositsCapped ? ` (Due: ${formatCurrency(remaining)})` : ''}
                       </SelectItem>
                     );
                   })}
