@@ -188,7 +188,7 @@ export default function CalculatorPage() {
     await calcStore.createException({ categoryId: excModal, userId: excUserId, userName: memberName, amount: Number(excAmount) });
     if (!shouldUseBackend()) {
       const cat = categories.find(c => c.id === excModal);
-      dataService.notifyMessMembers(messId, user?.id || '', { type: 'general', title: 'Expense Exception Added', message: `${memberName} has a fixed contribution of ${formatCurrency(Number(excAmount))} for "${cat?.title || ''}"` });
+      dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Expense Exception Added', message: `${memberName} has a fixed contribution of ${formatCurrency(Number(excAmount))} for "${cat?.title || ''}"` });
     }
     setExcModal(null); setExcUserId(''); setExcAmount(''); setExcStep(1);
     reload();
