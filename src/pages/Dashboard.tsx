@@ -55,18 +55,16 @@ export default function Dashboard() {
     if (!user || dataLoadedRef.current) return;
     
     try {
-      // Load all primary data in a single parallel batch
-      const [mess, messMembers, activeMonth, dates] = await Promise.all([
+      // Load primary data in parallel
+      const [mess, activeMonth, dates] = await Promise.all([
         dataService.getMessById(user.messId),
-        dataService.getMessMembers(user.messId),
         dataService.getActiveMonth(user.messId),
         dataService.getBazarDatesByMessId(user.messId),
       ]);
 
-      // Set initial data immediately for faster perceived load
+      // Set initial data immediately
       startTransition(() => {
         if (mess) setMessName(mess.name);
-        setMembers(messMembers || []);
         setBazarDates(dates || []);
       });
 
