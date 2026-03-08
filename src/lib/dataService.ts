@@ -1356,6 +1356,9 @@ export async function getActivityLogsByMessId(messId: string): Promise<MessActiv
 }
 
 export async function createActivityLog(logData: Omit<MessActivityLog, 'id' | 'createdAt'>): Promise<MessActivityLog> {
+  // Invalidate activity log cache
+  if ((logData as any).messId) apiCache.invalidate(cacheKeys.activityLogs((logData as any).messId));
+  
   if (shouldUseBackend()) {
     try {
       const result = await api.createActivityLogAPI(logData);
