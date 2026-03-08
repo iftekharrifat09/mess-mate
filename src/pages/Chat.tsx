@@ -239,7 +239,7 @@ export default function Chat() {
     }
   }
 
-  const isOffline = !shouldUseBackend();
+  
 
   const MessageMenu = ({ msg, isOwn }: { msg: ChatMessage; isOwn: boolean }) => {
     const canEdit = isOwn;
