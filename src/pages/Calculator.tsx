@@ -775,7 +775,9 @@ export default function CalculatorPage() {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => { setExcModal(null); setExcStep(1); }}>Cancel</Button>
-            {excStep === 2 && <Button onClick={handleSaveException} disabled={!excAmount}>Save</Button>}
+            {excStep === 2 && <Button onClick={handleSaveException} disabled={!excAmount || isSaving}>
+              {isSaving && <Loader2 className="h-4 w-4 animate-spin" />} Save
+            </Button>}
           </DialogFooter>
         </DialogContent>
       </Dialog>
