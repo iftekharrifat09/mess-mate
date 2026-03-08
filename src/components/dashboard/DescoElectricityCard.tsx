@@ -387,16 +387,33 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
   );
 }
 
-// DESCO LT-A Residential Tariff Slab Calculation
+// DESCO LT-A Residential Tariff Slabs
 function getSlabInfo(totalKwh: number) {
   if (totalKwh <= 50) {
     return { rate: 4.63, slab: '0-50', expectedCost: totalKwh * 4.63, extraCharge: 0 };
   }
-  // After 50 units, rate becomes 5.26/unit for ALL units (retroactive)
-  // Extra charge for first 50 units = (5.26 - 4.63) * 50 = 31.50
+  if (totalKwh <= 75) {
+    const extraCharge = (5.26 - 4.63) * 50; // 31.50 retroactive
+    return { rate: 5.26, slab: '0-75', expectedCost: totalKwh * 5.26, extraCharge };
+  }
+  if (totalKwh <= 200) {
+    const baseCost = 75 * 5.26;
+    const extraCharge = (5.26 - 4.63) * 50;
+    return { rate: 7.20, slab: '76-200', expectedCost: baseCost + (totalKwh - 75) * 7.20, extraCharge };
+  }
+  if (totalKwh <= 300) {
+    const baseCost = 75 * 5.26 + 125 * 7.20;
+    const extraCharge = (5.26 - 4.63) * 50;
+    return { rate: 7.59, slab: '201-300', expectedCost: baseCost + (totalKwh - 200) * 7.59, extraCharge };
+  }
+  if (totalKwh <= 400) {
+    const baseCost = 75 * 5.26 + 125 * 7.20 + 100 * 7.59;
+    const extraCharge = (5.26 - 4.63) * 50;
+    return { rate: 8.02, slab: '301-400', expectedCost: baseCost + (totalKwh - 300) * 8.02, extraCharge };
+  }
+  const baseCost = 75 * 5.26 + 125 * 7.20 + 100 * 7.59 + 100 * 8.02;
   const extraCharge = (5.26 - 4.63) * 50;
-  const expectedCost = totalKwh * 5.26;
-  return { rate: 5.26, slab: '50-75', expectedCost, extraCharge };
+  return { rate: 12.67, slab: '401-600', expectedCost: baseCost + (totalKwh - 400) * 12.67, extraCharge };
 }
 
 function CustomTooltip({ active, payload, label }: any) {
