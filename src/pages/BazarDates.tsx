@@ -445,7 +445,7 @@ export default function BazarDates() {
                             <Button variant="ghost" size="sm" onClick={() => handleEdit(bazar)}>
                               <Edit2 className="h-4 w-4" />
                             </Button>
-                            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(bazar)} disabled={deletingId === bazar.id}>
+                            <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setDeleteTarget(bazar)} disabled={deletingId === bazar.id}>
                               {deletingId === bazar.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                             </Button>
                           </div>
