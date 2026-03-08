@@ -26,6 +26,8 @@ interface DailyDiff {
   taka: number;
   kwh: number;
   cumulativeKwh: number;
+  adjustedTaka?: number;
+  crossedSlab?: boolean;
 }
 
 export default function DescoElectricityCard({ messId }: DescoElectricityCardProps) {
