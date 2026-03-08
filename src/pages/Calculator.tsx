@@ -81,8 +81,8 @@ export default function CalculatorPage() {
     ]);
     setCategories(cats);
     setAllExceptions(excs);
-    setPayments(pays);
-    setBillPayments(bills);
+    setPayments(pays.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
+    setBillPayments(bills.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
   }, [messId, activeMonthId]);
 
   useEffect(() => {

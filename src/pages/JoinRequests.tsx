@@ -81,7 +81,7 @@ export default function JoinRequests() {
       }
       
       console.log('Requests with users:', requestsWithUsers);
-      setPendingRequests(requestsWithUsers);
+      setPendingRequests(requestsWithUsers.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
     } catch (error) {
       console.error('Error loading pending requests:', error);
       toast({
