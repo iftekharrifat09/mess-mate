@@ -539,6 +539,8 @@ app.put("/api/auth/profile", authMiddleware, async (req, res) => {
         isActive: user.isActive !== false,
         emailVerified: user.emailVerified || false,
         emailNotifications: user.emailNotifications !== false,
+        notificationSoundEnabled: user.notificationSoundEnabled !== false,
+        browserNotificationsEnabled: user.browserNotificationsEnabled || false,
         notificationTone: user.notificationTone || "chime",
         customToneData: user.customToneData || null,
       },
