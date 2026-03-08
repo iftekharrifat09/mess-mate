@@ -467,27 +467,30 @@ export default function Profile() {
               </CardTitle>
               <CardDescription>Your personal details</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 px-4 sm:px-6">
               {/* Full Name */}
               <div className="space-y-2">
-                <Label>Full Name</Label>
+                <Label className="text-sm">Full Name</Label>
                 {isEditingName ? (
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <Input
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder="Enter your name"
+                      className="flex-1"
                     />
-                    <Button size="icon" onClick={handleUpdateName} disabled={isSavingName}>
-                      {isSavingName ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                    </Button>
-                    <Button size="icon" variant="outline" onClick={() => { setIsEditingName(false); setFullName(user.fullName); }} disabled={isSavingName}>
-                      <X className="h-4 w-4" />
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button size="icon" onClick={handleUpdateName} disabled={isSavingName} className="h-10 w-10">
+                        {isSavingName ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      </Button>
+                      <Button size="icon" variant="outline" onClick={() => { setIsEditingName(false); setFullName(user.fullName); }} disabled={isSavingName} className="h-10 w-10">
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                    <span>{user.fullName}</span>
+                    <span className="text-sm sm:text-base truncate pr-2">{user.fullName}</span>
                     <Button variant="ghost" size="sm" onClick={() => setIsEditingName(true)}>
                       <Edit2 className="h-4 w-4" />
                     </Button>
