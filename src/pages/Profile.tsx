@@ -554,22 +554,22 @@ export default function Profile() {
               </CardTitle>
               <CardDescription>Manage your email and password</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 px-4 sm:px-6">
               {/* Email */}
               <div className="space-y-2">
-                <Label>Email Address</Label>
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    <span>{user.email}</span>
+                <Label className="text-sm">Email Address</Label>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-muted rounded-lg">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm sm:text-base truncate">{user.email}</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     {user.emailVerified ? (
-                      <Badge variant="secondary" className="bg-success/10 text-success">
+                      <Badge variant="secondary" className="bg-success/10 text-success text-xs">
                         <Check className="h-3 w-3 mr-1" /> Verified
                       </Badge>
                     ) : (
-                      <Badge variant="secondary" className="bg-warning/10 text-warning">
+                      <Badge variant="secondary" className="bg-warning/10 text-warning text-xs">
                         Not Verified
                       </Badge>
                     )}
@@ -588,7 +588,7 @@ export default function Profile() {
 
               {/* Change Password */}
               <div className="space-y-2 pt-4 border-t">
-                <Label className="flex items-center gap-2">
+                <Label className="flex items-center gap-2 text-sm">
                   <Lock className="h-4 w-4" />
                   Password
                 </Label>
