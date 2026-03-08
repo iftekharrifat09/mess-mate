@@ -35,6 +35,7 @@ export default function Notices() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<Notice | null>(null);
 
   const isManager = user?.role === 'manager';
 
