@@ -291,7 +291,10 @@ export default function CalculatorPage() {
                 <div className="p-2 rounded-lg bg-primary/10"><DollarSign className="h-5 w-5 text-primary" /></div>
                 <div>
                   <p className="text-xs text-muted-foreground">Monthly Total</p>
-                  <p className="text-xl font-bold">{formatCurrency(monthlyTotal)}</p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-xl font-bold">{formatCurrency(monthlyTotal)}</p>
+                    {isMonthlyFullyPaid && <Badge className="bg-success text-success-foreground text-xs">Paid</Badge>}
+                  </div>
                 </div>
               </div>
             </CardContent>
