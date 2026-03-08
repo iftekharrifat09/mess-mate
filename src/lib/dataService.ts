@@ -1204,10 +1204,17 @@ export async function notifyManager(messId: string, notification: { type: Notifi
 // ============================================
 
 export async function getNotesByMessId(messId: string): Promise<Note[]> {
+  // Check cache first
+  const cacheKey = cacheKeys.notes(messId);
+  const cached = apiCache.get<Note[]>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     const result = await api.getNotesAPI(messId);
     if (result.success && result.data) {
-      return (result.data as any).notes || result.data || [];
+      const notes = (result.data as any).notes || result.data || [];
+      apiCache.set(cacheKey, notes, apiCache.getTTL('default'));
+      return notes;
     }
   }
   return storage.getNotesByMessId(messId);
