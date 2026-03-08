@@ -359,7 +359,7 @@ export default function Deposits() {
                                 size="sm" 
                                 variant="ghost" 
                                 className="text-destructive"
-                                onClick={() => handleDelete(deposit.id)}
+                                onClick={() => setDeleteTargetId(deposit.id)}
                                 disabled={deletingId === deposit.id}
                               >
                                 {deletingId === deposit.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
