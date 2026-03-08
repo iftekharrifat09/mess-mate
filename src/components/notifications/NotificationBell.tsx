@@ -11,10 +11,58 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/AuthContext';
 import * as dataService from '@/lib/dataService';
 import { getNotificationSoundEnabled } from '@/lib/preferences';
+import { getBrowserNotificationsEnabled } from '@/lib/notificationTones';
 import { Notification } from '@/types';
 import { format } from 'date-fns';
 import { Trash2, Check, CheckCheck } from 'lucide-react';
 import { useNotificationSound } from '@/hooks/useNotificationSound';
+import { toast as showToast } from '@/hooks/use-toast';
+
+const NOTIF_ICONS: Record<string, string> = {
+  meal: '🍽️',
+  deposit: '💰',
+  cost: '💳',
+  notice: '📢',
+  bazar: '🛒',
+  mess_update: '🏠',
+  join_request: '👋',
+};
+
+function getNotificationIcon(type: Notification['type']) {
+  return NOTIF_ICONS[type] || '🔔';
+}
+
+// Request browser notification permission
+export async function requestBrowserNotificationPermission(): Promise<boolean> {
+  if (!('Notification' in window)) return false;
+  if (Notification.permission === 'granted') return true;
+  if (Notification.permission === 'denied') return false;
+  const result = await Notification.requestPermission();
+  return result === 'granted';
+}
+
+// Send a browser push notification
+function sendBrowserNotification(title: string, body: string, icon?: string) {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  try {
+    const notif = new Notification(title, {
+      body,
+      icon: icon || '/favicon.ico',
+      badge: '/favicon.ico',
+      tag: `mess-notif-${Date.now()}`,
+      silent: true, // We handle sound ourselves
+    });
+    // Auto-close after 5 seconds
+    setTimeout(() => notif.close(), 5000);
+    // Focus the tab when clicked
+    notif.onclick = () => {
+      window.focus();
+      notif.close();
+    };
+  } catch (e) {
+    console.warn('Browser notification failed:', e);
+  }
+}
 
 export default function NotificationBell() {
   const { user } = useAuth();
@@ -23,6 +71,7 @@ export default function NotificationBell() {
   const [isOpen, setIsOpen] = useState(false);
   const { playNotificationSound, primeNotificationSound } = useNotificationSound();
   const prevUnseenCountRef = useRef<number>(0);
+  const prevNotifIdsRef = useRef<Set<string>>(new Set());
   const hasLoadedOnceRef = useRef(false);
 
   const loadNotifications = useCallback(async () => {
@@ -33,15 +82,37 @@ export default function NotificationBell() {
 
       const count = await dataService.getUnseenNotificationsCount(user.id);
 
-      // Skip sound on the very first load only; afterwards play on any increase (even 0 -> 1)
-      if (
-        hasLoadedOnceRef.current &&
-        count > prevUnseenCountRef.current &&
-        getNotificationSoundEnabled(user.id)
-      ) {
-        playNotificationSound(user.id);
+      // Detect truly new notifications (not just unseen count change)
+      if (hasLoadedOnceRef.current && count > prevUnseenCountRef.current) {
+        // Find new notification items
+        const prevIds = prevNotifIdsRef.current;
+        const newNotifs = notifs.filter(n => !n.seen && !prevIds.has(n.id));
+
+        // Play sound
+        if (getNotificationSoundEnabled(user.id)) {
+          playNotificationSound(user.id);
+        }
+
+        // Send browser push notifications + in-app toasts for each new notification
+        for (const n of newNotifs) {
+          // Browser notification (if enabled and permission granted)
+          if (getBrowserNotificationsEnabled(user.id)) {
+            sendBrowserNotification(
+              n.title,
+              n.message,
+            );
+          }
+
+          // In-app toast
+          showToast({
+            title: `${getNotificationIcon(n.type)} ${n.title}`,
+            description: n.message,
+          });
+        }
       }
 
+      // Update tracked IDs
+      prevNotifIdsRef.current = new Set(notifs.map(n => n.id));
       prevUnseenCountRef.current = count;
       hasLoadedOnceRef.current = true;
       setUnseenCount(count);
@@ -102,19 +173,6 @@ export default function NotificationBell() {
       loadNotifications();
     } catch (error) {
       console.error('Error deleting all notifications:', error);
-    }
-  };
-
-  const getNotificationIcon = (type: Notification['type']) => {
-    switch (type) {
-      case 'meal': return '🍽️';
-      case 'deposit': return '💰';
-      case 'cost': return '💳';
-      case 'notice': return '📢';
-      case 'bazar': return '🛒';
-      case 'mess_update': return '🏠';
-      case 'join_request': return '👋';
-      default: return '🔔';
     }
   };
 
