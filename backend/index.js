@@ -92,6 +92,7 @@ async function connectToDatabase() {
       calcCategories: db.collection("calcCategories"),
       calcExceptions: db.collection("calcExceptions"),
       calcPayments: db.collection("calcPayments"),
+      calcBillPayments: db.collection("calcBillPayments"),
     };
 
     // Create indexes
