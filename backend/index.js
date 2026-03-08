@@ -2296,6 +2296,14 @@ app.post("/api/calc-categories", authMiddleware, async (req, res) => {
     const { title, totalCost, status, messId, monthId } = req.body;
     const doc = { title, totalCost, status: status || "unpaid", messId: messId || req.user.messId, monthId, createdAt: new Date() };
     const result = await collections.calcCategories.insertOne(doc);
+
+    // Notify members
+    await notifyMembers(doc.messId, req.userId, {
+      title: "Expense Category Added",
+      message: `New expense category "${title}" added (৳${totalCost})`,
+      type: "general",
+    });
+
     res.json({ success: true, category: { id: result.insertedId.toString(), ...doc } });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to create category" });
