@@ -807,3 +807,20 @@ export async function updateCalcPaymentAPI(id: string, data: any) {
 export async function deleteCalcPaymentAPI(id: string) {
   return apiRequest(`/calc-payments/${id}`, { method: 'DELETE' });
 }
+
+// Bill Payments
+export async function getCalcBillPaymentsAPI(messId: string, monthId: string) {
+  return apiRequest(`/calc-bill-payments?messId=${messId}&monthId=${monthId}`, { method: 'GET' });
+}
+
+export async function createCalcBillPaymentAPI(data: any) {
+  return apiRequest('/calc-bill-payments', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function updateCalcBillPaymentAPI(id: string, data: any) {
+  return apiRequest(`/calc-bill-payments/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
+export async function deleteCalcBillPaymentAPI(id: string) {
+  return apiRequest(`/calc-bill-payments/${id}`, { method: 'DELETE' });
+}
