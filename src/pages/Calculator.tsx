@@ -28,6 +28,7 @@ import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
+import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 
 export default function CalculatorPage() {
   const { user } = useAuth();
@@ -39,6 +40,7 @@ export default function CalculatorPage() {
   const [allExceptions, setAllExceptions] = useState<CalcException[]>([]);
   const [payments, setPayments] = useState<CalcPayment[]>([]);
   const [billPayments, setBillPayments] = useState<CalcBillPayment[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Modal states
   const [catModal, setCatModal] = useState(false);
@@ -91,16 +93,18 @@ export default function CalculatorPage() {
   useEffect(() => {
     if (!messId) return;
     (async () => {
+      setIsLoading(true);
       const [m, month] = await Promise.all([
         dataService.getMessMembers(messId),
         dataService.getActiveMonth(messId),
       ]);
       setMembers(m || []);
       if (month) setActiveMonthId(month.id);
+      else setIsLoading(false);
     })();
   }, [messId]);
 
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => { reload().finally(() => setIsLoading(false)); }, [reload]);
 
   const totalMembers = members.length;
 
@@ -332,6 +336,14 @@ export default function CalculatorPage() {
   };
 
   const getExceptionsForCategory = (catId: string) => allExceptions.filter(e => e.categoryId === catId);
+
+  if (isLoading) {
+    return (
+      <DashboardLayout>
+        <LoadingSkeleton type="table" count={4} />
+      </DashboardLayout>
+    );
+  }
 
   if (!activeMonthId) {
     return (
