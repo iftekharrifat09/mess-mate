@@ -2515,6 +2515,13 @@ app.post("/api/calc-bill-payments", authMiddleware, async (req, res) => {
     const { categoryId, categoryName, amount, description, messId, monthId } = req.body;
     const doc = { categoryId, categoryName, amount, description, messId: messId || req.user.messId, monthId, createdAt: new Date() };
     const result = await collections.calcBillPayments.insertOne(doc);
+
+    await notifyMembers(doc.messId, req.userId, {
+      title: "Bill Payment Recorded",
+      message: `৳${amount} paid for "${categoryName}"${description ? ` - ${description}` : ""}`,
+      type: "general",
+    });
+
     res.json({ success: true, billPayment: { id: result.insertedId.toString(), ...doc } });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to create bill payment" });
