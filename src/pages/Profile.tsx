@@ -36,10 +36,12 @@ export default function Profile() {
   const { toast } = useToast();
 
   const [notificationSoundEnabled, setNotificationSoundEnabledState] = useState(true);
+  const [emailNotificationEnabled, setEmailNotificationEnabledState] = useState(true);
 
   useEffect(() => {
     if (!user) return;
     setNotificationSoundEnabledState(getNotificationSoundEnabled(user.id));
+    setEmailNotificationEnabledState(getEmailNotificationEnabled(user.id));
   }, [user]);
 
   const handleToggleNotificationSound = (checked: boolean) => {
