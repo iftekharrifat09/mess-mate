@@ -656,6 +656,24 @@ export default function CalendarModal() {
               <p className="text-xs text-muted-foreground text-center py-3">Could not load prayer times</p>
             )}
           </div>
+
+          {/* Close Button */}
+          <DialogClose asChild>
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.3 }}
+              className="flex justify-center pt-2 pb-1"
+            >
+              <Button
+                variant="outline"
+                className="gap-2 px-6 border-border/60 hover:bg-destructive/10 hover:border-destructive/50 hover:text-destructive transition-colors"
+              >
+                <X className="h-4 w-4" />
+                Close Calendar
+              </Button>
+            </motion.div>
+          </DialogClose>
         </motion.div>
       </DialogContent>
     </Dialog>
