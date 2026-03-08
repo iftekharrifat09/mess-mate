@@ -7,7 +7,7 @@
 import { shouldUseBackend, isBackendAvailable, isMongoDbConnected } from './config';
 import * as api from './api';
 import * as storage from './storage';
-import { apiCache, cacheKeys, invalidateMonthData } from './apiCache';
+import { apiCache, cacheKeys, invalidateMonthData, invalidateUserData } from './apiCache';
 import { User, Mess, Month, Meal, Deposit, MealCost, OtherCost, JoinRequest, Notice, BazarDate, Notification, Note, MessActivityLog } from '@/types';
 import { toast } from '@/hooks/use-toast';
 
@@ -38,16 +38,23 @@ export async function getUsers(): Promise<User[]> {
 }
 
 export async function getUserById(id: string): Promise<User | undefined> {
+  if (!id) return undefined;
+  
+  // Check cache first
+  const cacheKey = cacheKeys.user(id);
+  const cached = apiCache.get<User>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     try {
       const result = await api.getUserByIdAPI(id);
       if (result.success && result.data) {
         const data = result.data as any;
         const user = data.user || data;
-        // Ensure fullName is set (backend might only return 'name')
         if (user && !user.fullName && user.name) {
           user.fullName = user.name;
         }
+        if (user) apiCache.set(cacheKey, user, apiCache.getTTL('default'));
         return user;
       }
     } catch (error) {
@@ -62,6 +69,10 @@ export async function getUserByEmail(email: string): Promise<User | undefined> {
 }
 
 export async function updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
+  // Invalidate user cache on mutation
+  apiCache.invalidate(cacheKeys.user(id));
+  if (updates.messId) apiCache.invalidate(cacheKeys.messMembers(updates.messId));
+  
   if (shouldUseBackend()) {
     const result = await api.updateUserAPI(id, updates);
     if (result.success && result.data) {
@@ -75,6 +86,9 @@ export async function updateUser(id: string, updates: Partial<User>): Promise<Us
 }
 
 export async function deleteUser(id: string): Promise<boolean> {
+  // Invalidate user cache
+  invalidateUserData(id);
+  
   if (shouldUseBackend()) {
     const result = await api.deleteUserAPI(id);
     if (result.success) {
@@ -242,11 +256,18 @@ export async function getMonths(): Promise<Month[]> {
 export async function getMonthsByMessId(messId: string | undefined): Promise<Month[]> {
   if (!messId) return [];
   
+  // Check cache first
+  const cacheKey = cacheKeys.months(messId);
+  const cached = apiCache.get<Month[]>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     try {
       const result = await api.getMonthsAPI(messId);
       if (result.success && result.data) {
-        return (result.data as any).months || result.data || [];
+        const months = (result.data as any).months || result.data || [];
+        apiCache.set(cacheKey, months, apiCache.getTTL('default'));
+        return months;
       }
       if (result.usingLocalStorage) {
         return storage.getMonthsByMessId(messId);
@@ -289,6 +310,10 @@ export async function getActiveMonth(messId: string | undefined): Promise<Month 
 }
 
 export async function createMonth(monthData: Omit<Month, 'id' | 'createdAt'>): Promise<Month> {
+  // Invalidate months cache
+  if (monthData.messId) apiCache.invalidate(cacheKeys.months(monthData.messId));
+  apiCache.invalidatePrefix('month:active:');
+  
   if (shouldUseBackend()) {
     const result = await api.createMonthAPI(monthData as any);
     if (result.success && result.data) {
@@ -302,6 +327,10 @@ export async function createMonth(monthData: Omit<Month, 'id' | 'createdAt'>): P
 }
 
 export async function updateMonth(id: string, updates: Partial<Month>): Promise<Month | undefined> {
+  // Invalidate month-related caches
+  apiCache.invalidatePrefix('month:');
+  apiCache.invalidatePrefix('months:');
+  
   if (shouldUseBackend()) {
     const result = await api.updateMonthAPI(id, updates);
     if (result.success && result.data) {
@@ -449,6 +478,12 @@ export async function getDepositsByUserAndMonth(userId: string, monthId: string)
 }
 
 export async function createDeposit(depositData: Omit<Deposit, 'id' | 'createdAt'>): Promise<Deposit> {
+  // Invalidate cache on mutation
+  if ((depositData as any).monthId) {
+    apiCache.invalidate(cacheKeys.deposits((depositData as any).monthId));
+    apiCache.invalidatePrefix('summary:');
+  }
+  
   if (shouldUseBackend()) {
     const result = await api.createDepositAPI(depositData);
     if (result.success && result.data) {
@@ -462,6 +497,10 @@ export async function createDeposit(depositData: Omit<Deposit, 'id' | 'createdAt
 }
 
 export async function updateDeposit(id: string, updates: Partial<Deposit>): Promise<Deposit | undefined> {
+  // Invalidate deposit caches
+  apiCache.invalidatePrefix('deposits:');
+  apiCache.invalidatePrefix('summary:');
+  
   if (shouldUseBackend()) {
     const result = await api.updateDepositAPI(id, updates);
     if (result.success && result.data) {
@@ -475,6 +514,10 @@ export async function updateDeposit(id: string, updates: Partial<Deposit>): Prom
 }
 
 export async function deleteDeposit(id: string): Promise<boolean> {
+  // Invalidate deposit caches
+  apiCache.invalidatePrefix('deposits:');
+  apiCache.invalidatePrefix('summary:');
+  
   if (shouldUseBackend()) {
     const result = await api.deleteDepositAPI(id);
     if (result.success) {
@@ -492,14 +535,20 @@ export async function deleteDeposit(id: string): Promise<boolean> {
 // ============================================
 
 export async function getMealCostsByMonthId(monthId: string): Promise<MealCost[]> {
+  // Check cache first
+  const cacheKey = cacheKeys.mealCosts(monthId);
+  const cached = apiCache.get<MealCost[]>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     try {
       const result = await api.getMealCostsAPI(monthId);
       if (result.success && result.data) {
         const data = result.data as any;
-        // Backend returns { success: true, costs: [...] }
         const mealCosts = data.costs || data.mealCosts || (Array.isArray(data) ? data : []);
-        return Array.isArray(mealCosts) ? mealCosts : [];
+        const result_arr = Array.isArray(mealCosts) ? mealCosts : [];
+        apiCache.set(cacheKey, result_arr, apiCache.getTTL('short'));
+        return result_arr;
       }
       if (result.usingLocalStorage) {
         return storage.getMealCostsByMonthId(monthId);
@@ -513,11 +562,16 @@ export async function getMealCostsByMonthId(monthId: string): Promise<MealCost[]
 }
 
 export async function createMealCost(costData: Omit<MealCost, 'id' | 'createdAt'>): Promise<MealCost> {
+  // Invalidate cache
+  if ((costData as any).monthId) {
+    apiCache.invalidate(cacheKeys.mealCosts((costData as any).monthId));
+    apiCache.invalidatePrefix('summary:');
+  }
+  
   if (shouldUseBackend()) {
     const result = await api.createMealCostAPI(costData);
     if (result.success && result.data) {
       const data = result.data as any;
-      // Backend returns { success: true, cost: {...} }
       return data.cost || data.mealCost || data;
     }
     if (result.usingLocalStorage) {
@@ -528,6 +582,10 @@ export async function createMealCost(costData: Omit<MealCost, 'id' | 'createdAt'
 }
 
 export async function updateMealCost(id: string, updates: Partial<MealCost>): Promise<MealCost | undefined> {
+  // Invalidate cache
+  apiCache.invalidatePrefix('mealCosts:');
+  apiCache.invalidatePrefix('summary:');
+  
   if (shouldUseBackend()) {
     const result = await api.updateMealCostAPI(id, updates);
     if (result.success && result.data) {
@@ -542,6 +600,10 @@ export async function updateMealCost(id: string, updates: Partial<MealCost>): Pr
 }
 
 export async function deleteMealCost(id: string): Promise<boolean> {
+  // Invalidate cache
+  apiCache.invalidatePrefix('mealCosts:');
+  apiCache.invalidatePrefix('summary:');
+  
   if (shouldUseBackend()) {
     const result = await api.deleteMealCostAPI(id);
     if (result.success) {
@@ -559,14 +621,20 @@ export async function deleteMealCost(id: string): Promise<boolean> {
 // ============================================
 
 export async function getOtherCostsByMonthId(monthId: string): Promise<OtherCost[]> {
+  // Check cache first
+  const cacheKey = cacheKeys.otherCosts(monthId);
+  const cached = apiCache.get<OtherCost[]>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     try {
       const result = await api.getOtherCostsAPI(monthId);
       if (result.success && result.data) {
         const data = result.data as any;
-        // Backend returns { success: true, costs: [...] }
         const otherCosts = data.costs || data.otherCosts || (Array.isArray(data) ? data : []);
-        return Array.isArray(otherCosts) ? otherCosts : [];
+        const result_arr = Array.isArray(otherCosts) ? otherCosts : [];
+        apiCache.set(cacheKey, result_arr, apiCache.getTTL('short'));
+        return result_arr;
       }
       if (result.usingLocalStorage) {
         return storage.getOtherCostsByMonthId(monthId);
@@ -580,11 +648,16 @@ export async function getOtherCostsByMonthId(monthId: string): Promise<OtherCost
 }
 
 export async function createOtherCost(costData: Omit<OtherCost, 'id' | 'createdAt'>): Promise<OtherCost> {
+  // Invalidate cache
+  if ((costData as any).monthId) {
+    apiCache.invalidate(cacheKeys.otherCosts((costData as any).monthId));
+    apiCache.invalidatePrefix('summary:');
+  }
+  
   if (shouldUseBackend()) {
     const result = await api.createOtherCostAPI(costData);
     if (result.success && result.data) {
       const data = result.data as any;
-      // Backend returns { success: true, cost: {...} }
       return data.cost || data.otherCost || data;
     }
     if (result.usingLocalStorage) {
@@ -595,6 +668,10 @@ export async function createOtherCost(costData: Omit<OtherCost, 'id' | 'createdA
 }
 
 export async function updateOtherCost(id: string, updates: Partial<OtherCost>): Promise<OtherCost | undefined> {
+  // Invalidate cache
+  apiCache.invalidatePrefix('otherCosts:');
+  apiCache.invalidatePrefix('summary:');
+  
   if (shouldUseBackend()) {
     const result = await api.updateOtherCostAPI(id, updates);
     if (result.success && result.data) {
@@ -609,6 +686,10 @@ export async function updateOtherCost(id: string, updates: Partial<OtherCost>): 
 }
 
 export async function deleteOtherCost(id: string): Promise<boolean> {
+  // Invalidate cache
+  apiCache.invalidatePrefix('otherCosts:');
+  apiCache.invalidatePrefix('summary:');
+  
   if (shouldUseBackend()) {
     const result = await api.deleteOtherCostAPI(id);
     if (result.success) {
@@ -631,7 +712,6 @@ export async function getJoinRequests(): Promise<JoinRequest[]> {
       const result = await api.getJoinRequestsAPI();
       if (result.success && result.data) {
         const data = result.data as any;
-        // Handle both 'joinRequests' and 'requests' response formats
         const requests = data.joinRequests || data.requests || data || [];
         return requests;
       }
@@ -643,10 +723,17 @@ export async function getJoinRequests(): Promise<JoinRequest[]> {
 }
 
 export async function getJoinRequestsByMessId(messId: string): Promise<JoinRequest[]> {
+  // Check cache first
+  const cacheKey = cacheKeys.joinRequests(messId);
+  const cached = apiCache.get<JoinRequest[]>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     const result = await api.getJoinRequestsAPI(messId);
     if (result.success && result.data) {
-      return (result.data as any).joinRequests || result.data || [];
+      const requests = (result.data as any).joinRequests || result.data || [];
+      apiCache.set(cacheKey, requests, apiCache.getTTL('short'));
+      return requests;
     }
   }
   return storage.getJoinRequestsByMessId(messId);
@@ -679,10 +766,13 @@ export async function getPendingJoinRequestsForUser(userId: string): Promise<Joi
 }
 
 export async function createJoinRequest(requestData: Omit<JoinRequest, 'id' | 'createdAt'> & { messCode?: string }): Promise<JoinRequest> {
+  // Invalidate cache
+  if (requestData.messId) apiCache.invalidate(cacheKeys.joinRequests(requestData.messId));
+  if (requestData.userId) apiCache.invalidate(cacheKeys.userJoinRequests(requestData.userId));
+  
   if (shouldUseBackend()) {
     const result = await api.createJoinRequestAPI({
       messId: requestData.messId,
-      // Prefer messCode when available (backend supports both)
       messCode: (requestData as any).messCode,
     });
     if (result.success && result.data) {
@@ -701,6 +791,9 @@ export async function updateJoinRequest(id: string, updates: Partial<JoinRequest
 }
 
 export async function deleteJoinRequest(id: string): Promise<boolean> {
+  // Invalidate join request caches
+  apiCache.invalidatePrefix('joinRequests:');
+  
   if (shouldUseBackend()) {
     const result = await api.deleteJoinRequestAPI(id);
     if (result.success) {
@@ -711,6 +804,10 @@ export async function deleteJoinRequest(id: string): Promise<boolean> {
 }
 
 export async function approveJoinRequest(id: string): Promise<boolean> {
+  // Invalidate caches
+  apiCache.invalidatePrefix('joinRequests:');
+  apiCache.invalidatePrefix('mess:');
+  
   if (shouldUseBackend()) {
     const result = await api.approveJoinRequestAPI(id);
     if (result.success) {
@@ -720,12 +817,14 @@ export async function approveJoinRequest(id: string): Promise<boolean> {
       showFallbackAlert();
     }
   }
-  // For localStorage, use the comprehensive approve function that updates user too
   const result = storage.approveJoinRequestAndUpdateUser(id);
   return result.success;
 }
 
 export async function rejectJoinRequest(id: string): Promise<boolean> {
+  // Invalidate caches
+  apiCache.invalidatePrefix('joinRequests:');
+  
   if (shouldUseBackend()) {
     const result = await api.rejectJoinRequestAPI(id);
     if (result.success) {
@@ -787,26 +886,46 @@ export async function getMessMembers(messId: string | undefined): Promise<User[]
 // ============================================
 
 export async function getNoticesByMessId(messId: string): Promise<Notice[]> {
+  // Check cache first
+  const cacheKey = cacheKeys.notices(messId);
+  const cached = apiCache.get<Notice[]>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     const result = await api.getNoticesAPI(messId);
     if (result.success && result.data) {
-      return (result.data as any).notices || result.data || [];
+      const notices = (result.data as any).notices || result.data || [];
+      apiCache.set(cacheKey, notices, apiCache.getTTL('default'));
+      return notices;
     }
   }
   return storage.getNoticesByMessId(messId);
 }
 
 export async function getLatestNotice(messId: string): Promise<Notice | undefined> {
+  // Check cache first
+  const cacheKey = cacheKeys.latestNotice(messId);
+  const cached = apiCache.get<Notice>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     const result = await api.getActiveNoticeAPI(messId);
     if (result.success && result.data) {
-      return (result.data as any).notice || result.data;
+      const notice = (result.data as any).notice || result.data;
+      if (notice) apiCache.set(cacheKey, notice, apiCache.getTTL('default'));
+      return notice;
     }
   }
   return storage.getLatestNotice(messId);
 }
 
 export async function createNotice(noticeData: Omit<Notice, 'id' | 'createdAt'>): Promise<Notice> {
+  // Invalidate notice caches
+  if ((noticeData as any).messId) {
+    apiCache.invalidate(cacheKeys.notices((noticeData as any).messId));
+    apiCache.invalidate(cacheKeys.latestNotice((noticeData as any).messId));
+  }
+  
   if (shouldUseBackend()) {
     const result = await api.createNoticeAPI(noticeData as any);
     if (result.success && result.data) {
@@ -820,6 +939,9 @@ export async function createNotice(noticeData: Omit<Notice, 'id' | 'createdAt'>)
 }
 
 export async function updateNotice(id: string, updates: Partial<Notice>): Promise<Notice | undefined> {
+  // Invalidate notice caches
+  apiCache.invalidatePrefix('notices:');
+  
   if (shouldUseBackend()) {
     const result = await api.updateNoticeAPI(id, updates);
     if (result.success && result.data) {
@@ -833,6 +955,9 @@ export async function updateNotice(id: string, updates: Partial<Notice>): Promis
 }
 
 export async function deleteNotice(id: string): Promise<boolean> {
+  // Invalidate notice caches
+  apiCache.invalidatePrefix('notices:');
+  
   if (shouldUseBackend()) {
     const result = await api.deleteNoticeAPI(id);
     if (result.success) {
@@ -956,10 +1081,17 @@ export async function deleteBazarDate(id: string): Promise<boolean> {
 // ============================================
 
 export async function getNotificationsByUserId(userId: string): Promise<Notification[]> {
+  // Check cache first
+  const cacheKey = cacheKeys.notifications(userId);
+  const cached = apiCache.get<Notification[]>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     const result = await api.getNotificationsAPI();
     if (result.success && result.data) {
-      return (result.data as any).notifications || result.data || [];
+      const notifications = (result.data as any).notifications || result.data || [];
+      apiCache.set(cacheKey, notifications, apiCache.getTTL('short'));
+      return notifications;
     }
   }
   return storage.getNotificationsByUserId(userId);
@@ -974,6 +1106,9 @@ export async function getUnseenNotificationsCount(userId: string): Promise<numbe
 }
 
 export async function createNotification(notificationData: Omit<Notification, 'id' | 'createdAt' | 'seen'>): Promise<Notification> {
+  // Invalidate notification cache
+  if (notificationData.userId) apiCache.invalidate(cacheKeys.notifications(notificationData.userId));
+  
   if (shouldUseBackend()) {
     const result = await api.createNotificationAPI(notificationData);
     if (result.success && result.data) {
@@ -984,6 +1119,9 @@ export async function createNotification(notificationData: Omit<Notification, 'i
 }
 
 export async function markNotificationAsSeen(id: string): Promise<void> {
+  // Invalidate notification caches
+  apiCache.invalidatePrefix('notifications:');
+  
   if (shouldUseBackend()) {
     const result = await api.markNotificationReadAPI(id);
     if (result.success) {
@@ -994,6 +1132,9 @@ export async function markNotificationAsSeen(id: string): Promise<void> {
 }
 
 export async function markAllNotificationsAsSeen(userId: string): Promise<void> {
+  // Invalidate notification cache
+  apiCache.invalidate(cacheKeys.notifications(userId));
+  
   if (shouldUseBackend()) {
     const result = await api.markAllNotificationsReadAPI();
     if (result.success) {
@@ -1004,6 +1145,9 @@ export async function markAllNotificationsAsSeen(userId: string): Promise<void> 
 }
 
 export async function deleteNotification(id: string): Promise<boolean> {
+  // Invalidate notification caches
+  apiCache.invalidatePrefix('notifications:');
+  
   if (shouldUseBackend()) {
     const result = await api.deleteNotificationAPI(id);
     if (result.success) {
@@ -1014,6 +1158,9 @@ export async function deleteNotification(id: string): Promise<boolean> {
 }
 
 export async function deleteAllNotifications(userId: string): Promise<void> {
+  // Invalidate notification cache
+  apiCache.invalidate(cacheKeys.notifications(userId));
+  
   if (shouldUseBackend()) {
     const result = await api.deleteAllNotificationsAPI();
     if (result.success) {
@@ -1057,16 +1204,26 @@ export async function notifyManager(messId: string, notification: { type: Notifi
 // ============================================
 
 export async function getNotesByMessId(messId: string): Promise<Note[]> {
+  // Check cache first
+  const cacheKey = cacheKeys.notes(messId);
+  const cached = apiCache.get<Note[]>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     const result = await api.getNotesAPI(messId);
     if (result.success && result.data) {
-      return (result.data as any).notes || result.data || [];
+      const notes = (result.data as any).notes || result.data || [];
+      apiCache.set(cacheKey, notes, apiCache.getTTL('default'));
+      return notes;
     }
   }
   return storage.getNotesByMessId(messId);
 }
 
 export async function createNote(noteData: Omit<Note, 'id' | 'createdAt'>): Promise<Note> {
+  // Invalidate notes cache
+  if ((noteData as any).messId) apiCache.invalidate(cacheKeys.notes((noteData as any).messId));
+  
   if (shouldUseBackend()) {
     const result = await api.createNoteAPI(noteData as any);
     if (result.success && result.data) {
@@ -1080,6 +1237,9 @@ export async function createNote(noteData: Omit<Note, 'id' | 'createdAt'>): Prom
 }
 
 export async function updateNote(id: string, updates: Partial<Note>): Promise<Note | undefined> {
+  // Invalidate notes cache
+  apiCache.invalidatePrefix('notes:');
+  
   if (shouldUseBackend()) {
     const result = await api.updateNoteAPI(id, updates);
     if (result.success && result.data) {
@@ -1093,6 +1253,9 @@ export async function updateNote(id: string, updates: Partial<Note>): Promise<No
 }
 
 export async function deleteNote(id: string): Promise<boolean> {
+  // Invalidate notes cache
+  apiCache.invalidatePrefix('notes:');
+  
   if (shouldUseBackend()) {
     const result = await api.deleteNoteAPI(id);
     if (result.success) {
@@ -1172,11 +1335,18 @@ export async function deleteMonthAndData(monthId: string): Promise<void> {
 // ============================================
 
 export async function getActivityLogsByMessId(messId: string): Promise<MessActivityLog[]> {
+  // Check cache first
+  const cacheKey = cacheKeys.activityLogs(messId);
+  const cached = apiCache.get<MessActivityLog[]>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     try {
       const result = await api.getActivityLogsAPI(messId);
       if (result.success && result.data) {
-        return (result.data as any).logs || result.data as any;
+        const logs = (result.data as any).logs || result.data as any;
+        apiCache.set(cacheKey, logs, apiCache.getTTL('default'));
+        return logs;
       }
     } catch (error) {
       console.error('Error fetching activity logs from API:', error);
@@ -1186,6 +1356,9 @@ export async function getActivityLogsByMessId(messId: string): Promise<MessActiv
 }
 
 export async function createActivityLog(logData: Omit<MessActivityLog, 'id' | 'createdAt'>): Promise<MessActivityLog> {
+  // Invalidate activity log cache
+  if ((logData as any).messId) apiCache.invalidate(cacheKeys.activityLogs((logData as any).messId));
+  
   if (shouldUseBackend()) {
     try {
       const result = await api.createActivityLogAPI(logData);
@@ -1200,6 +1373,9 @@ export async function createActivityLog(logData: Omit<MessActivityLog, 'id' | 'c
 }
 
 export async function deleteActivityLog(logId: string): Promise<boolean> {
+  // Invalidate activity log caches
+  apiCache.invalidatePrefix('activityLogs:');
+  
   if (shouldUseBackend()) {
     try {
       const result = await api.deleteActivityLogAPI(logId);
