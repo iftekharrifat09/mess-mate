@@ -2555,7 +2555,17 @@ app.put("/api/calc-bill-payments/:id", authMiddleware, async (req, res) => {
 
 app.delete("/api/calc-bill-payments/:id", authMiddleware, async (req, res) => {
   try {
+    const doc = await collections.calcBillPayments.findOne({ _id: new ObjectId(req.params.id) });
     await collections.calcBillPayments.deleteOne({ _id: new ObjectId(req.params.id) });
+
+    if (doc) {
+      await notifyMembers(doc.messId, req.userId, {
+        title: "Bill Payment Deleted",
+        message: `Bill payment of ৳${doc.amount} for "${doc.categoryName}" has been removed`,
+        type: "general",
+      });
+    }
+
     res.json({ success: true, message: "Bill payment deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to delete bill payment" });
