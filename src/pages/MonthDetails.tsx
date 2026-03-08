@@ -209,10 +209,9 @@ export default function MonthDetails() {
       // Load all summaries in parallel for speed
       const summaries = await Promise.all(
         inactiveMonths.map(async (month) => {
-          const [summary, mSummary] = await Promise.all([
-            calculateMonthSummary(month.id, user.messId),
-            getAllMembersSummary(month.id, user.messId),
-          ]);
+          const monthData = await fetchMonthData(month.id, user.messId);
+          const summary = calculateMonthSummaryFromData(month.id, monthData);
+          const mSummary = getAllMembersSummaryFromData(monthData);
           return { month, summary, membersSummary: mSummary };
         })
       );
