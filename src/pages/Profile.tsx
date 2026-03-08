@@ -93,6 +93,8 @@ export default function Profile() {
     }
     setBrowserNotifEnabledState(checked);
     setBrowserNotificationsEnabled(user.id, checked);
+    // Sync to backend
+    updateProfileAPI({ browserNotificationsEnabled: checked }).catch(() => {});
     toast({ title: checked ? 'Browser notifications enabled' : 'Browser notifications disabled', variant: 'success' });
   };
 
