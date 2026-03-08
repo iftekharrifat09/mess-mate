@@ -49,6 +49,7 @@ export default function CalculatorPage() {
   const [excUserId, setExcUserId] = useState('');
   const [excAmount, setExcAmount] = useState('');
   const [excStep, setExcStep] = useState<1 | 2>(1);
+  const [deleteTarget, setDeleteTarget] = useState<{ type: string; id: string; label: string } | null>(null);
 
   // Member Deposit modal
   const [payModal, setPayModal] = useState(false);
