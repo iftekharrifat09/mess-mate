@@ -50,6 +50,21 @@ export default function Profile() {
     setNotificationSoundEnabled(user.id, checked);
     toast({ title: checked ? 'Notification sound enabled' : 'Notification sound disabled', variant: 'success' });
   };
+
+  const handleToggleEmailNotification = async (checked: boolean) => {
+    if (!user) return;
+    setEmailNotificationEnabledState(checked);
+    setEmailNotificationEnabled(user.id, checked);
+
+    // Sync preference to backend
+    try {
+      await updateProfileAPI({ emailNotifications: checked });
+    } catch {
+      // localStorage already updated as fallback
+    }
+
+    toast({ title: checked ? 'Email notifications enabled' : 'Email notifications disabled', variant: 'success' });
+  };
   
   const [isEditingName, setIsEditingName] = useState(false);
   const [isEditingPhone, setIsEditingPhone] = useState(false);
