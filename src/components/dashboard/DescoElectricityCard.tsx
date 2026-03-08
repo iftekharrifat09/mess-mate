@@ -257,7 +257,24 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
               <p className="text-center text-muted-foreground py-4 text-sm">No daily consumption data for this month</p>
             ) : (
               <div className="space-y-4">
-                {/* Chart */}
+                {/* Slab info note */}
+                {(() => {
+                  const totalKwh = dailyDiffs.reduce((sum, d) => sum + d.kwh, 0);
+                  const slab = getSlabInfo(totalKwh);
+                  return (
+                    <div className="flex items-center justify-between bg-muted/50 border border-border rounded-lg px-3 py-2 text-[11px]">
+                      <span className="text-muted-foreground">
+                        Current slab: <span className="font-semibold text-foreground">৳{slab.rate}/kWh</span> ({slab.slab} units)
+                      </span>
+                      {slab.extraCharge > 0 && (
+                        <span className="text-destructive font-medium">
+                          +৳{slab.extraCharge.toFixed(2)} retroactive
+                        </span>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 {/* Legend */}
                 <div className="flex items-center justify-center gap-3 sm:gap-4 text-[10px] sm:text-xs text-muted-foreground flex-wrap">
                   <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-sm bg-[#22c55e]" /> Low</span>
