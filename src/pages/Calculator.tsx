@@ -104,7 +104,7 @@ export default function CalculatorPage() {
     })();
   }, [messId]);
 
-  useEffect(() => { reload(); }, [reload]);
+  useEffect(() => { reload().finally(() => setIsLoading(false)); }, [reload]);
 
   const totalMembers = members.length;
 
