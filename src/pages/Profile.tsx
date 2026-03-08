@@ -453,11 +453,11 @@ export default function Profile() {
         className="space-y-6"
       >
         <div>
-          <h1 className="text-3xl font-bold text-foreground">My Profile</h1>
-          <p className="text-muted-foreground">Manage your account settings</p>
+          <h1 className="text-2xl sm:text-3xl font-bold text-foreground">My Profile</h1>
+          <p className="text-sm sm:text-base text-muted-foreground">Manage your account settings</p>
         </div>
 
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid gap-4 sm:gap-6 grid-cols-1 md:grid-cols-2">
           {/* Basic Info Card */}
           <Card>
             <CardHeader>
@@ -467,27 +467,30 @@ export default function Profile() {
               </CardTitle>
               <CardDescription>Your personal details</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 px-4 sm:px-6">
               {/* Full Name */}
               <div className="space-y-2">
-                <Label>Full Name</Label>
+                <Label className="text-sm">Full Name</Label>
                 {isEditingName ? (
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <Input
                       value={fullName}
                       onChange={(e) => setFullName(e.target.value)}
                       placeholder="Enter your name"
+                      className="flex-1"
                     />
-                    <Button size="icon" onClick={handleUpdateName} disabled={isSavingName}>
-                      {isSavingName ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                    </Button>
-                    <Button size="icon" variant="outline" onClick={() => { setIsEditingName(false); setFullName(user.fullName); }} disabled={isSavingName}>
-                      <X className="h-4 w-4" />
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button size="icon" onClick={handleUpdateName} disabled={isSavingName} className="h-10 w-10">
+                        {isSavingName ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      </Button>
+                      <Button size="icon" variant="outline" onClick={() => { setIsEditingName(false); setFullName(user.fullName); }} disabled={isSavingName} className="h-10 w-10">
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                    <span>{user.fullName}</span>
+                    <span className="text-sm sm:text-base truncate pr-2">{user.fullName}</span>
                     <Button variant="ghost" size="sm" onClick={() => setIsEditingName(true)}>
                       <Edit2 className="h-4 w-4" />
                     </Button>
@@ -497,26 +500,29 @@ export default function Profile() {
 
               {/* Phone */}
               <div className="space-y-2">
-                <Label>Phone Number</Label>
+                <Label className="text-sm">Phone Number</Label>
                 {isEditingPhone ? (
-                  <div className="flex gap-2">
+                  <div className="flex flex-col sm:flex-row gap-2">
                     <Input
                       value={phone}
                       onChange={(e) => setPhone(e.target.value)}
                       placeholder="Enter your phone"
+                      className="flex-1"
                     />
-                    <Button size="icon" onClick={handleUpdatePhone} disabled={isSavingPhone}>
-                      {isSavingPhone ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
-                    </Button>
-                    <Button size="icon" variant="outline" onClick={() => { setIsEditingPhone(false); setPhone(user.phone); }} disabled={isSavingPhone}>
-                      <X className="h-4 w-4" />
-                    </Button>
+                    <div className="flex gap-2">
+                      <Button size="icon" onClick={handleUpdatePhone} disabled={isSavingPhone} className="h-10 w-10">
+                        {isSavingPhone ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                      </Button>
+                      <Button size="icon" variant="outline" onClick={() => { setIsEditingPhone(false); setPhone(user.phone); }} disabled={isSavingPhone} className="h-10 w-10">
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                    <span className="flex items-center gap-2">
-                      <Phone className="h-4 w-4 text-muted-foreground" />
-                      {user.phone || 'Not set'}
+                    <span className="flex items-center gap-2 text-sm sm:text-base">
+                      <Phone className="h-4 w-4 text-muted-foreground shrink-0" />
+                      <span className="truncate">{user.phone || 'Not set'}</span>
                     </span>
                     <Button variant="ghost" size="sm" onClick={() => setIsEditingPhone(true)}>
                       <Edit2 className="h-4 w-4" />
@@ -526,14 +532,14 @@ export default function Profile() {
               </div>
 
               {/* Role & Joined */}
-              <div className="grid grid-cols-2 gap-4 pt-2">
-                <div className="p-3 bg-muted/50 rounded-lg">
-                  <p className="text-xs text-muted-foreground">Role</p>
-                  <p className="font-medium capitalize">{user.role}</p>
+              <div className="grid grid-cols-2 gap-2 sm:gap-4 pt-2">
+                <div className="p-2.5 sm:p-3 bg-muted/50 rounded-lg">
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">Role</p>
+                  <p className="text-sm sm:text-base font-medium capitalize">{user.role}</p>
                 </div>
-                <div className="p-3 bg-muted/50 rounded-lg">
-                  <p className="text-xs text-muted-foreground">Joined</p>
-                  <p className="font-medium">{format(new Date(user.createdAt), 'MMM yyyy')}</p>
+                <div className="p-2.5 sm:p-3 bg-muted/50 rounded-lg">
+                  <p className="text-[10px] sm:text-xs text-muted-foreground">Joined</p>
+                  <p className="text-sm sm:text-base font-medium">{format(new Date(user.createdAt), 'MMM yyyy')}</p>
                 </div>
               </div>
             </CardContent>
@@ -548,22 +554,22 @@ export default function Profile() {
               </CardTitle>
               <CardDescription>Manage your email and password</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className="space-y-4 px-4 sm:px-6">
               {/* Email */}
               <div className="space-y-2">
-                <Label>Email Address</Label>
-                <div className="flex items-center justify-between p-3 bg-muted rounded-lg">
-                  <div className="flex items-center gap-2">
-                    <Mail className="h-4 w-4 text-muted-foreground" />
-                    <span>{user.email}</span>
+                <Label className="text-sm">Email Address</Label>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-3 bg-muted rounded-lg">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <Mail className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <span className="text-sm sm:text-base truncate">{user.email}</span>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 shrink-0">
                     {user.emailVerified ? (
-                      <Badge variant="secondary" className="bg-success/10 text-success">
+                      <Badge variant="secondary" className="bg-success/10 text-success text-xs">
                         <Check className="h-3 w-3 mr-1" /> Verified
                       </Badge>
                     ) : (
-                      <Badge variant="secondary" className="bg-warning/10 text-warning">
+                      <Badge variant="secondary" className="bg-warning/10 text-warning text-xs">
                         Not Verified
                       </Badge>
                     )}
@@ -582,7 +588,7 @@ export default function Profile() {
 
               {/* Change Password */}
               <div className="space-y-2 pt-4 border-t">
-                <Label className="flex items-center gap-2">
+                <Label className="flex items-center gap-2 text-sm">
                   <Lock className="h-4 w-4" />
                   Password
                 </Label>
@@ -595,47 +601,47 @@ export default function Profile() {
 
           {/* Preferences Card */}
           <Card className="md:col-span-2">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
+            <CardHeader className="px-4 sm:px-6">
+              <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
                 <Volume2 className="h-5 w-5 text-primary" />
                 Preferences
               </CardTitle>
-              <CardDescription>Customize your experience</CardDescription>
+              <CardDescription className="text-xs sm:text-sm">Customize your experience</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <div className="space-y-1">
-                  <p className="font-medium">Notification sound</p>
-                  <p className="text-sm text-muted-foreground">
+            <CardContent className="space-y-3 sm:space-y-4 px-4 sm:px-6">
+              <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                <div className="space-y-0.5 min-w-0">
+                  <p className="text-sm font-medium">Notification sound</p>
+                  <p className="text-xs text-muted-foreground">
                     Play a sound when new notifications arrive
                   </p>
                 </div>
-                <Switch checked={notificationSoundEnabled} onCheckedChange={handleToggleNotificationSound} />
+                <Switch checked={notificationSoundEnabled} onCheckedChange={handleToggleNotificationSound} className="shrink-0" />
               </div>
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <div className="space-y-1">
-                  <p className="font-medium flex items-center gap-2">
+              <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                <div className="space-y-0.5 min-w-0">
+                  <p className="text-sm font-medium flex items-center gap-2">
                     <MailCheck className="h-4 w-4 text-muted-foreground" />
                     Email notifications
                   </p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     Receive email alerts for mess activities
                   </p>
                 </div>
-                <Switch checked={emailNotificationEnabled} onCheckedChange={handleToggleEmailNotification} />
+                <Switch checked={emailNotificationEnabled} onCheckedChange={handleToggleEmailNotification} className="shrink-0" />
               </div>
 
-              <div className="flex items-center justify-between rounded-lg border p-3">
-                <div className="space-y-1">
-                  <p className="font-medium flex items-center gap-2">
+              <div className="flex items-center justify-between gap-3 rounded-lg border p-3">
+                <div className="space-y-0.5 min-w-0">
+                  <p className="text-sm font-medium flex items-center gap-2">
                     <BellRing className="h-4 w-4 text-muted-foreground" />
                     Browser notifications
                   </p>
-                  <p className="text-sm text-muted-foreground">
+                  <p className="text-xs text-muted-foreground">
                     Get push alerts even when the tab is in background
                   </p>
                 </div>
-                <Switch checked={browserNotifEnabled} onCheckedChange={handleToggleBrowserNotifications} />
+                <Switch checked={browserNotifEnabled} onCheckedChange={handleToggleBrowserNotifications} className="shrink-0" />
               </div>
 
               {/* Notification Tone Picker */}
@@ -647,15 +653,15 @@ export default function Profile() {
                   className="space-y-3 pt-2"
                 >
                   <div className="space-y-1">
-                    <p className="font-medium flex items-center gap-2">
+                    <p className="text-sm font-medium flex items-center gap-2">
                       <Music className="h-4 w-4 text-muted-foreground" />
                       Notification tone
                     </p>
-                    <p className="text-sm text-muted-foreground">Choose a tone or upload your own</p>
+                    <p className="text-xs text-muted-foreground">Choose a tone or upload your own</p>
                   </div>
 
                   {/* Built-in tones */}
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
                     {BUILT_IN_TONES.map((tone) => (
                       <button
                         key={tone.id}
@@ -714,7 +720,7 @@ export default function Profile() {
                   </div>
 
                   {/* Upload custom tone */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
                     <Label
                       htmlFor="tone-upload"
                       className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/30 cursor-pointer transition-all text-sm text-muted-foreground"
