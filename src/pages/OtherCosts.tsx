@@ -51,6 +51,7 @@ export default function OtherCosts() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     userId: '',
     amount: '',
