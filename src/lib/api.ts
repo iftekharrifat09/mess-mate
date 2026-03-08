@@ -855,6 +855,13 @@ export async function deleteChatMessageAPI(id: string) {
   return apiRequest(`/chat/messages/${id}`, { method: 'DELETE' });
 }
 
+export async function reactChatMessageAPI(id: string, emoji: string) {
+  return apiRequest(`/chat/messages/${id}/react`, {
+    method: 'POST',
+    body: JSON.stringify({ emoji }),
+  });
+}
+
 export async function chatHeartbeatAPI() {
   return apiRequest('/chat/heartbeat', { method: 'POST' });
 }

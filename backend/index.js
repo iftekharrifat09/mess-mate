@@ -3092,9 +3092,38 @@ app.delete("/api/chat/messages/:id", authMiddleware, async (req, res) => {
   }
 });
 
-// ============================================
-// START SERVER
-// ============================================
+// React to a chat message (toggle emoji)
+app.post("/api/chat/messages/:id/react", authMiddleware, async (req, res) => {
+  try {
+    const { emoji } = req.body;
+    if (!emoji) return res.status(400).json({ success: false, error: "Emoji required" });
+    
+    const msg = await collections.chatMessages.findOne({ _id: new ObjectId(req.params.id) });
+    if (!msg) return res.status(404).json({ success: false, error: "Message not found" });
+    
+    const reactions = msg.reactions || [];
+    const existingIdx = reactions.findIndex(r => r.userId === req.user.id && r.emoji === emoji);
+    
+    if (existingIdx >= 0) {
+      // Remove reaction (toggle off)
+      reactions.splice(existingIdx, 1);
+    } else {
+      // Add reaction
+      reactions.push({ emoji, userId: req.user.id, userName: req.user.name || "Unknown" });
+    }
+    
+    await collections.chatMessages.updateOne(
+      { _id: new ObjectId(req.params.id) },
+      { $set: { reactions } }
+    );
+    
+    res.json({ success: true, reactions });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to react" });
+  }
+});
+
+
 
 async function startServer() {
   await connectToDatabase();

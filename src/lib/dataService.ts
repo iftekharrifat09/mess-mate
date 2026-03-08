@@ -1468,6 +1468,18 @@ export async function deleteChatMessageById(id: string): Promise<boolean> {
   return storage.deleteChatMessage(id);
 }
 
+export async function reactChatMessage(id: string, emoji: string): Promise<any> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.reactChatMessageAPI(id, emoji);
+      if (result.success) return result.data;
+    } catch (error) {
+      console.error('Error reacting to chat message:', error);
+    }
+  }
+  return null;
+}
+
 export async function chatHeartbeat(): Promise<{ activeUsers: Array<{ userId: string; name: string }>; count: number; typingUsers: Array<{ userId: string; name: string }> }> {
   if (shouldUseBackend()) {
     try {
