@@ -1,6 +1,6 @@
 import { useCallback, useRef } from 'react';
+import { BUILT_IN_TONES, getSelectedToneId, getCustomToneData } from '@/lib/notificationTones';
 
-// Simple notification sound using Web Audio API
 export function useNotificationSound() {
   const audioContextRef = useRef<AudioContext | null>(null);
 
@@ -11,15 +11,11 @@ export function useNotificationSound() {
           window.AudioContext || (window as any).webkitAudioContext
         )();
       }
-
       const ctx = audioContextRef.current;
       if (!ctx) return false;
-
-      // Some browsers require a user gesture before resume() will succeed.
       if (ctx.state === 'suspended') {
         await ctx.resume();
       }
-
       return true;
     } catch (error) {
       console.warn('Could not prime notification sound:', error);
@@ -27,43 +23,66 @@ export function useNotificationSound() {
     }
   }, []);
 
-  const playNotificationSound = useCallback(() => {
+  const playNotificationSound = useCallback((userId?: string | null) => {
     void (async () => {
+      const toneId = getSelectedToneId(userId);
+
+      // Custom uploaded tone
+      if (toneId === 'custom') {
+        const dataUrl = getCustomToneData(userId);
+        if (dataUrl) {
+          try {
+            const audio = new Audio(dataUrl);
+            audio.volume = 0.5;
+            await audio.play();
+          } catch (e) {
+            console.warn('Could not play custom tone:', e);
+          }
+        }
+        return;
+      }
+
+      // Built-in tone
       const ready = await primeNotificationSound();
       if (!ready || !audioContextRef.current) return;
 
       try {
-        const ctx = audioContextRef.current;
-        const now = ctx.currentTime;
-
-        // Create a pleasant three-tone ascending chime (C5, E5, G5 - major chord)
-        const frequencies = [523.25, 659.25, 783.99];
-        const durations = [0.12, 0.12, 0.25];
-
-        frequencies.forEach((freq, i) => {
-          const oscillator = ctx.createOscillator();
-          const gainNode = ctx.createGain();
-
-          oscillator.connect(gainNode);
-          gainNode.connect(ctx.destination);
-
-          oscillator.type = 'triangle'; // Softer, more bell-like tone
-          oscillator.frequency.setValueAtTime(freq, now);
-
-          const startTime = now + i * 0.1;
-          gainNode.gain.setValueAtTime(0, startTime);
-          gainNode.gain.linearRampToValueAtTime(0.25, startTime + 0.02);
-          gainNode.gain.exponentialRampToValueAtTime(0.01, startTime + durations[i] + 0.3);
-
-          oscillator.start(startTime);
-          oscillator.stop(startTime + durations[i] + 0.35);
-        });
+        const tone = BUILT_IN_TONES.find(t => t.id === toneId);
+        if (tone) {
+          tone.play(audioContextRef.current);
+        } else {
+          // Fallback to chime
+          BUILT_IN_TONES[0].play(audioContextRef.current);
+        }
       } catch (error) {
         console.warn('Could not play notification sound:', error);
       }
     })();
   }, [primeNotificationSound]);
 
-  return { playNotificationSound, primeNotificationSound };
-}
+  // Preview a specific tone by id
+  const previewTone = useCallback((toneId: string, userId?: string | null) => {
+    void (async () => {
+      if (toneId === 'custom') {
+        const dataUrl = getCustomToneData(userId);
+        if (dataUrl) {
+          try {
+            const audio = new Audio(dataUrl);
+            audio.volume = 0.5;
+            await audio.play();
+          } catch (e) {
+            console.warn('Could not preview custom tone:', e);
+          }
+        }
+        return;
+      }
 
+      const ready = await primeNotificationSound();
+      if (!ready || !audioContextRef.current) return;
+      const tone = BUILT_IN_TONES.find(t => t.id === toneId);
+      if (tone) tone.play(audioContextRef.current);
+    })();
+  }, [primeNotificationSound]);
+
+  return { playNotificationSound, primeNotificationSound, previewTone };
+}
