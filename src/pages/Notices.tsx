@@ -269,7 +269,7 @@ export default function Notices() {
                               <Button variant="ghost" size="sm" onClick={() => handleEdit(notice)}>
                                 <Edit2 className="h-4 w-4" />
                               </Button>
-                              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => handleDelete(notice)} disabled={deletingId === notice.id}>
+                              <Button variant="ghost" size="sm" className="text-destructive" onClick={() => setDeleteTarget(notice)} disabled={deletingId === notice.id}>
                                 {deletingId === notice.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
                               </Button>
                             </>
