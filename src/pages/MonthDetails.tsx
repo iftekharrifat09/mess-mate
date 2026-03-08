@@ -122,15 +122,11 @@ export default function MonthDetails() {
       setMembers(messMembers);
       
       if (month) {
-        // Load all month data in a single parallel batch
-        const [summary, memSummary, meals, deposits, mealCosts, otherCosts] = await Promise.all([
-          calculateMonthSummary(month.id, user.messId),
-          getAllMembersSummary(month.id, user.messId),
-          dataService.getMealsByMonthId(month.id),
-          dataService.getDepositsByMonthId(month.id),
-          dataService.getMealCostsByMonthId(month.id),
-          dataService.getOtherCostsByMonthId(month.id),
-        ]);
+        // Single fetch for all month data — no redundant API calls
+        const monthData = await fetchMonthData(month.id, user.messId);
+        const summary = calculateMonthSummaryFromData(month.id, monthData);
+        const memSummary = getAllMembersSummaryFromData(monthData);
+        const { meals, deposits, mealCosts, otherCosts } = monthData;
         
         // Set summary data immediately
         startTransition(() => {
