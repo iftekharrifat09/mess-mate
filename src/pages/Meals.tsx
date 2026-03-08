@@ -651,7 +651,7 @@ export default function Meals() {
                                 <div>
                                   <p className="text-sm font-medium">{getMemberName(meal.userId)}</p>
                                   <p className="text-xs text-muted-foreground">
-                                    B:{meal.breakfast} L:{meal.lunch} D:{meal.dinner}
+                                    B:<span className="font-bold text-foreground">{meal.breakfast}</span> L:<span className="font-bold text-foreground">{meal.lunch}</span> D:<span className="font-bold text-foreground">{meal.dinner}</span>
                                   </p>
                                 </div>
                               </div>
