@@ -621,14 +621,20 @@ export async function deleteMealCost(id: string): Promise<boolean> {
 // ============================================
 
 export async function getOtherCostsByMonthId(monthId: string): Promise<OtherCost[]> {
+  // Check cache first
+  const cacheKey = cacheKeys.otherCosts(monthId);
+  const cached = apiCache.get<OtherCost[]>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     try {
       const result = await api.getOtherCostsAPI(monthId);
       if (result.success && result.data) {
         const data = result.data as any;
-        // Backend returns { success: true, costs: [...] }
         const otherCosts = data.costs || data.otherCosts || (Array.isArray(data) ? data : []);
-        return Array.isArray(otherCosts) ? otherCosts : [];
+        const result_arr = Array.isArray(otherCosts) ? otherCosts : [];
+        apiCache.set(cacheKey, result_arr, apiCache.getTTL('short'));
+        return result_arr;
       }
       if (result.usingLocalStorage) {
         return storage.getOtherCostsByMonthId(monthId);
