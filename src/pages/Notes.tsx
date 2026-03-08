@@ -295,6 +295,14 @@ export default function Notes() {
           </div>
         )}
       </motion.div>
+
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget.id, deleteTarget.title)}
+        title={`Delete "${deleteTarget?.title}"?`}
+        description="This note will be permanently deleted. This action cannot be undone."
+      />
     </DashboardLayout>
   );
 }
