@@ -594,11 +594,11 @@ export default function CalculatorPage() {
           <CardContent className="pt-6">
             <Tabs defaultValue="deposits">
               <TabsList className="w-full grid grid-cols-2">
-                <TabsTrigger value="deposits">
-                  <Wallet className="h-4 w-4 mr-2" /> Deposits ({payments.length})
+                <TabsTrigger value="deposits" className="text-xs md:text-sm">
+                  <Wallet className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1 md:mr-2" /> Deposits ({payments.length})
                 </TabsTrigger>
-                <TabsTrigger value="records">
-                  <Receipt className="h-4 w-4 mr-2" /> Payment Records ({billPayments.length})
+                <TabsTrigger value="records" className="text-xs md:text-sm">
+                  <Receipt className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1 md:mr-2" /> Records ({billPayments.length})
                 </TabsTrigger>
               </TabsList>
 
