@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Users, Utensils, Wallet, ShoppingCart, Receipt,
   CalendarDays, UserPlus, LogOut, ChevronLeft, ChevronRight, Menu,
-  Building, Megaphone, Calendar, StickyNote, User, Calculator,
+  Building, Megaphone, Calendar, StickyNote, User, Calculator, MessageCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import NotificationBell from '@/components/notifications/NotificationBell';
