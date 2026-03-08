@@ -54,6 +54,7 @@ export default function Deposits() {
     note: '',
   });
   const [isSaving, setIsSaving] = useState(false);
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const isManager = user?.role === 'manager';
