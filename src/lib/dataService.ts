@@ -766,10 +766,13 @@ export async function getPendingJoinRequestsForUser(userId: string): Promise<Joi
 }
 
 export async function createJoinRequest(requestData: Omit<JoinRequest, 'id' | 'createdAt'> & { messCode?: string }): Promise<JoinRequest> {
+  // Invalidate cache
+  if (requestData.messId) apiCache.invalidate(cacheKeys.joinRequests(requestData.messId));
+  if (requestData.userId) apiCache.invalidate(cacheKeys.userJoinRequests(requestData.userId));
+  
   if (shouldUseBackend()) {
     const result = await api.createJoinRequestAPI({
       messId: requestData.messId,
-      // Prefer messCode when available (backend supports both)
       messCode: (requestData as any).messCode,
     });
     if (result.success && result.data) {
