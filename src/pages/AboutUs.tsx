@@ -379,7 +379,7 @@ export default function AboutUs() {
           >
             <h2 className="text-3xl font-bold text-foreground mb-4">Meet Our Developers</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto">
-              The talented individuals who brought Mess Manager to life
+              The talented individuals who brought Mess Mate to life
             </p>
           </motion.div>
 
