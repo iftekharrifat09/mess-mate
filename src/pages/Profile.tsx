@@ -531,6 +531,18 @@ export default function Profile() {
                 </div>
                 <Switch checked={notificationSoundEnabled} onCheckedChange={handleToggleNotificationSound} />
               </div>
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-1">
+                  <p className="font-medium flex items-center gap-2">
+                    <MailCheck className="h-4 w-4 text-muted-foreground" />
+                    Email notifications
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Receive email alerts for mess activities
+                  </p>
+                </div>
+                <Switch checked={emailNotificationEnabled} onCheckedChange={handleToggleEmailNotification} />
+              </div>
             </CardContent>
           </Card>
         </div>
