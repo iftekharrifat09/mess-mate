@@ -2480,7 +2480,17 @@ app.put("/api/calc-payments/:id", authMiddleware, async (req, res) => {
 
 app.delete("/api/calc-payments/:id", authMiddleware, async (req, res) => {
   try {
+    const doc = await collections.calcPayments.findOne({ _id: new ObjectId(req.params.id) });
     await collections.calcPayments.deleteOne({ _id: new ObjectId(req.params.id) });
+
+    if (doc) {
+      await notifyMembers(doc.messId, req.userId, {
+        title: "Deposit Deleted",
+        message: `${doc.userName}'s deposit of ৳${doc.amount} has been removed`,
+        type: "general",
+      });
+    }
+
     res.json({ success: true, message: "Payment deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to delete payment" });
