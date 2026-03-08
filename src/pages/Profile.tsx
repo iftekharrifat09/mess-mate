@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'; // notification prefs
+import { useEffect, useRef, useState } from 'react'; // notification prefs
 import { motion } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -25,7 +25,7 @@ import {
   getCustomToneData, setCustomToneData, removeCustomTone,
 } from '@/lib/notificationTones';
 import { useNotificationSound } from '@/hooks/useNotificationSound';
-import { getBrowserNotificationsEnabled, setBrowserNotificationsEnabled, requestBrowserNotificationPermission } from '@/lib/browserNotifications';
+import { getBrowserNotificationAvailability, getBrowserNotificationsEnabled, setBrowserNotificationsEnabled, requestBrowserNotificationPermission } from '@/lib/browserNotifications';
 import {
   updateProfileAPI,
   sendOtpAPI,
