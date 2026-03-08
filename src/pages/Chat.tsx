@@ -10,16 +10,18 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Send, Trash2, MessageCircle, Loader2, MoreVertical, Pencil, X, Users, Reply } from 'lucide-react';
+import { Send, Trash2, MessageCircle, Loader2, MoreVertical, Pencil, X, Users, Reply, SmilePlus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import * as dataService from '@/lib/dataService';
 import { syncUnsyncedChatMessages } from '@/lib/dataService';
 import { getUnsyncedChatMessages } from '@/lib/storage';
-import type { ChatMessage, ChatActiveUser } from '@/types';
+import type { ChatMessage, ChatActiveUser, ChatReaction } from '@/types';
 import { toast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
+
+const REACTION_EMOJIS = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
 
 // Typing indicator bubble with bouncing dots animation
 function TypingIndicator({ names }: { names: string[] }) {
@@ -54,19 +56,79 @@ function TypingIndicator({ names }: { names: string[] }) {
   );
 }
 
+// Emoji reaction picker popup
+function ReactionPicker({ onSelect, isOwn }: { onSelect: (emoji: string) => void; isOwn: boolean }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.8 }}
+      animate={{ opacity: 1, scale: 1 }}
+      exit={{ opacity: 0, scale: 0.8 }}
+      className={cn(
+        'absolute bottom-full mb-1 flex items-center gap-0.5 bg-card border border-border rounded-full px-2 py-1 shadow-lg z-20',
+        isOwn ? 'right-0' : 'left-0'
+      )}
+    >
+      {REACTION_EMOJIS.map(emoji => (
+        <button
+          key={emoji}
+          onClick={() => onSelect(emoji)}
+          className="hover:scale-125 transition-transform text-lg px-0.5 cursor-pointer"
+        >
+          {emoji}
+        </button>
+      ))}
+    </motion.div>
+  );
+}
+
+// Grouped reactions display below a message
+function ReactionsDisplay({ reactions, userId, onToggle }: { reactions: ChatReaction[]; userId: string; onToggle: (emoji: string) => void }) {
+  if (!reactions || reactions.length === 0) return null;
+
+  // Group by emoji
+  const grouped: Record<string, { count: number; users: string[]; hasOwn: boolean }> = {};
+  for (const r of reactions) {
+    if (!grouped[r.emoji]) grouped[r.emoji] = { count: 0, users: [], hasOwn: false };
+    grouped[r.emoji].count++;
+    grouped[r.emoji].users.push(r.userName);
+    if (r.userId === userId) grouped[r.emoji].hasOwn = true;
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1 mt-1">
+      {Object.entries(grouped).map(([emoji, data]) => (
+        <button
+          key={emoji}
+          onClick={() => onToggle(emoji)}
+          title={data.users.join(', ')}
+          className={cn(
+            'inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-xs border cursor-pointer transition-colors',
+            data.hasOwn
+              ? 'bg-primary/15 border-primary/30 text-foreground'
+              : 'bg-muted/50 border-border text-muted-foreground hover:bg-muted'
+          )}
+        >
+          <span>{emoji}</span>
+          {data.count > 1 && <span className="text-[10px] font-medium">{data.count}</span>}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export default function Chat() {
   const { user } = useAuth();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
-  
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
   const [activeUsers, setActiveUsers] = useState<ChatActiveUser[]>([]);
   const [typingUsers, setTypingUsers] = useState<ChatActiveUser[]>([]);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [replyTo, setReplyTo] = useState<{ id: string; senderName: string; message: string } | null>(null);
+  const [reactionPickerMsgId, setReactionPickerMsgId] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevMessageCountRef = useRef(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -86,7 +148,6 @@ export default function Chat() {
         setTimeout(scrollToBottom, 100);
       }
       prevMessageCountRef.current = msgs.length;
-      
     } catch (e) {
       console.error('Failed to load chat:', e);
     } finally {
@@ -117,7 +178,7 @@ export default function Chat() {
     };
   }, []);
 
-  // Auto-sync when backend becomes available (silent, automatic)
+  // Auto-sync (silent, automatic)
   useEffect(() => {
     const doSync = async () => {
       try {
@@ -133,7 +194,15 @@ export default function Chat() {
     return () => clearInterval(interval);
   }, [loadMessages]);
 
-  // Send typing indicator (debounced - max once per 2 seconds)
+  // Close reaction picker on outside click
+  useEffect(() => {
+    const handler = () => setReactionPickerMsgId(null);
+    if (reactionPickerMsgId) {
+      document.addEventListener('click', handler);
+      return () => document.removeEventListener('click', handler);
+    }
+  }, [reactionPickerMsgId]);
+
   const sendTyping = useCallback(() => {
     const now = Date.now();
     if (now - lastTypingSentRef.current > 2000) {
@@ -170,11 +239,7 @@ export default function Chat() {
   };
 
   const handleReply = (msg: ChatMessage) => {
-    setReplyTo({
-      id: msg.id,
-      senderName: msg.senderName,
-      message: msg.message,
-    });
+    setReplyTo({ id: msg.id, senderName: msg.senderName, message: msg.message });
     inputRef.current?.focus();
   };
 
@@ -213,6 +278,16 @@ export default function Chat() {
     }
   };
 
+  const handleReact = async (msgId: string, emoji: string) => {
+    setReactionPickerMsgId(null);
+    try {
+      await dataService.reactChatMessage(msgId, emoji);
+      await loadMessages();
+    } catch {
+      toast({ title: 'Error', description: 'Failed to react', variant: 'destructive' });
+    }
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSend(); }
   };
@@ -238,12 +313,9 @@ export default function Chat() {
     }
   }
 
-  
-
   const MessageMenu = ({ msg, isOwn }: { msg: ChatMessage; isOwn: boolean }) => {
     const canEdit = isOwn;
     const canDelete = isOwn || user?.role === 'manager';
-    // Always show menu (at minimum for Reply)
 
     return (
       <DropdownMenu>
@@ -256,10 +328,14 @@ export default function Chat() {
             <MoreVertical className="h-3.5 w-3.5" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align={isOwn ? 'end' : 'start'} className="w-32">
+        <DropdownMenuContent align={isOwn ? 'end' : 'start'} className="w-36">
           <DropdownMenuItem onClick={() => handleReply(msg)}>
             <Reply className="h-3.5 w-3.5 mr-2" />
             Reply
+          </DropdownMenuItem>
+          <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setReactionPickerMsgId(msg.id); }}>
+            <SmilePlus className="h-3.5 w-3.5 mr-2" />
+            React
           </DropdownMenuItem>
           {canEdit && (
             <DropdownMenuItem onClick={() => handleEdit(msg)}>
@@ -306,7 +382,6 @@ export default function Chat() {
                 <span className="text-xs text-muted-foreground hidden sm:inline">online</span>
               </div>
             )}
-            
           </div>
         </div>
 
@@ -335,6 +410,7 @@ export default function Chat() {
                     {group.messages.map((msg) => {
                       const isOwn = msg.userId === user?.id;
                       const isEditing = editingId === msg.id;
+                      const showReactionPicker = reactionPickerMsgId === msg.id;
 
                       return (
                         <motion.div
@@ -355,63 +431,93 @@ export default function Chat() {
                             {!isOwn && (
                               <p className="text-xs font-medium text-muted-foreground mb-1 px-1">{msg.senderName}</p>
                             )}
-                            <div className="flex items-start gap-1">
+
+                            {/* Reply label above the bubble (WhatsApp style) */}
+                            {msg.replyTo && !isEditing && (
+                              <div className={cn('flex items-center gap-1 mb-0.5 px-1', isOwn ? 'flex-row-reverse' : 'flex-row')}>
+                                <Reply className="h-3 w-3 text-muted-foreground" />
+                                <span className="text-[10px] text-muted-foreground">
+                                  {isOwn ? 'You' : msg.senderName} replied to {msg.replyTo.senderName === user?.fullName ? 'you' : msg.replyTo.senderName}
+                                </span>
+                              </div>
+                            )}
+
+                            <div className="flex items-start gap-1 relative">
                               {/* Three-dot menu on left for own messages */}
                               {isOwn && !isEditing && <MessageMenu msg={msg} isOwn={isOwn} />}
 
-                              <div
-                                className={cn(
-                                  'rounded-2xl px-4 py-2 relative',
-                                  isOwn
-                                    ? 'bg-primary text-primary-foreground rounded-tr-sm'
-                                    : 'bg-muted text-foreground rounded-tl-sm'
-                                )}
-                              >
-                                {/* Reply quote */}
-                                {msg.replyTo && !isEditing && (
-                                  <div className={cn(
-                                    'mb-2 pl-3 py-1 rounded text-xs border-l-2',
-                                    isOwn
-                                      ? 'border-primary-foreground/40 bg-primary-foreground/10'
-                                      : 'border-primary/40 bg-primary/5'
-                                  )}>
-                                    <p className={cn('font-semibold', isOwn ? 'text-primary-foreground/80' : 'text-primary')}>
-                                      {msg.replyTo.senderName}
-                                    </p>
-                                    <p className={cn('line-clamp-1', isOwn ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
-                                      {msg.replyTo.message}
-                                    </p>
-                                  </div>
-                                )}
-
-                                {isEditing ? (
-                                  <div className="flex items-center gap-2">
-                                    <Input
-                                      ref={editInputRef}
-                                      value={editText}
-                                      onChange={e => setEditText(e.target.value)}
-                                      onKeyDown={handleEditKeyDown}
-                                      maxLength={2000}
-                                      className="h-7 text-sm bg-background text-foreground border-none rounded-lg min-w-[150px]"
+                              <div className="relative">
+                                {/* Reaction picker */}
+                                <AnimatePresence>
+                                  {showReactionPicker && (
+                                    <ReactionPicker
+                                      isOwn={isOwn}
+                                      onSelect={(emoji) => handleReact(msg.id, emoji)}
                                     />
-                                    <Button size="icon" className="h-6 w-6 flex-shrink-0" onClick={handleEditSave}>
-                                      <Send className="h-3 w-3" />
-                                    </Button>
-                                    <Button size="icon" variant="ghost" className="h-6 w-6 flex-shrink-0" onClick={() => { setEditingId(null); setEditText(''); }}>
-                                      <X className="h-3 w-3" />
-                                    </Button>
-                                  </div>
-                                ) : (
-                                  <>
-                                    <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
-                                    <div className={cn('flex items-center gap-1 mt-1', isOwn ? 'justify-end' : 'justify-start')}>
-                                      <span className={cn('text-[10px]', isOwn ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
-                                        {format(new Date(msg.createdAt), 'h:mm a')}
-                                        {msg.editedAt && ' • edited'}
-                                      </span>
+                                  )}
+                                </AnimatePresence>
+
+                                <div
+                                  className={cn(
+                                    'rounded-2xl px-4 py-2',
+                                    isOwn
+                                      ? 'bg-primary text-primary-foreground rounded-tr-sm'
+                                      : 'bg-muted text-foreground rounded-tl-sm'
+                                  )}
+                                >
+                                  {/* Reply quote inside bubble */}
+                                  {msg.replyTo && !isEditing && (
+                                    <div className={cn(
+                                      'mb-2 pl-3 py-1.5 rounded-lg text-xs border-l-2',
+                                      isOwn
+                                        ? 'border-primary-foreground/40 bg-primary-foreground/10'
+                                        : 'border-primary/40 bg-primary/5'
+                                    )}>
+                                      <p className={cn('font-semibold text-[11px]', isOwn ? 'text-primary-foreground/80' : 'text-primary')}>
+                                        {msg.replyTo.senderName}
+                                      </p>
+                                      <p className={cn('line-clamp-1', isOwn ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
+                                        {msg.replyTo.message}
+                                      </p>
                                     </div>
-                                  </>
-                                )}
+                                  )}
+
+                                  {isEditing ? (
+                                    <div className="flex items-center gap-2">
+                                      <Input
+                                        ref={editInputRef}
+                                        value={editText}
+                                        onChange={e => setEditText(e.target.value)}
+                                        onKeyDown={handleEditKeyDown}
+                                        maxLength={2000}
+                                        className="h-7 text-sm bg-background text-foreground border-none rounded-lg min-w-[150px]"
+                                      />
+                                      <Button size="icon" className="h-6 w-6 flex-shrink-0" onClick={handleEditSave}>
+                                        <Send className="h-3 w-3" />
+                                      </Button>
+                                      <Button size="icon" variant="ghost" className="h-6 w-6 flex-shrink-0" onClick={() => { setEditingId(null); setEditText(''); }}>
+                                        <X className="h-3 w-3" />
+                                      </Button>
+                                    </div>
+                                  ) : (
+                                    <>
+                                      <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
+                                      <div className={cn('flex items-center gap-1 mt-1', isOwn ? 'justify-end' : 'justify-start')}>
+                                        <span className={cn('text-[10px]', isOwn ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
+                                          {format(new Date(msg.createdAt), 'h:mm a')}
+                                          {msg.editedAt && ' • edited'}
+                                        </span>
+                                      </div>
+                                    </>
+                                  )}
+                                </div>
+
+                                {/* Reactions display below the bubble */}
+                                <ReactionsDisplay
+                                  reactions={msg.reactions || []}
+                                  userId={user?.id || ''}
+                                  onToggle={(emoji) => handleReact(msg.id, emoji)}
+                                />
                               </div>
 
                               {/* Three-dot menu on right for other's messages */}
