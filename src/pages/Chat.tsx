@@ -248,7 +248,7 @@ export default function Chat() {
   const MessageMenu = ({ msg, isOwn }: { msg: ChatMessage; isOwn: boolean }) => {
     const canEdit = isOwn;
     const canDelete = isOwn || user?.role === 'manager';
-    if (!canEdit && !canDelete) return null;
+    // Always show menu (at minimum for Reply)
 
     return (
       <DropdownMenu>
