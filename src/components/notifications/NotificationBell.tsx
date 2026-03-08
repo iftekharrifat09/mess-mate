@@ -28,7 +28,7 @@ const NOTIF_ICONS: Record<string, string> = {
   join_request: '👋',
 };
 
-function getNotificationIcon(type: Notification['type']) {
+function getNotifIcon(type: AppNotification['type']) {
   return NOTIF_ICONS[type] || '🔔';
 }
 
