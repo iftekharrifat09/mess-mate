@@ -712,7 +712,6 @@ export async function getJoinRequests(): Promise<JoinRequest[]> {
       const result = await api.getJoinRequestsAPI();
       if (result.success && result.data) {
         const data = result.data as any;
-        // Handle both 'joinRequests' and 'requests' response formats
         const requests = data.joinRequests || data.requests || data || [];
         return requests;
       }
@@ -724,10 +723,17 @@ export async function getJoinRequests(): Promise<JoinRequest[]> {
 }
 
 export async function getJoinRequestsByMessId(messId: string): Promise<JoinRequest[]> {
+  // Check cache first
+  const cacheKey = cacheKeys.joinRequests(messId);
+  const cached = apiCache.get<JoinRequest[]>(cacheKey);
+  if (cached) return cached;
+  
   if (shouldUseBackend()) {
     const result = await api.getJoinRequestsAPI(messId);
     if (result.success && result.data) {
-      return (result.data as any).joinRequests || result.data || [];
+      const requests = (result.data as any).joinRequests || result.data || [];
+      apiCache.set(cacheKey, requests, apiCache.getTTL('short'));
+      return requests;
     }
   }
   return storage.getJoinRequestsByMessId(messId);
