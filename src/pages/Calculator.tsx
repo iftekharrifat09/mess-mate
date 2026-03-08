@@ -739,7 +739,9 @@ export default function CalculatorPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setCatModal(false)}>Cancel</Button>
-            <Button onClick={handleSaveCategory} disabled={!catTitle.trim() || !catCost}>Save</Button>
+            <Button onClick={handleSaveCategory} disabled={!catTitle.trim() || !catCost || isSaving}>
+              {isSaving && <Loader2 className="h-4 w-4 animate-spin" />} Save
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
