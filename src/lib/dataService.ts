@@ -1253,6 +1253,9 @@ export async function updateNote(id: string, updates: Partial<Note>): Promise<No
 }
 
 export async function deleteNote(id: string): Promise<boolean> {
+  // Invalidate notes cache
+  apiCache.invalidatePrefix('notes:');
+  
   if (shouldUseBackend()) {
     const result = await api.deleteNoteAPI(id);
     if (result.success) {
