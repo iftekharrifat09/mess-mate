@@ -261,8 +261,9 @@ export default function CalculatorPage() {
               <Button variant="outline" onClick={handleOpenDepositModal}>
                 <Wallet className="h-4 w-4 mr-2" /> Member Deposit
               </Button>
-              <Button variant="secondary" onClick={handleOpenBillModal}>
-                <CreditCard className="h-4 w-4 mr-2" /> Pay Bill
+              <Button variant="secondary" onClick={handleOpenBillModal} className="relative overflow-hidden group transition-all duration-300 hover:shadow-lg hover:shadow-primary/25 hover:scale-105 hover:bg-primary hover:text-primary-foreground">
+                <span className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary-foreground/10 to-primary/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
+                <CreditCard className="h-4 w-4 mr-2 transition-transform duration-300 group-hover:rotate-12" /> Pay Bill
               </Button>
             </div>
           )}
