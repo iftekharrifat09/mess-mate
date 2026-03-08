@@ -115,7 +115,7 @@ export default function Notes() {
   const handleDelete = async (id: string, title: string) => {
     if (!user || deletingId) return;
     setDeletingId(id);
-    
+    setDeleteTarget(null);
     try {
       await dataService.deleteNote(id);
       await dataService.notifyMessMembers(user.messId, user.id, {
