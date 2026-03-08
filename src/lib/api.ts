@@ -259,7 +259,7 @@ export async function getCurrentUserAPI() {
   return apiRequest('/auth/me', { method: 'GET' });
 }
 
-export async function updateProfileAPI(data: { name?: string; phone?: string; emailNotifications?: boolean }) {
+export async function updateProfileAPI(data: { name?: string; phone?: string; emailNotifications?: boolean; notificationTone?: string; customToneData?: string | null }) {
   return apiRequest('/auth/profile', {
     method: 'PUT',
     body: JSON.stringify(data),

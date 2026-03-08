@@ -498,11 +498,13 @@ app.get("/api/auth/me", authMiddleware, async (req, res) => {
 // Update Profile
 app.put("/api/auth/profile", authMiddleware, async (req, res) => {
   try {
-    const { name, phone, emailNotifications } = req.body;
+    const { name, phone, emailNotifications, notificationTone, customToneData } = req.body;
     const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (phone !== undefined) updateData.phone = phone;
     if (emailNotifications !== undefined) updateData.emailNotifications = emailNotifications;
+    if (notificationTone !== undefined) updateData.notificationTone = notificationTone;
+    if (customToneData !== undefined) updateData.customToneData = customToneData; // base64 data URL or null to remove
 
     await collections.users.updateOne(
       { _id: new ObjectId(req.userId) },
@@ -527,6 +529,8 @@ app.put("/api/auth/profile", authMiddleware, async (req, res) => {
         isActive: user.isActive !== false,
         emailVerified: user.emailVerified || false,
         emailNotifications: user.emailNotifications !== false,
+        notificationTone: user.notificationTone || "chime",
+        customToneData: user.customToneData || null,
       },
     });
   } catch (error) {

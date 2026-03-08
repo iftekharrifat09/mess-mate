@@ -81,6 +81,8 @@ export default function Profile() {
     setSelectedTone(toneId);
     setSelectedToneId(user.id, toneId);
     previewTone(toneId, user.id);
+    // Sync to backend
+    updateProfileAPI({ notificationTone: toneId }).catch(() => {});
     toast({ title: `Notification tone set to "${toneId === 'custom' ? 'Custom' : BUILT_IN_TONES.find(t => t.id === toneId)?.name || toneId}"` });
   };
 
@@ -91,8 +93,8 @@ export default function Profile() {
       toast({ title: 'File too large', description: 'Max 1MB allowed', variant: 'destructive' });
       return;
     }
-    if (!file.type.startsWith('audio/')) {
-      toast({ title: 'Invalid file', description: 'Please upload an audio file (.mp3, .wav, .ogg)', variant: 'destructive' });
+    if (file.type !== 'audio/mpeg' && !file.name.toLowerCase().endsWith('.mp3')) {
+      toast({ title: 'Invalid file', description: 'Only MP3 files are supported', variant: 'destructive' });
       return;
     }
     const reader = new FileReader();
@@ -102,6 +104,8 @@ export default function Profile() {
       setHasCustomTone(true);
       setSelectedTone('custom');
       setSelectedToneId(user.id, 'custom');
+      // Sync to backend
+      updateProfileAPI({ notificationTone: 'custom', customToneData: dataUrl }).catch(() => {});
       // Preview it
       const audio = new Audio(dataUrl);
       audio.volume = 0.5;
@@ -117,6 +121,8 @@ export default function Profile() {
     removeCustomTone(user.id);
     setHasCustomTone(false);
     setSelectedTone('chime');
+    // Sync to backend
+    updateProfileAPI({ notificationTone: 'chime', customToneData: null }).catch(() => {});
     toast({ title: 'Custom tone removed', variant: 'destructive' });
   };
   
@@ -685,11 +691,11 @@ export default function Profile() {
                     <input
                       id="tone-upload"
                       type="file"
-                      accept="audio/*"
+                      accept=".mp3,audio/mpeg"
                       className="hidden"
                       onChange={handleUploadTone}
                     />
-                    <span className="text-[11px] text-muted-foreground">MP3, WAV, OGG • Max 1MB</span>
+                    <span className="text-[11px] text-muted-foreground">MP3 only • Max 1MB</span>
                   </div>
                 </motion.div>
               )}
