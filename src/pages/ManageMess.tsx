@@ -562,6 +562,22 @@ export default function ManageMess() {
                           })}
                         </p>
                       </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                        onClick={async () => {
+                          try {
+                            await dataService.deleteActivityLog(log.id);
+                            setActivityLogs(prev => prev.filter(l => l.id !== log.id));
+                            toast({ title: 'Activity log deleted' });
+                          } catch {
+                            toast({ title: 'Failed to delete', variant: 'destructive' });
+                          }
+                        }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
                     </div>
                   );
                 })}
