@@ -662,9 +662,17 @@ export default function CalculatorPage() {
               <Select onValueChange={v => { setPayUserId(v); setPayStep(2); }}>
                 <SelectTrigger><SelectValue placeholder="Choose a member" /></SelectTrigger>
                 <SelectContent>
-                  {members.map(m => (
-                    <SelectItem key={m.id} value={m.id}>{m.fullName}</SelectItem>
-                  ))}
+                  {members.map(m => {
+                    const due = memberDues[m.id] || 0;
+                    const paid = memberPayments[m.id] || 0;
+                    const isMemberPaid = due > 0 && paid >= due;
+                    const disabled = isMonthlyFullyPaid && isMemberPaid;
+                    return (
+                      <SelectItem key={m.id} value={m.id} disabled={disabled}>
+                        {m.fullName}{disabled ? ' (Fully Paid)' : ''}
+                      </SelectItem>
+                    );
+                  })}
                 </SelectContent>
               </Select>
             </div>
