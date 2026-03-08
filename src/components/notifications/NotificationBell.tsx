@@ -105,7 +105,7 @@ export default function NotificationBell() {
 
           // In-app toast
           showToast({
-            title: `${getNotificationIcon(n.type)} ${n.title}`,
+            title: `${getNotifIcon(n.type)} ${n.title}`,
             description: n.message,
           });
         }
