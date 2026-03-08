@@ -791,6 +791,9 @@ export async function updateJoinRequest(id: string, updates: Partial<JoinRequest
 }
 
 export async function deleteJoinRequest(id: string): Promise<boolean> {
+  // Invalidate join request caches
+  apiCache.invalidatePrefix('joinRequests:');
+  
   if (shouldUseBackend()) {
     const result = await api.deleteJoinRequestAPI(id);
     if (result.success) {
