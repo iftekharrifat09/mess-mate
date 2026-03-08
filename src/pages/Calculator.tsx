@@ -173,7 +173,11 @@ export default function CalculatorPage() {
 
   const handleDeleteCategory = async (id: string) => {
     setDeleteTarget(null);
+    const cat = categories.find(c => c.id === id);
     await calcStore.deleteCategory(id);
+    if (!shouldUseBackend() && cat) {
+      dataService.notifyMessMembers(messId, user?.id || '', { type: 'general', title: 'Expense Category Deleted', message: `Expense category "${cat.title}" has been removed` });
+    }
     reload();
     toast({ title: 'Category deleted', variant: 'destructive' });
   };
