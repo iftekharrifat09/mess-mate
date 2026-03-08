@@ -42,11 +42,16 @@ export default function Profile() {
 
   const [notificationSoundEnabled, setNotificationSoundEnabledState] = useState(true);
   const [emailNotificationEnabled, setEmailNotificationEnabledState] = useState(true);
+  const [selectedTone, setSelectedTone] = useState('chime');
+  const [hasCustomTone, setHasCustomTone] = useState(false);
+  const { previewTone } = useNotificationSound();
 
   useEffect(() => {
     if (!user) return;
     setNotificationSoundEnabledState(getNotificationSoundEnabled(user.id));
     setEmailNotificationEnabledState(getEmailNotificationEnabled(user.id));
+    setSelectedTone(getSelectedToneId(user.id));
+    setHasCustomTone(!!getCustomToneData(user.id));
   }, [user]);
 
   const handleToggleNotificationSound = (checked: boolean) => {
