@@ -622,6 +622,19 @@ export default function Profile() {
                 <Switch checked={emailNotificationEnabled} onCheckedChange={handleToggleEmailNotification} />
               </div>
 
+              <div className="flex items-center justify-between rounded-lg border p-3">
+                <div className="space-y-1">
+                  <p className="font-medium flex items-center gap-2">
+                    <BellRing className="h-4 w-4 text-muted-foreground" />
+                    Browser notifications
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Get push alerts even when the tab is in background
+                  </p>
+                </div>
+                <Switch checked={browserNotifEnabled} onCheckedChange={handleToggleBrowserNotifications} />
+              </div>
+
               {/* Notification Tone Picker */}
               {notificationSoundEnabled && (
                 <motion.div
