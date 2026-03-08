@@ -21,6 +21,7 @@ import {
 import * as dataService from '@/lib/dataService';
 import * as calcStore from '@/lib/calculatorStorage';
 import { Users } from 'lucide-react';
+import CalendarModal from '@/components/dashboard/CalendarModal';
 
 // Default empty states to show UI immediately
 const EMPTY_MONTH_SUMMARY: MonthSummary = {
