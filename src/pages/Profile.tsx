@@ -720,7 +720,7 @@ export default function Profile() {
                   </div>
 
                   {/* Upload custom tone */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2">
                     <Label
                       htmlFor="tone-upload"
                       className="flex items-center gap-2 px-3 py-2 rounded-lg border border-dashed border-muted-foreground/30 hover:border-primary/50 hover:bg-muted/30 cursor-pointer transition-all text-sm text-muted-foreground"
