@@ -4,16 +4,23 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
-import { Send, Trash2, MessageCircle, Loader2, WifiOff, RefreshCw } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { Send, Trash2, MessageCircle, Loader2, WifiOff, RefreshCw, MoreVertical, Pencil, X, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { format } from 'date-fns';
 import * as dataService from '@/lib/dataService';
 import { syncUnsyncedChatMessages } from '@/lib/dataService';
 import { shouldUseBackend } from '@/lib/config';
 import { getUnsyncedChatMessages } from '@/lib/storage';
-import type { ChatMessage } from '@/types';
+import type { ChatMessage, ChatActiveUser } from '@/types';
 import { toast } from '@/hooks/use-toast';
 import { motion, AnimatePresence } from 'framer-motion';
+import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
 
 export default function Chat() {
   const { user } = useAuth();
@@ -23,8 +30,14 @@ export default function Chat() {
   const [loading, setLoading] = useState(true);
   const [unsyncedCount, setUnsyncedCount] = useState(0);
   const [syncing, setSyncing] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editText, setEditText] = useState('');
+  const [activeUsers, setActiveUsers] = useState<ChatActiveUser[]>([]);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
   const prevMessageCountRef = useRef(0);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const editInputRef = useRef<HTMLInputElement>(null);
 
   const scrollToBottom = useCallback(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -51,13 +64,27 @@ export default function Chat() {
     loadMessages();
   }, [loadMessages]);
 
-  // Poll every 3 seconds
+  // Poll messages every 3 seconds
   useEffect(() => {
     const interval = setInterval(loadMessages, 3000);
     return () => clearInterval(interval);
   }, [loadMessages]);
 
-  // Auto-sync unsynced messages when backend becomes available
+  // Heartbeat every 5 seconds for active presence
+  useEffect(() => {
+    const sendHeartbeat = async () => {
+      const result = await dataService.chatHeartbeat();
+      setActiveUsers(result.activeUsers);
+    };
+    sendHeartbeat();
+    const interval = setInterval(sendHeartbeat, 5000);
+    return () => {
+      clearInterval(interval);
+      dataService.chatLeave();
+    };
+  }, []);
+
+  // Auto-sync when backend becomes available
   useEffect(() => {
     if (!shouldUseBackend()) return;
     const unsyncedMessages = getUnsyncedChatMessages();
@@ -80,15 +107,20 @@ export default function Chat() {
     if (!newMessage.trim() || sending || !user) return;
     setSending(true);
     try {
-      await dataService.sendChatMessage({
-        messId: user.messId || '',
-        userId: user.id,
-        senderName: user.fullName || 'Unknown',
-        message: newMessage.trim(),
-      });
+      const activeIds = activeUsers.map(u => u.userId);
+      await dataService.sendChatMessage(
+        {
+          messId: user.messId || '',
+          userId: user.id,
+          senderName: user.fullName || 'Unknown',
+          message: newMessage.trim(),
+        },
+        activeIds,
+      );
       setNewMessage('');
       await loadMessages();
       setTimeout(scrollToBottom, 150);
+      inputRef.current?.focus();
     } catch {
       toast({ title: 'Error', description: 'Failed to send message', variant: 'destructive' });
     } finally {
@@ -96,14 +128,44 @@ export default function Chat() {
     }
   };
 
-  const handleDelete = async (id: string) => {
+  const handleEdit = (msg: ChatMessage) => {
+    setEditingId(msg.id);
+    setEditText(msg.message);
+    setTimeout(() => editInputRef.current?.focus(), 50);
+  };
+
+  const handleEditSave = async () => {
+    if (!editingId || !editText.trim()) return;
     try {
-      const result = await dataService.deleteChatMessageById(id);
-      if (result) {
-        setMessages(prev => prev.filter(m => m.id !== id));
-      }
+      await dataService.editChatMessage(editingId, editText.trim());
+      setEditingId(null);
+      setEditText('');
+      await loadMessages();
+    } catch {
+      toast({ title: 'Error', description: 'Failed to edit message', variant: 'destructive' });
+    }
+  };
+
+  const handleEditKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleEditSave();
+    }
+    if (e.key === 'Escape') {
+      setEditingId(null);
+      setEditText('');
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    try {
+      await dataService.deleteChatMessageById(deleteTarget);
+      setMessages(prev => prev.filter(m => m.id !== deleteTarget));
     } catch {
       toast({ title: 'Error', description: 'Failed to delete message', variant: 'destructive' });
+    } finally {
+      setDeleteTarget(null);
     }
   };
 
@@ -144,12 +206,24 @@ export default function Chat() {
             <div>
               <h1 className="text-xl font-bold text-foreground">Mess Chat</h1>
               <p className="text-xs text-muted-foreground">
-                {messages.length} messages • {new Set(messages.map(m => m.userId)).size} participants
+                {messages.length} messages
                 {isOffline && <span className="text-destructive ml-1">• Offline mode</span>}
               </p>
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Active users indicator */}
+            {activeUsers.length > 0 && (
+              <div className="flex items-center gap-1.5 bg-muted px-3 py-1.5 rounded-full" title={activeUsers.map(u => u.name).join(', ')}>
+                <span className="relative flex h-2.5 w-2.5">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                </span>
+                <Users className="h-3.5 w-3.5 text-muted-foreground" />
+                <span className="text-xs font-medium text-foreground">{activeUsers.length}</span>
+                <span className="text-xs text-muted-foreground hidden sm:inline">online</span>
+              </div>
+            )}
             {unsyncedCount > 0 && (
               <Button
                 variant="outline"
@@ -158,11 +232,7 @@ export default function Chat() {
                 disabled={syncing || isOffline}
                 className="gap-1.5 text-xs"
               >
-                {syncing ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
-                ) : (
-                  <RefreshCw className="h-3 w-3" />
-                )}
+                {syncing ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
                 Sync {unsyncedCount}
               </Button>
             )}
@@ -194,6 +264,10 @@ export default function Chat() {
                   <AnimatePresence>
                     {group.messages.map((msg) => {
                       const isOwn = msg.userId === user?.id;
+                      const isEditing = editingId === msg.id;
+                      const canEdit = isOwn;
+                      const canDelete = isOwn || user?.role === 'manager';
+
                       return (
                         <motion.div
                           key={msg.id}
@@ -209,35 +283,99 @@ export default function Chat() {
                               </AvatarFallback>
                             </Avatar>
                           )}
-                          <div className={cn('max-w-[75%] min-w-[120px]', isOwn ? 'items-end' : 'items-start')}>
+                          <div className={cn('max-w-[75%] min-w-[120px] flex flex-col', isOwn ? 'items-end' : 'items-start')}>
                             {!isOwn && (
                               <p className="text-xs font-medium text-muted-foreground mb-1 px-1">{msg.senderName}</p>
                             )}
-                            <div
-                              className={cn(
-                                'rounded-2xl px-4 py-2 relative',
-                                isOwn
-                                  ? 'bg-primary text-primary-foreground rounded-tr-sm'
-                                  : 'bg-muted text-foreground rounded-tl-sm'
+                            <div className="flex items-start gap-1">
+                              {/* Three-dot menu - shows on left for own, right for others */}
+                              {isOwn && (canEdit || canDelete) && !isEditing && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-1"
+                                    >
+                                      <MoreVertical className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="end" className="w-32">
+                                    {canEdit && (
+                                      <DropdownMenuItem onClick={() => handleEdit(msg)}>
+                                        <Pencil className="h-3.5 w-3.5 mr-2" />
+                                        Edit
+                                      </DropdownMenuItem>
+                                    )}
+                                    {canDelete && (
+                                      <DropdownMenuItem onClick={() => setDeleteTarget(msg.id)} className="text-destructive focus:text-destructive">
+                                        <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                        Delete
+                                      </DropdownMenuItem>
+                                    )}
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
                               )}
-                            >
-                              <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
-                              <div className={cn('flex items-center gap-1 mt-1', isOwn ? 'justify-end' : 'justify-start')}>
-                                <span className={cn('text-[10px]', isOwn ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
-                                  {format(new Date(msg.createdAt), 'h:mm a')}
-                                </span>
-                              </div>
-                            </div>
-                            {(isOwn || user?.role === 'manager') && (
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity mt-0.5"
-                                onClick={() => handleDelete(msg.id)}
+
+                              <div
+                                className={cn(
+                                  'rounded-2xl px-4 py-2 relative',
+                                  isOwn
+                                    ? 'bg-primary text-primary-foreground rounded-tr-sm'
+                                    : 'bg-muted text-foreground rounded-tl-sm'
+                                )}
                               >
-                                <Trash2 className="h-3 w-3 text-destructive" />
-                              </Button>
-                            )}
+                                {isEditing ? (
+                                  <div className="flex items-center gap-2">
+                                    <Input
+                                      ref={editInputRef}
+                                      value={editText}
+                                      onChange={e => setEditText(e.target.value)}
+                                      onKeyDown={handleEditKeyDown}
+                                      maxLength={2000}
+                                      className="h-7 text-sm bg-background text-foreground border-none rounded-lg min-w-[150px]"
+                                    />
+                                    <Button size="icon" className="h-6 w-6 flex-shrink-0" onClick={handleEditSave}>
+                                      <Send className="h-3 w-3" />
+                                    </Button>
+                                    <Button size="icon" variant="ghost" className="h-6 w-6 flex-shrink-0" onClick={() => { setEditingId(null); setEditText(''); }}>
+                                      <X className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <p className="text-sm whitespace-pre-wrap break-words">{msg.message}</p>
+                                    <div className={cn('flex items-center gap-1 mt-1', isOwn ? 'justify-end' : 'justify-start')}>
+                                      <span className={cn('text-[10px]', isOwn ? 'text-primary-foreground/60' : 'text-muted-foreground')}>
+                                        {format(new Date(msg.createdAt), 'h:mm a')}
+                                        {msg.editedAt && ' • edited'}
+                                      </span>
+                                    </div>
+                                  </>
+                                )}
+                              </div>
+
+                              {/* Three-dot menu for other people's messages (manager can delete) */}
+                              {!isOwn && canDelete && !isEditing && (
+                                <DropdownMenu>
+                                  <DropdownMenuTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 mt-1"
+                                    >
+                                      <MoreVertical className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </DropdownMenuTrigger>
+                                  <DropdownMenuContent align="start" className="w-32">
+                                    <DropdownMenuItem onClick={() => setDeleteTarget(msg.id)} className="text-destructive focus:text-destructive">
+                                      <Trash2 className="h-3.5 w-3.5 mr-2" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  </DropdownMenuContent>
+                                </DropdownMenu>
+                              )}
+                            </div>
                           </div>
                         </motion.div>
                       );
@@ -254,6 +392,7 @@ export default function Chat() {
         <div className="border-t border-border pt-3 mt-2">
           <div className="flex gap-2 items-end">
             <Input
+              ref={inputRef}
               placeholder="Type a message..."
               value={newMessage}
               onChange={e => setNewMessage(e.target.value)}
@@ -277,6 +416,15 @@ export default function Chat() {
           </p>
         </div>
       </div>
+
+      {/* Delete Confirmation */}
+      <DeleteConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        onConfirm={handleDelete}
+        title="Delete Message"
+        description="Are you sure you want to delete this message? This cannot be undone."
+      />
     </DashboardLayout>
   );
 }

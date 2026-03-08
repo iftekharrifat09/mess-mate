@@ -1412,10 +1412,10 @@ export async function getChatMessagesByMessId(messId: string): Promise<ChatMessa
   return storage.getChatMessagesByMessId(messId);
 }
 
-export async function sendChatMessage(data: { messId: string; userId: string; senderName: string; message: string }): Promise<ChatMessage> {
+export async function sendChatMessage(data: { messId: string; userId: string; senderName: string; message: string }, activeUserIds?: string[]): Promise<ChatMessage> {
   if (shouldUseBackend()) {
     try {
-      const result = await api.sendChatMessageAPI(data.message);
+      const result = await api.sendChatMessageAPI(data.message, activeUserIds);
       if (result.success && result.data) {
         const msg = (result.data as any).message || result.data;
         return msg;
@@ -1429,6 +1429,29 @@ export async function sendChatMessage(data: { messId: string; userId: string; se
   const msg = storage.createChatMessage(data);
   storage.addUnsyncedChatMessage(msg);
   return msg;
+}
+
+export async function editChatMessage(id: string, message: string): Promise<ChatMessage | null> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.editChatMessageAPI(id, message);
+      if (result.success && result.data) {
+        return (result.data as any).message || result.data;
+      }
+    } catch (error) {
+      console.error('Error editing chat message:', error);
+    }
+  }
+  // localStorage fallback: edit locally
+  const messages = storage.getChatMessages();
+  const idx = messages.findIndex(m => m.id === id);
+  if (idx !== -1) {
+    messages[idx].message = message;
+    messages[idx].editedAt = new Date().toISOString();
+    storage.saveChatMessages(messages);
+    return messages[idx];
+  }
+  return null;
 }
 
 export async function deleteChatMessageById(id: string): Promise<boolean> {
@@ -1446,6 +1469,24 @@ export async function deleteChatMessageById(id: string): Promise<boolean> {
   return storage.deleteChatMessage(id);
 }
 
+export async function chatHeartbeat(): Promise<{ activeUsers: Array<{ userId: string; name: string }>; count: number }> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.chatHeartbeatAPI();
+      if (result.success && result.data) {
+        return { activeUsers: (result.data as any).activeUsers || [], count: (result.data as any).count || 0 };
+      }
+    } catch {}
+  }
+  return { activeUsers: [], count: 0 };
+}
+
+export async function chatLeave(): Promise<void> {
+  if (shouldUseBackend()) {
+    try { await api.chatLeaveAPI(); } catch {}
+  }
+}
+
 /**
  * Sync unsynced chat messages to the backend when connection is restored
  */
@@ -1461,16 +1502,14 @@ export async function syncUnsyncedChatMessages(): Promise<number> {
       const result = await api.sendChatMessageAPI(msg.message);
       if (result.success) {
         syncedCount++;
-        // Remove the local-only version
         storage.deleteChatMessage(msg.id);
       }
     } catch {
-      break; // Stop if backend goes down again
+      break;
     }
   }
 
   if (syncedCount > 0) {
-    // Clear synced messages from unsynced list
     const remaining = unsynced.slice(syncedCount);
     if (remaining.length === 0) {
       storage.clearUnsyncedChatMessages();

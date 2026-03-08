@@ -837,15 +837,30 @@ export async function getChatMessagesAPI(limit?: number, before?: string) {
   return apiRequest(`/chat/messages${q ? '?' + q : ''}`, { method: 'GET' });
 }
 
-export async function sendChatMessageAPI(message: string) {
+export async function sendChatMessageAPI(message: string, activeUserIds?: string[]) {
   return apiRequest('/chat/messages', {
     method: 'POST',
+    body: JSON.stringify({ message, activeUserIds }),
+  });
+}
+
+export async function editChatMessageAPI(id: string, message: string) {
+  return apiRequest(`/chat/messages/${id}`, {
+    method: 'PUT',
     body: JSON.stringify({ message }),
   });
 }
 
 export async function deleteChatMessageAPI(id: string) {
   return apiRequest(`/chat/messages/${id}`, { method: 'DELETE' });
+}
+
+export async function chatHeartbeatAPI() {
+  return apiRequest('/chat/heartbeat', { method: 'POST' });
+}
+
+export async function chatLeaveAPI() {
+  return apiRequest('/chat/leave', { method: 'POST' });
 }
 
 // ============================================
