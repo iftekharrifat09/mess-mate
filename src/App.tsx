@@ -26,6 +26,7 @@ import Notes from "./pages/Notes";
 import Profile from "./pages/Profile";
 import EditCalendar from "./pages/EditCalendar";
 import Calculator from "./pages/Calculator";
+import Chat from "./pages/Chat";
 
 const queryClient = new QueryClient();
 
@@ -60,6 +61,7 @@ const App = () => (
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/edit-calendar" element={<EditCalendar />} />
                 <Route path="/calculator" element={<Calculator />} />
+                <Route path="/chat" element={<Chat />} />
               </Routes>
             </BrowserRouter>
           </TooltipProvider>

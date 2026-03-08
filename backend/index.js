@@ -101,6 +101,7 @@ async function connectToDatabase() {
       calcPayments: db.collection("calcPayments"),
       calcBillPayments: db.collection("calcBillPayments"),
       activityLogs: db.collection("activityLogs"),
+      chatMessages: db.collection("chatMessages"),
     };
 
     // Create indexes
@@ -131,6 +132,8 @@ async function connectToDatabase() {
       collections.calcBillPayments.createIndex({ messId: 1, monthId: 1 }),
       collections.calcBillPayments.createIndex({ categoryId: 1 }),
       collections.activityLogs.createIndex({ messId: 1 }),
+      collections.chatMessages.createIndex({ messId: 1, createdAt: -1 }),
+      collections.chatMessages.createIndex({ messId: 1, createdAt: 1 }),
     ]);
   } catch (error) {
     console.error("❌ MongoDB Connection Error:", error);
@@ -2867,6 +2870,112 @@ app.get("/api/desco/alert-status", authMiddleware, async (req, res) => {
     });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to get alert status" });
+  }
+});
+
+// ============================================
+// CHAT API
+// ============================================
+
+// Get chat messages for the user's mess (with pagination)
+app.get("/api/chat/messages", authMiddleware, async (req, res) => {
+  try {
+    const messId = req.user.messId;
+    if (!messId) return res.status(400).json({ success: false, error: "Not in a mess" });
+
+    const limit = parseInt(req.query.limit) || 50;
+    const before = req.query.before; // cursor-based pagination
+
+    const query = { messId };
+    if (before) {
+      query.createdAt = { $lt: before };
+    }
+
+    const messages = await collections.chatMessages
+      .find(query)
+      .sort({ createdAt: -1 })
+      .limit(limit)
+      .toArray();
+
+    // Attach sender info
+    const userIds = [...new Set(messages.map(m => m.userId))];
+    const users = await collections.users
+      .find({ _id: { $in: userIds.map(id => new ObjectId(id)) } })
+      .project({ _id: 1, name: 1 })
+      .toArray();
+    const userMap = {};
+    users.forEach(u => { userMap[u._id.toString()] = u.name; });
+
+    const enriched = messages.map(m => ({
+      ...transformDoc(m),
+      senderName: userMap[m.userId] || "Unknown",
+    }));
+
+    res.json({ success: true, messages: enriched.reverse() });
+  } catch (error) {
+    console.error("Chat fetch error:", error);
+    res.status(500).json({ success: false, error: "Failed to fetch messages" });
+  }
+});
+
+// Send a chat message
+app.post("/api/chat/messages", authMiddleware, async (req, res) => {
+  try {
+    const messId = req.user.messId;
+    if (!messId) return res.status(400).json({ success: false, error: "Not in a mess" });
+
+    const { message } = req.body;
+    if (!message || !message.trim()) {
+      return res.status(400).json({ success: false, error: "Message cannot be empty" });
+    }
+
+    const trimmed = message.trim().substring(0, 2000); // max 2000 chars
+
+    const chatMsg = {
+      messId,
+      userId: req.user.id,
+      message: trimmed,
+      createdAt: new Date().toISOString(),
+    };
+
+    const result = await collections.chatMessages.insertOne(chatMsg);
+    const saved = { ...transformDoc({ _id: result.insertedId, ...chatMsg }), senderName: req.user.name || "Unknown" };
+
+    // Send notifications to all other mess members
+    const members = await collections.users.find({ messId, _id: { $ne: new ObjectId(req.user.id) }, isApproved: true, isActive: true }).toArray();
+    const senderName = req.user.name || "Unknown";
+    const notifPromises = members.map(member =>
+      collections.notifications.insertOne({
+        userId: member._id.toString(),
+        messId,
+        type: "chat",
+        title: `💬 ${senderName}`,
+        message: trimmed.length > 80 ? trimmed.substring(0, 80) + "..." : trimmed,
+        seen: false,
+        createdAt: new Date().toISOString(),
+      })
+    );
+    await Promise.all(notifPromises);
+
+    res.json({ success: true, message: saved });
+  } catch (error) {
+    console.error("Chat send error:", error);
+    res.status(500).json({ success: false, error: "Failed to send message" });
+  }
+});
+
+// Delete a chat message (only own messages)
+app.delete("/api/chat/messages/:id", authMiddleware, async (req, res) => {
+  try {
+    const msg = await collections.chatMessages.findOne({ _id: new ObjectId(req.params.id) });
+    if (!msg) return res.status(404).json({ success: false, error: "Message not found" });
+    if (msg.userId !== req.user.id && req.user.role !== "manager") {
+      return res.status(403).json({ success: false, error: "Cannot delete others' messages" });
+    }
+    await collections.chatMessages.deleteOne({ _id: new ObjectId(req.params.id) });
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to delete message" });
   }
 });
 

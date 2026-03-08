@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard, Users, Utensils, Wallet, ShoppingCart, Receipt,
   CalendarDays, UserPlus, LogOut, ChevronLeft, ChevronRight, Menu,
-  Building, Megaphone, Calendar, StickyNote, User, Calculator,
+  Building, Megaphone, Calendar, StickyNote, User, Calculator, MessageCircle,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import NotificationBell from '@/components/notifications/NotificationBell';
@@ -31,6 +31,7 @@ const getNavItems = (isManager: boolean): NavItem[] => [
   { label: 'Bazar Dates', href: '/bazar-dates', icon: ShoppingCart, managerOnly: true },
   { label: 'Notices', href: '/notices', icon: Megaphone },
   { label: 'All Notes', href: '/notes', icon: StickyNote },
+  { label: 'Mess Chat', href: '/chat', icon: MessageCircle },
   { label: 'Join Requests', href: '/join-requests', icon: UserPlus, managerOnly: true },
   { label: 'Manage Mess', href: '/manage-mess', icon: Building, managerOnly: true },
 ];

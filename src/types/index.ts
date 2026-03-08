@@ -104,7 +104,7 @@ export interface Notification {
   id: string;
   userId: string;
   messId: string;
-  type: 'meal' | 'deposit' | 'cost' | 'notice' | 'bazar' | 'mess_update' | 'join_request';
+  type: 'meal' | 'deposit' | 'cost' | 'notice' | 'bazar' | 'mess_update' | 'join_request' | 'chat';
   title: string;
   message: string;
   seen: boolean;
@@ -141,6 +141,15 @@ export interface MonthSummary {
   mealRate: number;
   totalIndividualCost: number;
   totalSharedCost: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  messId: string;
+  userId: string;
+  senderName: string;
+  message: string;
+  createdAt: string;
 }
 
 export interface MessActivityLog {

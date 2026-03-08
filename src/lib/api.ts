@@ -826,6 +826,29 @@ export async function deleteCalcBillPaymentAPI(id: string) {
 }
 
 // ============================================
+// CHAT API
+// ============================================
+
+export async function getChatMessagesAPI(limit?: number, before?: string) {
+  const params = new URLSearchParams();
+  if (limit) params.set('limit', String(limit));
+  if (before) params.set('before', before);
+  const q = params.toString();
+  return apiRequest(`/chat/messages${q ? '?' + q : ''}`, { method: 'GET' });
+}
+
+export async function sendChatMessageAPI(message: string) {
+  return apiRequest('/chat/messages', {
+    method: 'POST',
+    body: JSON.stringify({ message }),
+  });
+}
+
+export async function deleteChatMessageAPI(id: string) {
+  return apiRequest(`/chat/messages/${id}`, { method: 'DELETE' });
+}
+
+// ============================================
 // ACTIVITY LOGS
 // ============================================
 
