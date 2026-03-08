@@ -346,13 +346,16 @@ export default function CalculatorPage() {
 
   const handleDeleteBillPayment = async (id: string) => {
     setDeleteTarget(null);
-    const bp = billPayments.find(b => b.id === id);
-    await calcStore.deleteBillPayment(id);
-    if (!shouldUseBackend() && bp) {
-      dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Bill Payment Deleted', message: `Bill payment of ${formatCurrency(bp.amount)} for "${bp.categoryName}" has been removed` });
-    }
-    reload();
-    toast({ title: 'Bill payment deleted', variant: 'destructive' });
+    setIsDeleting(true);
+    try {
+      const bp = billPayments.find(b => b.id === id);
+      await calcStore.deleteBillPayment(id);
+      if (!shouldUseBackend() && bp) {
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'cost', title: 'Bill Payment Deleted', message: `Bill payment of ${formatCurrency(bp.amount)} for "${bp.categoryName}" has been removed` });
+      }
+      await reload();
+      toast({ title: 'Bill payment deleted', variant: 'destructive' });
+    } finally { setIsDeleting(false); }
   };
 
   const getExceptionsForCategory = (catId: string) => allExceptions.filter(e => e.categoryId === catId);
