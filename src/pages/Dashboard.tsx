@@ -21,6 +21,7 @@ import {
 import * as dataService from '@/lib/dataService';
 import * as calcStore from '@/lib/calculatorStorage';
 import { Users } from 'lucide-react';
+import CalendarModal from '@/components/dashboard/CalendarModal';
 
 // Default empty states to show UI immediately
 const EMPTY_MONTH_SUMMARY: MonthSummary = {
@@ -155,11 +156,14 @@ export default function Dashboard() {
         className="space-y-6"
       >
         {/* Header */}
-        <div ref={headerRef}>
-          <h1 className="text-3xl font-bold text-foreground">{messName}</h1>
-          <p className="text-muted-foreground">
-            Welcome back, {user?.fullName}! Here's your mess overview.
-          </p>
+        <div ref={headerRef} className="flex items-start justify-between">
+          <div>
+            <h1 className="text-3xl font-bold text-foreground">{messName}</h1>
+            <p className="text-muted-foreground">
+              Welcome back, {user?.fullName}! Here's your mess overview.
+            </p>
+          </div>
+          <CalendarModal />
         </div>
 
         {/* Main Grid */}
