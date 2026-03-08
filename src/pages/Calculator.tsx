@@ -516,7 +516,7 @@ export default function CalculatorPage() {
                               <Button variant="outline" size="sm" onClick={() => { setEditCat(cat); setCatTitle(cat.title); setCatCost(String(cat.totalCost)); setCatModal(true); }}>
                                 <Edit2 className="h-3.5 w-3.5 mr-1" /> Edit
                               </Button>
-                              <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => handleDeleteCategory(cat.id)}>
+                              <Button variant="outline" size="sm" className="text-destructive hover:text-destructive" onClick={() => setDeleteTarget({ type: 'category', id: cat.id, label: `"${cat.title}"` })}>
                                 <Trash2 className="h-3.5 w-3.5 mr-1" /> Delete
                               </Button>
                               <Button variant="outline" size="sm" onClick={() => { setExcModal(cat.id); setExcStep(1); setExcUserId(''); setExcAmount(''); }}>
