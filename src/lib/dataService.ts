@@ -920,6 +920,12 @@ export async function getLatestNotice(messId: string): Promise<Notice | undefine
 }
 
 export async function createNotice(noticeData: Omit<Notice, 'id' | 'createdAt'>): Promise<Notice> {
+  // Invalidate notice caches
+  if ((noticeData as any).messId) {
+    apiCache.invalidate(cacheKeys.notices((noticeData as any).messId));
+    apiCache.invalidate(cacheKeys.latestNotice((noticeData as any).messId));
+  }
+  
   if (shouldUseBackend()) {
     const result = await api.createNoticeAPI(noticeData as any);
     if (result.success && result.data) {
