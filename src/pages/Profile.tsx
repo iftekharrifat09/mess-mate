@@ -84,9 +84,14 @@ export default function Profile() {
   const handleToggleBrowserNotifications = async (checked: boolean) => {
     if (!user) return;
     if (checked) {
+      // Check if permanently denied first
+      if ('Notification' in window && Notification.permission === 'denied') {
+        toast({ title: 'Notifications blocked', description: 'Please enable notifications in your browser/device settings and try again.', variant: 'destructive' });
+        return;
+      }
       const granted = await requestBrowserNotificationPermission();
       if (!granted) {
-        toast({ title: 'Permission denied', description: 'Please allow notifications in your browser settings', variant: 'destructive' });
+        toast({ title: 'Notifications blocked', description: 'Please enable notifications in your browser/device settings and try again.', variant: 'destructive' });
         return;
       }
     }
