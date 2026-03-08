@@ -316,3 +316,26 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
     </motion.div>
   );
 }
+
+function TodayDateDisplay() {
+  const today = new Date();
+  const bangla = toBanglaDate(today);
+  const hijri = toHijriDate(today);
+  const englishDate = `${today.getDate()} ${ENGLISH_MONTHS[today.getMonth()]} ${today.getFullYear()}`;
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 10 }}
+      animate={{ opacity: 1, x: 0 }}
+      className="hidden sm:flex flex-col items-end text-right bg-card/50 backdrop-blur-sm border border-border/50 rounded-lg px-3 py-2"
+    >
+      <span className="text-xs font-medium text-foreground">{englishDate}</span>
+      <span className="text-xs font-bold text-primary">
+        {toBanglaDigits(bangla.day)} {bangla.month} {toBanglaDigits(bangla.year)}
+      </span>
+      <span className="text-xs font-bold text-gold">
+        {hijri.day} {hijri.month} {hijri.year} AH
+      </span>
+    </motion.div>
+  );
+}
