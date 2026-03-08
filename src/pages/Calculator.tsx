@@ -180,6 +180,7 @@ export default function CalculatorPage() {
   };
 
   const handleDeleteException = async (id: string) => {
+    setDeleteTarget(null);
     await calcStore.deleteException(id);
     reload();
   };
