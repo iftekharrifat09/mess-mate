@@ -497,6 +497,10 @@ export async function createDeposit(depositData: Omit<Deposit, 'id' | 'createdAt
 }
 
 export async function updateDeposit(id: string, updates: Partial<Deposit>): Promise<Deposit | undefined> {
+  // Invalidate deposit caches
+  apiCache.invalidatePrefix('deposits:');
+  apiCache.invalidatePrefix('summary:');
+  
   if (shouldUseBackend()) {
     const result = await api.updateDepositAPI(id, updates);
     if (result.success && result.data) {
