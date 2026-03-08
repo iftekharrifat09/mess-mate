@@ -13,9 +13,10 @@ import NoticePopup from '@/components/notices/NoticePopup';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import { MonthSummary, MemberSummary, BazarDate, User } from '@/types';
 import { 
-  calculateMonthSummary, 
-  calculateMemberSummary, 
-  getAllMembersSummary 
+  fetchMonthData,
+  calculateMonthSummaryFromData, 
+  calculateMemberSummaryFromData, 
+  getAllMembersSummaryFromData 
 } from '@/lib/calculations';
 import * as dataService from '@/lib/dataService';
 import * as calcStore from '@/lib/calculatorStorage';
