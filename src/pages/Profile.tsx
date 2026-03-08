@@ -695,7 +695,7 @@ export default function Profile() {
                       className="hidden"
                       onChange={handleUploadTone}
                     />
-                    <span className="text-[11px] text-muted-foreground">MP3, WAV, OGG • Max 1MB</span>
+                    <span className="text-[11px] text-muted-foreground">MP3 only • Max 1MB</span>
                   </div>
                 </motion.div>
               )}
