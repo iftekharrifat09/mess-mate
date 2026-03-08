@@ -1237,6 +1237,9 @@ export async function createNote(noteData: Omit<Note, 'id' | 'createdAt'>): Prom
 }
 
 export async function updateNote(id: string, updates: Partial<Note>): Promise<Note | undefined> {
+  // Invalidate notes cache
+  apiCache.invalidatePrefix('notes:');
+  
   if (shouldUseBackend()) {
     const result = await api.updateNoteAPI(id, updates);
     if (result.success && result.data) {
