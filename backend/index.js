@@ -2404,7 +2404,20 @@ app.post("/api/calc-exceptions", authMiddleware, async (req, res) => {
 
 app.delete("/api/calc-exceptions/:id", authMiddleware, async (req, res) => {
   try {
+    const exc = await collections.calcExceptions.findOne({ _id: new ObjectId(req.params.id) });
     await collections.calcExceptions.deleteOne({ _id: new ObjectId(req.params.id) });
+
+    if (exc) {
+      const cat = await collections.calcCategories.findOne({ _id: new ObjectId(exc.categoryId) });
+      if (cat) {
+        await notifyMembers(cat.messId, req.userId, {
+          title: "Expense Exception Removed",
+          message: `${exc.userName}'s exception for "${cat.title}" has been removed`,
+          type: "general",
+        });
+      }
+    }
+
     res.json({ success: true, message: "Exception deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to delete exception" });
