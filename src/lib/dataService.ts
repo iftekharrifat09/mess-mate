@@ -310,6 +310,10 @@ export async function getActiveMonth(messId: string | undefined): Promise<Month 
 }
 
 export async function createMonth(monthData: Omit<Month, 'id' | 'createdAt'>): Promise<Month> {
+  // Invalidate months cache
+  if (monthData.messId) apiCache.invalidate(cacheKeys.months(monthData.messId));
+  apiCache.invalidatePrefix('month:active:');
+  
   if (shouldUseBackend()) {
     const result = await api.createMonthAPI(monthData as any);
     if (result.success && result.data) {
