@@ -1373,6 +1373,9 @@ export async function createActivityLog(logData: Omit<MessActivityLog, 'id' | 'c
 }
 
 export async function deleteActivityLog(logId: string): Promise<boolean> {
+  // Invalidate activity log caches
+  apiCache.invalidatePrefix('activityLogs:');
+  
   if (shouldUseBackend()) {
     try {
       const result = await api.deleteActivityLogAPI(logId);
