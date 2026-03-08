@@ -721,9 +721,17 @@ export default function CalculatorPage() {
           ) : (
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">Member: <span className="font-semibold text-foreground">{members.find(m => m.id === payUserId)?.fullName}</span></p>
+              {isDepositsCapped && (() => {
+                const due = memberDues[payUserId] || 0;
+                const paid = memberPayments[payUserId] || 0;
+                const remaining = Math.max(0, due - paid);
+                return (
+                  <p className="text-xs text-warning font-medium">⚠ Monthly total reached. Max deposit: {formatCurrency(remaining)}</p>
+                );
+              })()}
               <div>
                 <Label>Amount</Label>
-                <Input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)} placeholder="500" />
+                <Input type="number" value={payAmount} onChange={e => setPayAmount(e.target.value)} placeholder="500" max={isDepositsCapped ? Math.max(0, (memberDues[payUserId] || 0) - (memberPayments[payUserId] || 0)) : undefined} />
               </div>
               <div>
                 <Label>Description</Label>
