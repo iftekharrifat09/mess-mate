@@ -386,54 +386,54 @@ export default function CalculatorPage() {
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 gap-3 md:gap-4">
           <Card className="shadow-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-primary/10"><DollarSign className="h-5 w-5 text-primary" /></div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Monthly Total</p>
-                  <div className="flex items-center gap-2">
-                    <p className="text-xl font-bold">{formatCurrency(monthlyTotal)}</p>
-                    {isMonthlyFullyPaid && <Badge className="bg-success text-success-foreground text-xs">Paid</Badge>}
+            <CardContent className="p-4 md:pt-6 md:p-6">
+              <div className="flex items-center gap-2.5 md:gap-3">
+                <div className="p-2 md:p-2.5 rounded-lg bg-primary/10 shrink-0"><DollarSign className="h-4 w-4 md:h-5 md:w-5 text-primary" /></div>
+                <div className="min-w-0">
+                  <p className="text-[11px] md:text-xs text-muted-foreground">Monthly Total</p>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <p className="text-lg md:text-xl font-bold truncate">{formatCurrency(monthlyTotal)}</p>
+                    {isMonthlyFullyPaid && <Badge className="bg-success text-success-foreground text-[10px] md:text-xs px-1.5">Paid</Badge>}
                   </div>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card className="shadow-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-success/10"><Wallet className="h-5 w-5 text-success" /></div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Total Deposits</p>
-                  <p className="text-xl font-bold text-success">{formatCurrency(totalDeposits)}</p>
+            <CardContent className="p-4 md:pt-6 md:p-6">
+              <div className="flex items-center gap-2.5 md:gap-3">
+                <div className="p-2 md:p-2.5 rounded-lg bg-success/10 shrink-0"><Wallet className="h-4 w-4 md:h-5 md:w-5 text-success" /></div>
+                <div className="min-w-0">
+                  <p className="text-[11px] md:text-xs text-muted-foreground">Total Deposits</p>
+                  <p className="text-lg md:text-xl font-bold text-success truncate">{formatCurrency(totalDeposits)}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card className="shadow-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-destructive/10"><Receipt className="h-5 w-5 text-destructive" /></div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Total Paid</p>
-                  <p className="text-xl font-bold text-destructive">{formatCurrency(totalBillsPaid)}</p>
+            <CardContent className="p-4 md:pt-6 md:p-6">
+              <div className="flex items-center gap-2.5 md:gap-3">
+                <div className="p-2 md:p-2.5 rounded-lg bg-destructive/10 shrink-0"><Receipt className="h-4 w-4 md:h-5 md:w-5 text-destructive" /></div>
+                <div className="min-w-0">
+                  <p className="text-[11px] md:text-xs text-muted-foreground">Total Paid</p>
+                  <p className="text-lg md:text-xl font-bold text-destructive truncate">{formatCurrency(totalBillsPaid)}</p>
                 </div>
               </div>
             </CardContent>
           </Card>
           <Card className="shadow-card">
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-3">
-                <div className={`p-2 rounded-lg ${currentBalance >= 0 ? 'bg-info/10' : 'bg-destructive/10'}`}>
-                  <CalcIcon className={`h-5 w-5 ${currentBalance >= 0 ? 'text-info' : 'text-destructive'}`} />
+            <CardContent className="p-4 md:pt-6 md:p-6">
+              <div className="flex items-center gap-2.5 md:gap-3">
+                <div className={`p-2 md:p-2.5 rounded-lg shrink-0 ${currentBalance >= 0 ? 'bg-info/10' : 'bg-destructive/10'}`}>
+                  <CalcIcon className={`h-4 w-4 md:h-5 md:w-5 ${currentBalance >= 0 ? 'text-info' : 'text-destructive'}`} />
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Current Balance</p>
-                  <p className={`text-xl font-bold ${currentBalance >= 0 ? 'text-info' : 'text-destructive'}`}>{formatCurrency(currentBalance)}</p>
+                <div className="min-w-0">
+                  <p className="text-[11px] md:text-xs text-muted-foreground">Current Balance</p>
+                  <p className={`text-lg md:text-xl font-bold truncate ${currentBalance >= 0 ? 'text-info' : 'text-destructive'}`}>{formatCurrency(currentBalance)}</p>
                   {isMonthlyFullyPaid && currentBalance > 0 && (
-                    <p className="text-[10px] text-muted-foreground mt-0.5">This balance will be refunded to members who overpaid</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5 leading-tight">Refund pending</p>
                   )}
                 </div>
               </div>
