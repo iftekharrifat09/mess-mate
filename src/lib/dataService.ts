@@ -1145,6 +1145,9 @@ export async function markAllNotificationsAsSeen(userId: string): Promise<void> 
 }
 
 export async function deleteNotification(id: string): Promise<boolean> {
+  // Invalidate notification caches
+  apiCache.invalidatePrefix('notifications:');
+  
   if (shouldUseBackend()) {
     const result = await api.deleteNotificationAPI(id);
     if (result.success) {
