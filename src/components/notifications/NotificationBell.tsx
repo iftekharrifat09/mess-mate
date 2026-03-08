@@ -11,7 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useAuth } from '@/contexts/AuthContext';
 import * as dataService from '@/lib/dataService';
 import { getNotificationSoundEnabled } from '@/lib/preferences';
-import { getBrowserNotificationsEnabled } from '@/lib/browserNotifications';
+import { getBrowserNotificationsEnabled, requestBrowserNotificationPermission } from '@/lib/browserNotifications';
 import type { Notification as AppNotification } from '@/types';
 import { format } from 'date-fns';
 import { Trash2, Check, CheckCheck } from 'lucide-react';
@@ -30,15 +30,6 @@ const NOTIF_ICONS: Record<string, string> = {
 
 function getNotifIcon(type: AppNotification['type']) {
   return NOTIF_ICONS[type] || '🔔';
-}
-
-// Request browser notification permission
-export async function requestBrowserNotificationPermission(): Promise<boolean> {
-  if (!('Notification' in window)) return false;
-  if (Notification.permission === 'granted') return true;
-  if (Notification.permission === 'denied') return false;
-  const result = await Notification.requestPermission();
-  return result === 'granted';
 }
 
 // Send a browser push notification
