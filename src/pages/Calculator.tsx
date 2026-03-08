@@ -93,12 +93,14 @@ export default function CalculatorPage() {
   useEffect(() => {
     if (!messId) return;
     (async () => {
+      setIsLoading(true);
       const [m, month] = await Promise.all([
         dataService.getMessMembers(messId),
         dataService.getActiveMonth(messId),
       ]);
       setMembers(m || []);
       if (month) setActiveMonthId(month.id);
+      else setIsLoading(false);
     })();
   }, [messId]);
 
