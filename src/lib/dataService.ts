@@ -8,7 +8,7 @@ import { shouldUseBackend, isBackendAvailable, isMongoDbConnected } from './conf
 import * as api from './api';
 import * as storage from './storage';
 import { apiCache, cacheKeys, invalidateMonthData, invalidateUserData } from './apiCache';
-import { User, Mess, Month, Meal, Deposit, MealCost, OtherCost, JoinRequest, Notice, BazarDate, Notification, Note, MessActivityLog } from '@/types';
+import { User, Mess, Month, Meal, Deposit, MealCost, OtherCost, JoinRequest, Notice, BazarDate, Notification, Note, MessActivityLog, ChatMessage } from '@/types';
 import { toast } from '@/hooks/use-toast';
 
 // Helper to show localStorage fallback alert - debounced
