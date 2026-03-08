@@ -10,15 +10,16 @@ import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
 import { User } from '@/types';
 import * as dataService from '@/lib/dataService';
 import * as calcStore from '@/lib/calculatorStorage';
-import { CalcCategory, CalcException, CalcPayment } from '@/lib/calculatorStorage';
+import { CalcCategory, CalcException, CalcPayment, CalcBillPayment } from '@/lib/calculatorStorage';
 import { formatCurrency } from '@/lib/calculations';
 import {
   Plus, Edit2, Trash2, UserPlus, Calculator as CalcIcon,
-  CheckCircle, XCircle, Users, Wallet, DollarSign, Calendar
+  CheckCircle, Users, Wallet, DollarSign, Receipt, CreditCard,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import {
@@ -34,6 +35,7 @@ export default function CalculatorPage() {
   const [categories, setCategories] = useState<CalcCategory[]>([]);
   const [allExceptions, setAllExceptions] = useState<CalcException[]>([]);
   const [payments, setPayments] = useState<CalcPayment[]>([]);
+  const [billPayments, setBillPayments] = useState<CalcBillPayment[]>([]);
 
   // Modal states
   const [catModal, setCatModal] = useState(false);
@@ -41,32 +43,41 @@ export default function CalculatorPage() {
   const [catTitle, setCatTitle] = useState('');
   const [catCost, setCatCost] = useState('');
 
-  const [excModal, setExcModal] = useState<string | null>(null); // categoryId
+  const [excModal, setExcModal] = useState<string | null>(null);
   const [excUserId, setExcUserId] = useState('');
   const [excAmount, setExcAmount] = useState('');
   const [excStep, setExcStep] = useState<1 | 2>(1);
 
+  // Member Deposit modal
   const [payModal, setPayModal] = useState(false);
   const [payUserId, setPayUserId] = useState('');
   const [payAmount, setPayAmount] = useState('');
   const [payDesc, setPayDesc] = useState('');
   const [payStep, setPayStep] = useState<1 | 2>(1);
-  const [paidPopup, setPaidPopup] = useState(false);
 
   const [editPayment, setEditPayment] = useState<CalcPayment | null>(null);
+
+  // Pay Bill modal
+  const [billModal, setBillModal] = useState(false);
+  const [billCatId, setBillCatId] = useState('');
+  const [billAmount, setBillAmount] = useState('');
+  const [billDesc, setBillDesc] = useState('');
+  const [editBillPayment, setEditBillPayment] = useState<CalcBillPayment | null>(null);
 
   const messId = user?.messId || '';
 
   const reload = useCallback(async () => {
     if (!messId || !activeMonthId) return;
-    const [cats, excs, pays] = await Promise.all([
+    const [cats, excs, pays, bills] = await Promise.all([
       calcStore.getCategories(messId, activeMonthId),
       calcStore.getAllExceptions(messId, activeMonthId),
       calcStore.getPayments(messId, activeMonthId),
+      calcStore.getBillPayments(messId, activeMonthId),
     ]);
     setCategories(cats);
     setAllExceptions(excs);
     setPayments(pays);
+    setBillPayments(bills);
   }, [messId, activeMonthId]);
 
   useEffect(() => {
@@ -83,7 +94,6 @@ export default function CalculatorPage() {
 
   useEffect(() => { reload(); }, [reload]);
 
-  // Calculations
   const totalMembers = members.length;
 
   const memberDues = useMemo(() => {
@@ -104,6 +114,34 @@ export default function CalculatorPage() {
 
   const monthlyTotal = useMemo(() => categories.reduce((s, c) => s + c.totalCost, 0), [categories]);
 
+  // Summary calculations
+  const totalDeposits = useMemo(() => payments.reduce((s, p) => s + p.amount, 0), [payments]);
+  const totalBillsPaid = useMemo(() => billPayments.reduce((s, bp) => s + bp.amount, 0), [billPayments]);
+  const currentBalance = totalDeposits - totalBillsPaid;
+
+  // Category paid amounts
+  const categoryPaidMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const bp of billPayments) {
+      map[bp.categoryId] = (map[bp.categoryId] || 0) + bp.amount;
+    }
+    return map;
+  }, [billPayments]);
+
+  // Unpaid categories for Pay Bill dropdown
+  const unpaidCategories = useMemo(() =>
+    categories.filter(c => {
+      const paid = categoryPaidMap[c.id] || 0;
+      return paid < c.totalCost;
+    }), [categories, categoryPaidMap]);
+
+  const selectedBillCatDue = useMemo(() => {
+    if (!billCatId) return 0;
+    const cat = categories.find(c => c.id === billCatId);
+    if (!cat) return 0;
+    return cat.totalCost - (categoryPaidMap[cat.id] || 0);
+  }, [billCatId, categories, categoryPaidMap]);
+
   // Handlers
   const handleSaveCategory = async () => {
     if (!catTitle.trim() || !catCost) return;
@@ -123,11 +161,6 @@ export default function CalculatorPage() {
     toast({ title: 'Category deleted', variant: 'destructive' });
   };
 
-  const handleStatusChange = async (id: string, status: 'paid' | 'unpaid') => {
-    await calcStore.updateCategory(id, { status });
-    reload();
-  };
-
   const handleSaveException = async () => {
     if (!excModal || !excUserId || !excAmount) return;
     await calcStore.createException({ categoryId: excModal, userId: excUserId, userName: members.find(m => m.id === excUserId)?.fullName || '', amount: Number(excAmount) });
@@ -141,22 +174,12 @@ export default function CalculatorPage() {
     reload();
   };
 
-  const handleOpenPayModal = () => {
-    setPayModal(true); setPayStep(1); setPayUserId(''); setPayAmount(''); setPayDesc('');
+  // Member Deposit handlers
+  const handleOpenDepositModal = () => {
+    setPayModal(true); setPayStep(1); setPayUserId(''); setPayAmount(''); setPayDesc(''); setEditPayment(null);
   };
 
-  const handleSelectPayMember = (uid: string) => {
-    const due = memberDues[uid] || 0;
-    const paid = memberPayments[uid] || 0;
-    if (paid >= due && due > 0) {
-      setPaidPopup(true);
-      return;
-    }
-    setPayUserId(uid);
-    setPayStep(2);
-  };
-
-  const handleSavePayment = async () => {
+  const handleSaveDeposit = async () => {
     if (!payUserId || !payAmount) return;
     if (editPayment) {
       await calcStore.updatePayment(editPayment.id, { amount: Number(payAmount), description: payDesc });
@@ -166,13 +189,42 @@ export default function CalculatorPage() {
     }
     setPayModal(false); setPayUserId(''); setPayAmount(''); setPayDesc(''); setPayStep(1);
     reload();
-    toast({ title: editPayment ? 'Payment updated' : 'Payment recorded' });
+    toast({ title: editPayment ? 'Deposit updated' : 'Deposit recorded' });
   };
 
-  const handleDeletePayment = async (id: string) => {
+  const handleDeleteDeposit = async (id: string) => {
     await calcStore.deletePayment(id);
     reload();
-    toast({ title: 'Payment deleted', variant: 'destructive' });
+    toast({ title: 'Deposit deleted', variant: 'destructive' });
+  };
+
+  // Pay Bill handlers
+  const handleOpenBillModal = () => {
+    setBillModal(true); setBillCatId(''); setBillAmount(''); setBillDesc(''); setEditBillPayment(null);
+  };
+
+  const handleSaveBillPayment = async () => {
+    if (!billCatId || !billAmount) return;
+    const amt = Number(billAmount);
+    if (!editBillPayment && amt > selectedBillCatDue) {
+      toast({ title: 'Amount exceeds remaining due', variant: 'destructive' });
+      return;
+    }
+    if (editBillPayment) {
+      await calcStore.updateBillPayment(editBillPayment.id, { amount: amt, description: billDesc, categoryId: billCatId, categoryName: categories.find(c => c.id === billCatId)?.title || '' });
+      setEditBillPayment(null);
+    } else {
+      await calcStore.createBillPayment({ messId, monthId: activeMonthId, categoryId: billCatId, categoryName: categories.find(c => c.id === billCatId)?.title || '', amount: amt, description: billDesc });
+    }
+    setBillModal(false); setBillCatId(''); setBillAmount(''); setBillDesc('');
+    reload();
+    toast({ title: editBillPayment ? 'Bill payment updated' : 'Bill payment recorded' });
+  };
+
+  const handleDeleteBillPayment = async (id: string) => {
+    await calcStore.deleteBillPayment(id);
+    reload();
+    toast({ title: 'Bill payment deleted', variant: 'destructive' });
   };
 
   const getExceptionsForCategory = (catId: string) => allExceptions.filter(e => e.categoryId === catId);
@@ -197,24 +249,27 @@ export default function CalculatorPage() {
               <CalcIcon className="h-6 w-6 text-primary-foreground" />
             </div>
             <div>
-             <h1 className="text-2xl font-bold text-foreground">Mess Expenses</h1>
+              <h1 className="text-2xl font-bold text-foreground">Mess Expenses</h1>
               <p className="text-sm text-muted-foreground">Manage monthly cost categories & payments</p>
             </div>
           </div>
           {isManager && (
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               <Button onClick={() => { setCatModal(true); setEditCat(null); setCatTitle(''); setCatCost(''); }}>
                 <Plus className="h-4 w-4 mr-2" /> Add Category
               </Button>
-              <Button variant="outline" onClick={handleOpenPayModal}>
-                <Wallet className="h-4 w-4 mr-2" /> Member Paying
+              <Button variant="outline" onClick={handleOpenDepositModal}>
+                <Wallet className="h-4 w-4 mr-2" /> Member Deposit
+              </Button>
+              <Button variant="secondary" onClick={handleOpenBillModal}>
+                <CreditCard className="h-4 w-4 mr-2" /> Pay Bill
               </Button>
             </div>
           )}
         </div>
 
-        {/* Monthly Summary */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {/* Summary Cards */}
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card className="shadow-card">
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
@@ -229,10 +284,10 @@ export default function CalculatorPage() {
           <Card className="shadow-card">
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-info/10"><Users className="h-5 w-5 text-info" /></div>
+                <div className="p-2 rounded-lg bg-success/10"><Wallet className="h-5 w-5 text-success" /></div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Total Members</p>
-                  <p className="text-xl font-bold">{totalMembers}</p>
+                  <p className="text-xs text-muted-foreground">Total Deposits</p>
+                  <p className="text-xl font-bold text-success">{formatCurrency(totalDeposits)}</p>
                 </div>
               </div>
             </CardContent>
@@ -240,10 +295,23 @@ export default function CalculatorPage() {
           <Card className="shadow-card">
             <CardContent className="pt-6">
               <div className="flex items-center gap-3">
-                <div className="p-2 rounded-lg bg-success/10"><CalcIcon className="h-5 w-5 text-success" /></div>
+                <div className="p-2 rounded-lg bg-destructive/10"><Receipt className="h-5 w-5 text-destructive" /></div>
                 <div>
-                  <p className="text-xs text-muted-foreground">Per Member (avg)</p>
-                  <p className="text-xl font-bold">{totalMembers > 0 ? formatCurrency(monthlyTotal / totalMembers) : '৳0'}</p>
+                  <p className="text-xs text-muted-foreground">Total Paid</p>
+                  <p className="text-xl font-bold text-destructive">{formatCurrency(totalBillsPaid)}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="shadow-card">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-3">
+                <div className={`p-2 rounded-lg ${currentBalance >= 0 ? 'bg-info/10' : 'bg-destructive/10'}`}>
+                  <CalcIcon className={`h-5 w-5 ${currentBalance >= 0 ? 'text-info' : 'text-destructive'}`} />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground">Current Balance</p>
+                  <p className={`text-xl font-bold ${currentBalance >= 0 ? 'text-info' : 'text-destructive'}`}>{formatCurrency(currentBalance)}</p>
                 </div>
               </div>
             </CardContent>
@@ -313,7 +381,9 @@ export default function CalculatorPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <AnimatePresence>
                 {categories.map(cat => {
-                  const isPaid = cat.status === 'paid';
+                  const catPaid = categoryPaidMap[cat.id] || 0;
+                  const isPaid = catPaid >= cat.totalCost;
+                  const catRemaining = cat.totalCost - catPaid;
                   const catExc = getExceptionsForCategory(cat.id);
                   return (
                     <motion.div key={cat.id} layout initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}>
@@ -321,24 +391,9 @@ export default function CalculatorPage() {
                         <CardHeader className="pb-3">
                           <div className="flex items-center justify-between">
                             <CardTitle className="text-base">{cat.title}</CardTitle>
-                            <div className="flex items-center gap-2">
-                              {isManager && (
-                                <Select value={cat.status} onValueChange={(v: 'paid' | 'unpaid') => handleStatusChange(cat.id, v)}>
-                                  <SelectTrigger className="h-8 w-24 text-xs">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="paid">Paid</SelectItem>
-                                    <SelectItem value="unpaid">Unpaid</SelectItem>
-                                  </SelectContent>
-                                </Select>
-                              )}
-                              {!isManager && (
-                                <Badge variant={isPaid ? 'default' : 'destructive'} className={isPaid ? 'bg-success text-success-foreground' : ''}>
-                                  {isPaid ? 'Paid' : 'Unpaid'}
-                                </Badge>
-                              )}
-                            </div>
+                            <Badge variant={isPaid ? 'default' : 'destructive'} className={isPaid ? 'bg-success text-success-foreground' : ''}>
+                              {isPaid ? 'Paid' : 'Unpaid'}
+                            </Badge>
                           </div>
                         </CardHeader>
                         <CardContent className="space-y-3">
@@ -346,8 +401,19 @@ export default function CalculatorPage() {
                             <span className="text-sm text-muted-foreground">Total Cost</span>
                             <span className="font-bold text-lg">{formatCurrency(cat.totalCost)}</span>
                           </div>
+                          {catPaid > 0 && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Bill Paid</span>
+                              <span className="font-semibold text-success">{formatCurrency(catPaid)}</span>
+                            </div>
+                          )}
+                          {!isPaid && catRemaining > 0 && (
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="text-muted-foreground">Remaining</span>
+                              <span className="font-semibold text-destructive">{formatCurrency(catRemaining)}</span>
+                            </div>
+                          )}
 
-                          {/* Per-member breakdown */}
                           {totalMembers > 0 && (
                             <div className="text-xs text-muted-foreground">
                               {catExc.length === 0 ? (
@@ -400,55 +466,113 @@ export default function CalculatorPage() {
           )}
         </div>
 
-        {/* Payment Records (Manager only) */}
-        {isManager && payments.length > 0 && (
-          <Card className="shadow-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-lg">
-                <Wallet className="h-5 w-5 text-primary" /> Payment Records
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Date</TableHead>
-                      <TableHead>Member</TableHead>
-                      <TableHead>Amount</TableHead>
-                      <TableHead>Note</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {payments.map(p => (
-                      <TableRow key={p.id}>
-                        <TableCell className="text-muted-foreground whitespace-nowrap">
-                          {format(new Date(p.createdAt), 'MMM dd, yyyy hh:mm a')}
-                        </TableCell>
-                        <TableCell className="font-medium">{p.userName}</TableCell>
-                        <TableCell className="font-bold text-success">{formatCurrency(p.amount)}</TableCell>
-                        <TableCell className="text-muted-foreground">{p.description || '-'}</TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex justify-end gap-1">
-                            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
-                              setEditPayment(p); setPayUserId(p.userId); setPayAmount(String(p.amount)); setPayDesc(p.description); setPayStep(2); setPayModal(true);
-                            }}>
-                              <Edit2 className="h-4 w-4" />
-                            </Button>
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeletePayment(p.id)}>
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-            </CardContent>
-          </Card>
-        )}
+        {/* Bottom Tabs: Deposits & Payment Records */}
+        <Card className="shadow-card">
+          <CardContent className="pt-6">
+            <Tabs defaultValue="deposits">
+              <TabsList className="w-full grid grid-cols-2">
+                <TabsTrigger value="deposits">
+                  <Wallet className="h-4 w-4 mr-2" /> Deposits ({payments.length})
+                </TabsTrigger>
+                <TabsTrigger value="records">
+                  <Receipt className="h-4 w-4 mr-2" /> Payment Records ({billPayments.length})
+                </TabsTrigger>
+              </TabsList>
+
+              <TabsContent value="deposits">
+                {payments.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">No deposits recorded yet.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Member</TableHead>
+                          <TableHead>Amount</TableHead>
+                          <TableHead>Note</TableHead>
+                          {isManager && <TableHead className="text-right">Actions</TableHead>}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {payments.map(p => (
+                          <TableRow key={p.id}>
+                            <TableCell className="text-muted-foreground whitespace-nowrap">
+                              {format(new Date(p.createdAt), 'MMM dd, yyyy hh:mm a')}
+                            </TableCell>
+                            <TableCell className="font-medium">{p.userName}</TableCell>
+                            <TableCell className="font-bold text-success">{formatCurrency(p.amount)}</TableCell>
+                            <TableCell className="text-muted-foreground">{p.description || '-'}</TableCell>
+                            {isManager && (
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-1">
+                                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+                                    setEditPayment(p); setPayUserId(p.userId); setPayAmount(String(p.amount)); setPayDesc(p.description); setPayStep(2); setPayModal(true);
+                                  }}>
+                                    <Edit2 className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteDeposit(p.id)}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </TabsContent>
+
+              <TabsContent value="records">
+                {billPayments.length === 0 ? (
+                  <p className="text-muted-foreground text-center py-8">No bill payments recorded yet.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Date</TableHead>
+                          <TableHead>Category</TableHead>
+                          <TableHead>Amount Paid</TableHead>
+                          <TableHead>Description</TableHead>
+                          {isManager && <TableHead className="text-right">Actions</TableHead>}
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {billPayments.map(bp => (
+                          <TableRow key={bp.id}>
+                            <TableCell className="text-muted-foreground whitespace-nowrap">
+                              {format(new Date(bp.createdAt), 'MMM dd, yyyy hh:mm a')}
+                            </TableCell>
+                            <TableCell className="font-medium">{bp.categoryName}</TableCell>
+                            <TableCell className="font-bold text-success">{formatCurrency(bp.amount)}</TableCell>
+                            <TableCell className="text-muted-foreground">{bp.description || '-'}</TableCell>
+                            {isManager && (
+                              <TableCell className="text-right">
+                                <div className="flex justify-end gap-1">
+                                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => {
+                                    setEditBillPayment(bp); setBillCatId(bp.categoryId); setBillAmount(String(bp.amount)); setBillDesc(bp.description); setBillModal(true);
+                                  }}>
+                                    <Edit2 className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => handleDeleteBillPayment(bp.id)}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                )}
+              </TabsContent>
+            </Tabs>
+          </CardContent>
+        </Card>
       </motion.div>
 
       {/* Add/Edit Category Modal */}
@@ -508,16 +632,16 @@ export default function CalculatorPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Member Paying Modal */}
+      {/* Member Deposit Modal */}
       <Dialog open={payModal} onOpenChange={v => { setPayModal(v); if (!v) { setPayStep(1); setEditPayment(null); } }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editPayment ? 'Edit Payment' : 'Record Payment'}</DialogTitle>
+            <DialogTitle>{editPayment ? 'Edit Deposit' : 'Record Deposit'}</DialogTitle>
           </DialogHeader>
           {payStep === 1 ? (
             <div className="space-y-3">
               <Label>Select Member</Label>
-              <Select onValueChange={handleSelectPayMember}>
+              <Select onValueChange={v => { setPayUserId(v); setPayStep(2); }}>
                 <SelectTrigger><SelectValue placeholder="Choose a member" /></SelectTrigger>
                 <SelectContent>
                   {members.map(m => (
@@ -535,26 +659,60 @@ export default function CalculatorPage() {
               </div>
               <div>
                 <Label>Description</Label>
-                <Textarea value={payDesc} onChange={e => setPayDesc(e.target.value)} placeholder="Payment note..." rows={2} />
+                <Textarea value={payDesc} onChange={e => setPayDesc(e.target.value)} placeholder="Deposit note..." rows={2} />
               </div>
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => { setPayModal(false); setEditPayment(null); }}>Cancel</Button>
-            {payStep === 2 && <Button onClick={handleSavePayment} disabled={!payAmount}>Save</Button>}
+            {payStep === 2 && <Button onClick={handleSaveDeposit} disabled={!payAmount}>Save</Button>}
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Already Paid Popup */}
-      <Dialog open={paidPopup} onOpenChange={setPaidPopup}>
+      {/* Pay Bill Modal */}
+      <Dialog open={billModal} onOpenChange={v => { setBillModal(v); if (!v) setEditBillPayment(null); }}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><CheckCircle className="h-5 w-5 text-success" /> Already Paid</DialogTitle>
+            <DialogTitle>{editBillPayment ? 'Edit Bill Payment' : 'Pay Bill'}</DialogTitle>
           </DialogHeader>
-          <p className="text-muted-foreground">This member has already fully paid their dues.</p>
+          <div className="space-y-4">
+            <div>
+              <Label>Category</Label>
+              <Select value={billCatId} onValueChange={v => { setBillCatId(v); setBillAmount(''); }}>
+                <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
+                <SelectContent>
+                  {(editBillPayment ? categories : unpaidCategories).map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.title} — Due: {formatCurrency(c.totalCost - (categoryPaidMap[c.id] || 0))}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Amount</Label>
+              <Input
+                type="number"
+                value={billAmount}
+                onChange={e => {
+                  const val = Number(e.target.value);
+                  if (!editBillPayment && val > selectedBillCatDue) return;
+                  setBillAmount(e.target.value);
+                }}
+                placeholder={billCatId ? `Due: ${formatCurrency(selectedBillCatDue)}` : 'Select a category first'}
+                max={editBillPayment ? undefined : selectedBillCatDue}
+              />
+              {billCatId && !editBillPayment && (
+                <p className="text-xs text-muted-foreground mt-1">Max: {formatCurrency(selectedBillCatDue)}</p>
+              )}
+            </div>
+            <div>
+              <Label>Description (optional)</Label>
+              <Textarea value={billDesc} onChange={e => setBillDesc(e.target.value)} placeholder="Payment note..." rows={2} />
+            </div>
+          </div>
           <DialogFooter>
-            <Button onClick={() => setPaidPopup(false)}>OK</Button>
+            <Button variant="outline" onClick={() => { setBillModal(false); setEditBillPayment(null); }}>Cancel</Button>
+            <Button onClick={handleSaveBillPayment} disabled={!billCatId || !billAmount}>Save</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
