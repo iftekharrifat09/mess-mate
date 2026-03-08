@@ -7,7 +7,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import { PasswordInput } from '@/components/ui/password-input';
 import { useToast } from '@/hooks/use-toast';
-import { Utensils, Mail, User, Phone, Building, LogIn, UserPlus, ArrowLeft, KeyRound, RefreshCw } from 'lucide-react';
+import { Utensils, Mail, User, Phone, Building, LogIn, UserPlus, ArrowLeft, KeyRound, RefreshCw, Home } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { getUserByEmail, getPendingJoinRequestsForUser } from '@/lib/storage';
 import { getOTPExpiry } from '@/lib/otp';
@@ -489,6 +490,10 @@ export default function Auth() {
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
       <div className="w-full max-w-md animate-fade-in">
         <div className="text-center mb-8">
+          <Link to="/" className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4">
+            <ArrowLeft className="w-4 h-4" />
+            Back to Home
+          </Link>
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl gradient-primary mb-4">
             <Utensils className="w-8 h-8 text-primary-foreground" />
           </div>
