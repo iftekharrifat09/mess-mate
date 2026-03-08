@@ -805,7 +805,7 @@ export default function CalculatorPage() {
               <Wallet className="h-5 w-5" /> Deposit Limit Reached
             </AlertDialogTitle>
             <AlertDialogDescription>
-              Total deposits have reached the Monthly Total of <span className="font-semibold text-foreground">{formatCurrency(monthlyTotal)}</span>. No more deposits can be added as the total deposits cannot exceed the monthly total.
+              Total deposits have reached the Monthly Total of <span className="font-semibold text-foreground">{formatCurrency(monthlyTotal)}</span> and all members have paid their dues. No more deposits can be added.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
