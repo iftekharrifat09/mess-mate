@@ -940,6 +940,7 @@ export default function CalculatorPage() {
         }}
         title={`Delete ${deleteTarget?.label}?`}
         description="This will be permanently deleted. This action cannot be undone."
+        isDeleting={isDeleting}
       />
     </DashboardLayout>
   );
