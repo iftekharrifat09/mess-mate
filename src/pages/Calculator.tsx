@@ -770,6 +770,42 @@ export default function CalculatorPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Deposit Warning Modal */}
+      <AlertDialog open={depositWarning} onOpenChange={setDepositWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-warning">
+              <Wallet className="h-5 w-5" /> Deposit Limit Reached
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Total deposits have reached the Monthly Total of <span className="font-semibold text-foreground">{formatCurrency(monthlyTotal)}</span>. No more deposits can be added as the total deposits cannot exceed the monthly total.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction>Understood</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* No Unpaid Categories Warning Modal */}
+      <AlertDialog open={billWarning} onOpenChange={setBillWarning}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-warning">
+              <CheckCircle className="h-5 w-5" /> No Bills to Pay
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {categories.length === 0
+                ? 'There are no expense categories created yet. Please add a category first before paying bills.'
+                : 'All expense categories have been fully paid. There are no remaining bills to pay.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction>Understood</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }
