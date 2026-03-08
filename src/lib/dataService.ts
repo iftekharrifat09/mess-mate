@@ -939,6 +939,9 @@ export async function createNotice(noticeData: Omit<Notice, 'id' | 'createdAt'>)
 }
 
 export async function updateNotice(id: string, updates: Partial<Notice>): Promise<Notice | undefined> {
+  // Invalidate notice caches
+  apiCache.invalidatePrefix('notices:');
+  
   if (shouldUseBackend()) {
     const result = await api.updateNoticeAPI(id, updates);
     if (result.success && result.data) {
