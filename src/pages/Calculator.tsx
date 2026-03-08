@@ -291,13 +291,16 @@ export default function CalculatorPage() {
 
   const handleDeleteDeposit = async (id: string) => {
     setDeleteTarget(null);
-    const dep = payments.find(p => p.id === id);
-    await calcStore.deletePayment(id);
-    if (!shouldUseBackend() && dep) {
-      dataService.notifyMessMembers(messId, user?.id || '', { type: 'deposit', title: 'Deposit Deleted', message: `${dep.userName}'s deposit of ${formatCurrency(dep.amount)} has been removed` });
-    }
-    reload();
-    toast({ title: 'Deposit deleted', variant: 'destructive' });
+    setIsDeleting(true);
+    try {
+      const dep = payments.find(p => p.id === id);
+      await calcStore.deletePayment(id);
+      if (!shouldUseBackend() && dep) {
+        dataService.notifyMessMembers(messId, user?.id || '', { type: 'deposit', title: 'Deposit Deleted', message: `${dep.userName}'s deposit of ${formatCurrency(dep.amount)} has been removed` });
+      }
+      await reload();
+      toast({ title: 'Deposit deleted', variant: 'destructive' });
+    } finally { setIsDeleting(false); }
   };
 
   // Pay Bill handlers
