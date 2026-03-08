@@ -149,7 +149,13 @@ export interface ChatMessage {
   userId: string;
   senderName: string;
   message: string;
+  editedAt?: string | null;
   createdAt: string;
+}
+
+export interface ChatActiveUser {
+  userId: string;
+  name: string;
 }
 
 export interface MessActivityLog {

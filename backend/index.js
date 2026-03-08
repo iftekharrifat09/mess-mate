@@ -2877,6 +2877,56 @@ app.get("/api/desco/alert-status", authMiddleware, async (req, res) => {
 // CHAT API
 // ============================================
 
+// In-memory active chat users: { messId -> { userId -> lastPing timestamp } }
+const activeChatUsers = new Map();
+
+// Heartbeat - mark user as active on chat page
+app.post("/api/chat/heartbeat", authMiddleware, async (req, res) => {
+  try {
+    const messId = req.user.messId;
+    if (!messId) return res.status(400).json({ success: false, error: "Not in a mess" });
+
+    if (!activeChatUsers.has(messId)) {
+      activeChatUsers.set(messId, new Map());
+    }
+    activeChatUsers.get(messId).set(req.user.id, {
+      timestamp: Date.now(),
+      name: req.user.name || "Unknown",
+    });
+
+    // Clean up stale users (no heartbeat for 15 seconds)
+    const messUsers = activeChatUsers.get(messId);
+    const now = Date.now();
+    for (const [uid, data] of messUsers.entries()) {
+      if (now - data.timestamp > 15000) {
+        messUsers.delete(uid);
+      }
+    }
+
+    const activeList = [];
+    for (const [uid, data] of messUsers.entries()) {
+      activeList.push({ userId: uid, name: data.name });
+    }
+
+    res.json({ success: true, activeUsers: activeList, count: activeList.length });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Heartbeat failed" });
+  }
+});
+
+// Leave chat
+app.post("/api/chat/leave", authMiddleware, async (req, res) => {
+  try {
+    const messId = req.user.messId;
+    if (messId && activeChatUsers.has(messId)) {
+      activeChatUsers.get(messId).delete(req.user.id);
+    }
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false });
+  }
+});
+
 // Get chat messages for the user's mess (with pagination)
 app.get("/api/chat/messages", authMiddleware, async (req, res) => {
   try {
@@ -2924,37 +2974,48 @@ app.post("/api/chat/messages", authMiddleware, async (req, res) => {
     const messId = req.user.messId;
     if (!messId) return res.status(400).json({ success: false, error: "Not in a mess" });
 
-    const { message } = req.body;
+    const { message, activeUserIds } = req.body;
     if (!message || !message.trim()) {
       return res.status(400).json({ success: false, error: "Message cannot be empty" });
     }
 
-    const trimmed = message.trim().substring(0, 2000); // max 2000 chars
+    const trimmed = message.trim().substring(0, 2000);
 
     const chatMsg = {
       messId,
       userId: req.user.id,
       message: trimmed,
+      editedAt: null,
       createdAt: new Date().toISOString(),
     };
 
     const result = await collections.chatMessages.insertOne(chatMsg);
     const saved = { ...transformDoc({ _id: result.insertedId, ...chatMsg }), senderName: req.user.name || "Unknown" };
 
-    // Send notifications to all other mess members
-    const members = await collections.users.find({ messId, _id: { $ne: new ObjectId(req.user.id) }, isApproved: true, isActive: true }).toArray();
+    // Only notify members who are NOT currently active on the chat page
+    const activeOnChat = new Set(activeUserIds || []);
+    activeOnChat.add(req.user.id); // sender never gets notified
+
+    const members = await collections.users.find({
+      messId,
+      isApproved: true,
+      isActive: true,
+    }).toArray();
+
     const senderName = req.user.name || "Unknown";
-    const notifPromises = members.map(member =>
-      collections.notifications.insertOne({
-        userId: member._id.toString(),
-        messId,
-        type: "chat",
-        title: `💬 ${senderName}`,
-        message: trimmed.length > 80 ? trimmed.substring(0, 80) + "..." : trimmed,
-        seen: false,
-        createdAt: new Date().toISOString(),
-      })
-    );
+    const notifPromises = members
+      .filter(member => !activeOnChat.has(member._id.toString()))
+      .map(member =>
+        collections.notifications.insertOne({
+          userId: member._id.toString(),
+          messId,
+          type: "chat",
+          title: `💬 ${senderName}`,
+          message: trimmed.length > 80 ? trimmed.substring(0, 80) + "..." : trimmed,
+          seen: false,
+          createdAt: new Date().toISOString(),
+        })
+      );
     await Promise.all(notifPromises);
 
     res.json({ success: true, message: saved });
@@ -2964,7 +3025,31 @@ app.post("/api/chat/messages", authMiddleware, async (req, res) => {
   }
 });
 
-// Delete a chat message (only own messages)
+// Edit a chat message
+app.put("/api/chat/messages/:id", authMiddleware, async (req, res) => {
+  try {
+    const msg = await collections.chatMessages.findOne({ _id: new ObjectId(req.params.id) });
+    if (!msg) return res.status(404).json({ success: false, error: "Message not found" });
+    if (msg.userId !== req.user.id) {
+      return res.status(403).json({ success: false, error: "Can only edit your own messages" });
+    }
+    const { message } = req.body;
+    if (!message || !message.trim()) {
+      return res.status(400).json({ success: false, error: "Message cannot be empty" });
+    }
+    const trimmed = message.trim().substring(0, 2000);
+    await collections.chatMessages.updateOne(
+      { _id: new ObjectId(req.params.id) },
+      { $set: { message: trimmed, editedAt: new Date().toISOString() } }
+    );
+    const updated = await collections.chatMessages.findOne({ _id: new ObjectId(req.params.id) });
+    res.json({ success: true, message: { ...transformDoc(updated), senderName: req.user.name || "Unknown" } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to edit message" });
+  }
+});
+
+// Delete a chat message (only own messages or manager)
 app.delete("/api/chat/messages/:id", authMiddleware, async (req, res) => {
   try {
     const msg = await collections.chatMessages.findOne({ _id: new ObjectId(req.params.id) });
