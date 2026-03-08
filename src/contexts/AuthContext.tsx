@@ -21,6 +21,27 @@ import {
 import { USE_BACKEND, isMongoDbConnected, setMongoDbConnected } from '@/lib/config';
 import { apiCache } from '@/lib/apiCache';
 import { toast } from '@/hooks/use-toast';
+import { setNotificationSoundEnabled } from '@/lib/preferences';
+import { setBrowserNotificationsEnabled } from '@/lib/browserNotifications';
+import { setSelectedToneId, setCustomToneData, removeCustomTone } from '@/lib/notificationTones';
+
+// Sync notification preferences from backend API response to localStorage
+function syncNotificationPrefsFromApi(userId: string, apiUser: any) {
+  if (apiUser.notificationSoundEnabled !== undefined) {
+    setNotificationSoundEnabled(userId, apiUser.notificationSoundEnabled);
+  }
+  if (apiUser.browserNotificationsEnabled !== undefined) {
+    setBrowserNotificationsEnabled(userId, apiUser.browserNotificationsEnabled);
+  }
+  if (apiUser.notificationTone) {
+    setSelectedToneId(userId, apiUser.notificationTone);
+  }
+  if (apiUser.customToneData) {
+    setCustomToneData(userId, apiUser.customToneData);
+  } else if (apiUser.customToneData === null) {
+    removeCustomTone(userId);
+  }
+}
 
 interface AuthContextType {
   user: User | null;
@@ -104,6 +125,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 emailVerified: apiUser.emailVerified || false,
                 createdAt: new Date().toISOString(),
               };
+              syncNotificationPrefsFromApi(localUser.id, apiUser);
               setUser(localUser);
               saveCurrentUser(localUser);
               setIsLoading(false);
@@ -144,6 +166,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             emailVerified: apiUser.emailVerified || false,
             createdAt: new Date().toISOString(),
           };
+          syncNotificationPrefsFromApi(localUser.id, apiUser);
           setUser(localUser);
           saveCurrentUser(localUser);
           return;
@@ -192,6 +215,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           emailVerified: apiUser.emailVerified || false,
           createdAt: new Date().toISOString(),
         };
+        syncNotificationPrefsFromApi(localUser.id, apiUser);
         setUser(localUser);
         saveCurrentUser(localUser);
         setIsBackendConnected(true);

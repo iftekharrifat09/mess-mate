@@ -462,6 +462,10 @@ app.post("/api/auth/login", async (req, res) => {
         isApproved: user.isApproved !== false,
         isActive: user.isActive !== false,
         emailVerified: user.emailVerified || false,
+        notificationSoundEnabled: user.notificationSoundEnabled !== false,
+        browserNotificationsEnabled: user.browserNotificationsEnabled || false,
+        notificationTone: user.notificationTone || "chime",
+        customToneData: user.customToneData || null,
       },
       token,
     });
@@ -488,6 +492,10 @@ app.get("/api/auth/me", authMiddleware, async (req, res) => {
         isApproved: user.isApproved !== false,
         isActive: user.isActive !== false,
         emailVerified: user.emailVerified || false,
+        notificationSoundEnabled: user.notificationSoundEnabled !== false,
+        browserNotificationsEnabled: user.browserNotificationsEnabled || false,
+        notificationTone: user.notificationTone || "chime",
+        customToneData: user.customToneData || null,
       },
     });
   } catch (error) {
@@ -498,13 +506,15 @@ app.get("/api/auth/me", authMiddleware, async (req, res) => {
 // Update Profile
 app.put("/api/auth/profile", authMiddleware, async (req, res) => {
   try {
-    const { name, phone, emailNotifications, notificationTone, customToneData } = req.body;
+    const { name, phone, emailNotifications, notificationTone, customToneData, notificationSoundEnabled, browserNotificationsEnabled } = req.body;
     const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (phone !== undefined) updateData.phone = phone;
     if (emailNotifications !== undefined) updateData.emailNotifications = emailNotifications;
     if (notificationTone !== undefined) updateData.notificationTone = notificationTone;
     if (customToneData !== undefined) updateData.customToneData = customToneData; // base64 data URL or null to remove
+    if (notificationSoundEnabled !== undefined) updateData.notificationSoundEnabled = notificationSoundEnabled;
+    if (browserNotificationsEnabled !== undefined) updateData.browserNotificationsEnabled = browserNotificationsEnabled;
 
     await collections.users.updateOne(
       { _id: new ObjectId(req.userId) },
@@ -529,6 +539,8 @@ app.put("/api/auth/profile", authMiddleware, async (req, res) => {
         isActive: user.isActive !== false,
         emailVerified: user.emailVerified || false,
         emailNotifications: user.emailNotifications !== false,
+        notificationSoundEnabled: user.notificationSoundEnabled !== false,
+        browserNotificationsEnabled: user.browserNotificationsEnabled || false,
         notificationTone: user.notificationTone || "chime",
         customToneData: user.customToneData || null,
       },
