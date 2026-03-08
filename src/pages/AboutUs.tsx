@@ -245,7 +245,7 @@ export default function AboutUs() {
             <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center">
               <Utensils className="w-5 h-5 text-primary-foreground" />
             </div>
-            <span className="font-bold text-xl text-foreground">Mess Manager</span>
+            <span className="font-bold text-xl text-foreground">Mess Mate</span>
           </Link>
           
           {/* Desktop Navigation */}
