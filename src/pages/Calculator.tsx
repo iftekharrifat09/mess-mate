@@ -165,6 +165,7 @@ export default function CalculatorPage() {
   };
 
   const handleDeleteCategory = async (id: string) => {
+    setDeleteTarget(null);
     await calcStore.deleteCategory(id);
     reload();
     toast({ title: 'Category deleted', variant: 'destructive' });
