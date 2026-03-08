@@ -9,7 +9,7 @@ A Node.js + Express + MongoDB backend for the Mess Management System.
 ```bash
 cd backend
 npm init -y
-npm install express mongodb cors bcryptjs jsonwebtoken nodemailer dotenv
+npm install express mongodb cors bcryptjs jsonwebtoken nodemailer dotenv node-fetch@2
 ```
 
 ### 2. Configure Environment Variables

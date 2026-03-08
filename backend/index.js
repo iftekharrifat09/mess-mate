@@ -6,7 +6,7 @@
  * Setup Instructions:
  * 1. Create a new folder and copy this file
  * 2. Run: npm init -y
- * 3. Run: npm install express mongodb cors bcryptjs jsonwebtoken nodemailer dotenv
+ * 3. Run: npm install express mongodb cors bcryptjs jsonwebtoken nodemailer dotenv node-fetch@2
  * 4. Create a .env file with:
  *    - MONGO_URI=your_mongodb_atlas_connection_string
  *    - JWT_SECRET=your_jwt_secret_key
@@ -14,6 +14,12 @@
  *    - EMAIL_PASS=your_gmail_app_password
  *    - PORT=5000
  * 5. Run: node index.js
+ * 
+ * DESCO Low Balance Email Feature:
+ * - Automatically checks DESCO prepaid balance every 30 minutes
+ * - Sends email alerts to all mess members when balance <= ৳100
+ * - Emails are sent every 12 hours maximum to avoid spam
+ * - Requires descoAccountNo to be configured in mess settings
  */
 
 const express = require("express");
