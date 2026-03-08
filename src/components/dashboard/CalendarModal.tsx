@@ -337,7 +337,7 @@ export default function CalendarModal() {
         </motion.div>
       </DialogTrigger>
 
-      <DialogContent className="w-[calc(100vw-0.5rem)] max-w-[760px] max-h-[94vh] overflow-y-auto p-0 gap-0 bg-card border-border shadow-2xl shadow-primary/5">
+      <DialogContent hideCloseButton className="w-[calc(100vw-0.5rem)] max-w-[760px] max-h-[94vh] overflow-y-auto p-0 gap-0 bg-card border-border shadow-2xl shadow-primary/5">
 
         {/* ═══ Header ═══ */}
         <motion.div
