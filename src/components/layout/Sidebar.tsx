@@ -150,7 +150,10 @@ export default function Sidebar() {
           )}
           <Button
             variant="ghost"
-            className={cn('w-full text-sidebar-foreground hover:bg-sidebar-accent', isCollapsed ? 'justify-center px-0' : 'justify-start')}
+            className={cn(
+              'w-full text-sidebar-foreground hover:bg-destructive/10 hover:text-destructive transition-colors',
+              isCollapsed ? 'justify-center px-0' : 'justify-start'
+            )}
             onClick={handleLogout}
           >
             <LogOut className="h-5 w-5" />

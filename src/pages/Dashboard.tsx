@@ -25,6 +25,16 @@ import { Users, Loader2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import CalendarModal from '@/components/dashboard/CalendarModal';
 import { toBanglaDate, toBanglaDigits, toHijriDate, ENGLISH_MONTHS } from '@/lib/dateConversions';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 // Default empty states to show UI immediately
 const EMPTY_MONTH_SUMMARY: MonthSummary = {
@@ -59,21 +69,18 @@ export default function Dashboard() {
     if (!user || dataLoadedRef.current) return;
     
     try {
-      // Load primary data in parallel
       const [mess, activeMonth, dates] = await Promise.all([
         dataService.getMessById(user.messId),
         dataService.getActiveMonth(user.messId),
         dataService.getBazarDatesByMessId(user.messId),
       ]);
 
-      // Set initial data immediately
       startTransition(() => {
         if (mess) setMessName(mess.name);
         setBazarDates(dates || []);
       });
 
       if (activeMonth) {
-        // Single fetch for all month data — no redundant API calls
         const monthData = await fetchMonthData(activeMonth.id, user.messId);
         const mSummary = calculateMonthSummaryFromData(activeMonth.id, monthData);
         const pSummary = calculateMemberSummaryFromData(user.id, monthData);
@@ -83,11 +90,9 @@ export default function Dashboard() {
           setMonthSummary(mSummary);
           setPersonalSummary(pSummary);
           setMembersSummary(allMembers);
-          // Use pre-fetched members instead of separate call
           setMembers(monthData.members);
         });
 
-        // Load calc data for utility expenses
         if (user.messId && activeMonth.id) {
           const [cats, excs, pays] = await Promise.all([
             calcStore.getCategories(user.messId, activeMonth.id),
@@ -130,7 +135,6 @@ export default function Dashboard() {
   }, [user, authLoading, loadDashboardData]);
 
   useEffect(() => {
-    // GSAP entrance animation for header
     if (headerRef.current && messName) {
       gsap.fromTo(
         headerRef.current.children,
@@ -150,7 +154,6 @@ export default function Dashboard() {
 
   return (
     <DashboardLayout>
-      {/* Notice Popup for Members */}
       {user?.role === 'member' && <NoticePopup />}
       
       <motion.div 
@@ -167,7 +170,6 @@ export default function Dashboard() {
             </p>
           </div>
           <div className="flex items-center gap-3">
-            {/* Today's Date Display */}
             <TodayDateDisplay />
             <CalendarModal />
           </div>
@@ -175,21 +177,10 @@ export default function Dashboard() {
 
         {/* Main Grid */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Left Column - Month Summary */}
-          <motion.div
-            initial={{ opacity: 0, x: -20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.1 }}
-          >
+          <motion.div initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
             {monthSummary && <MonthSummaryCard summary={monthSummary} messId={user?.messId || ''} />}
           </motion.div>
-
-          {/* Right Column - Personal Info */}
-          <motion.div
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: 0.2 }}
-          >
+          <motion.div initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
             {personalSummary && (
               <PersonalInfoCard
                 summary={personalSummary}
@@ -208,27 +199,19 @@ export default function Dashboard() {
 
         {/* DESCO Electricity */}
         {user?.messId && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-          >
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
             <DescoElectricityCard messId={user.messId} />
           </motion.div>
         )}
 
-        {/* Bazar Dates - only show when there are upcoming/current dates */}
+        {/* Bazar Dates */}
         {bazarDates.length > 0 && bazarDates.some(d => {
           const dateObj = new Date(d.date);
           const today = new Date();
           today.setHours(0, 0, 0, 0);
           return dateObj >= today;
         }) && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4 }}
-          >
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
             <BazarDateCard bazarDates={bazarDates} members={members} />
           </motion.div>
         )}
@@ -264,6 +247,7 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
   const [includePrevBalance, setIncludePrevBalance] = useState(false);
   const [prevBalances, setPrevBalances] = useState<Record<string, number>>({});
   const [loadingPrev, setLoadingPrev] = useState(false);
+  const [showConfirmOff, setShowConfirmOff] = useState(false);
 
   // Load previous month balances when toggle is turned on
   useEffect(() => {
@@ -313,7 +297,6 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
   const memberDues = useMemo(() => {
     if (!messId || !activeMonthId) return {};
     const totalMembers = members.length;
-
     const dues: Record<string, { shouldPay: number; totalPaid: number }> = {};
     for (const m of members) {
       const shouldPay = calcStore.calculateMemberDues(calcCategories, calcExceptions, totalMembers, m.id);
@@ -322,6 +305,15 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
     }
     return dues;
   }, [messId, activeMonthId, members, calcCategories, calcExceptions, calcPayments]);
+
+  const handleToggleChange = (checked: boolean) => {
+    if (!checked && includePrevBalance) {
+      // Show confirmation before turning off
+      setShowConfirmOff(true);
+    } else {
+      setIncludePrevBalance(checked);
+    }
+  };
 
   return (
     <motion.div
@@ -339,7 +331,8 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
         <div className="flex items-center gap-2 sm:ml-auto">
           <Switch
             checked={includePrevBalance}
-            onCheckedChange={setIncludePrevBalance}
+            onCheckedChange={handleToggleChange}
+            disabled={loadingPrev}
             id="prev-balance-toggle"
           />
           <label
@@ -357,6 +350,28 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
         </div>
       </div>
 
+      {/* Confirmation dialog for turning off */}
+      <AlertDialog open={showConfirmOff} onOpenChange={setShowConfirmOff}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Disable Previous Month Adjustment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to disable Previous Month +/− adjustment? Member balances will show only the current month values.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => {
+              setIncludePrevBalance(false);
+              setPrevBalances({});
+              setShowConfirmOff(false);
+            }}>
+              Disable
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       {adjustedSummaries.length === 0 ? (
         <div className="text-center py-12 bg-card rounded-lg border border-border">
           <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
@@ -368,7 +383,6 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
           {adjustedSummaries.map((member) => {
-            // Crown logic: find single highest meal member
             const maxMeals = Math.max(...adjustedSummaries.map(m => m.totalMeals));
             const topMembers = adjustedSummaries.filter(m => m.totalMeals === maxMeals);
             const isMealKing = maxMeals > 0 && topMembers.length === 1 && member.userId === topMembers[0].userId;

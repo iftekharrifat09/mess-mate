@@ -2021,13 +2021,30 @@ app.put("/api/members/:id", authMiddleware, async (req, res) => {
     if (isApproved !== undefined) updates.isApproved = isApproved;
     if (isActive !== undefined) updates.isActive = isActive;
 
-    await collections.users.updateOne(
-      { _id: new ObjectId(req.params.id) },
-      { $set: updates }
-    );
+    // Validate: target user must exist and be in same mess
+    const targetUser = await collections.users.findOne({ _id: new ObjectId(req.params.id) });
+    if (!targetUser) {
+      return res.status(404).json({ success: false, error: "User not found" });
+    }
+    if (targetUser.messId !== req.user.messId) {
+      return res.status(403).json({ success: false, error: "User is not in your mess" });
+    }
 
-    // If making someone a manager, update the mess
+    // If making someone a manager, validate current user IS the manager
     if (role === "manager") {
+      if (req.user.role !== "manager") {
+        return res.status(403).json({ success: false, error: "Only the current manager can transfer the role" });
+      }
+      if (targetUser.role === "manager") {
+        return res.status(400).json({ success: false, error: "This member is already the manager" });
+      }
+
+      // Promote new manager
+      await collections.users.updateOne(
+        { _id: new ObjectId(req.params.id) },
+        { $set: { role: "manager" } }
+      );
+      // Update mess managerId
       await collections.messes.updateOne(
         { _id: new ObjectId(req.user.messId) },
         { $set: { managerId: req.params.id } }
@@ -2036,6 +2053,42 @@ app.put("/api/members/:id", authMiddleware, async (req, res) => {
       await collections.users.updateOne(
         { _id: new ObjectId(req.userId) },
         { $set: { role: "member" } }
+      );
+
+      // Notify ALL members (including old manager) about the change
+      const allMembers = await collections.users
+        .find({ messId: req.user.messId, isActive: { $ne: false } })
+        .toArray();
+
+      const notification = {
+        type: "manager_change",
+        title: "Manager Changed",
+        message: `Manager has been changed from ${req.user.name} to ${targetUser.name}`,
+      };
+
+      const notifications = allMembers.map((member) => ({
+        userId: member._id.toString(),
+        messId: req.user.messId,
+        ...notification,
+        seen: false,
+        createdAt: new Date(),
+      }));
+
+      if (notifications.length > 0) {
+        await collections.notifications.insertMany(notifications);
+      }
+
+      // Send email to all verified members
+      for (const member of allMembers) {
+        if (member.emailVerified && member.emailNotifications !== false) {
+          await sendNotificationEmail(member, notification);
+        }
+      }
+    } else {
+      // Non-manager updates
+      await collections.users.updateOne(
+        { _id: new ObjectId(req.params.id) },
+        { $set: updates }
       );
     }
 
@@ -2055,6 +2108,7 @@ app.put("/api/members/:id", authMiddleware, async (req, res) => {
       },
     });
   } catch (error) {
+    console.error("Update Member Error:", error);
     res.status(500).json({ success: false, error: "Failed to update member" });
   }
 });
