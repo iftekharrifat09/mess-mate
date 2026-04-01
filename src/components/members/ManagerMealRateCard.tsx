@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { ChartContainer, ChartTooltip, ChartTooltipContent } from '@/components/ui/chart';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, Cell, LabelList } from 'recharts';
+import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell, LabelList, ReferenceLine } from 'recharts';
 import { TrendingUp, Crown, Loader2 } from 'lucide-react';
 import * as dataService from '@/lib/dataService';
 import { fetchMonthData, calculateMonthSummaryFromData } from '@/lib/calculations';
@@ -19,16 +19,8 @@ interface MonthManagerData {
   mealRate: number;
   managerName: string;
   managerId: string;
+  managerSegments?: { name: string; startDate: string; endDate: string; days: number }[];
 }
-
-const COLORS = [
-  'hsl(var(--primary))',
-  'hsl(var(--warning))',
-  'hsl(142 76% 36%)',
-  'hsl(280 67% 52%)',
-  'hsl(199 89% 48%)',
-  'hsl(350 80% 55%)',
-];
 
 export default function ManagerMealRateCard({ messId, members }: ManagerMealRateCardProps) {
   const [data, setData] = useState<MonthManagerData[]>([]);
@@ -46,21 +38,17 @@ export default function ManagerMealRateCard({ messId, members }: ManagerMealRate
         dataService.getActivityLogsByMessId(messId),
       ]);
 
-      // Sort months chronologically
       const sortedMonths = allMonths.sort(
         (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       );
 
-      // Build manager timeline from activity logs
       const managerChanges = activityLogs
         .filter(log => log.type === 'manager_change')
         .sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
-      // Get current manager from mess
       const mess = await dataService.getMessById(messId);
       const currentManagerId = mess?.managerId || '';
 
-      // Build data for each month
       const chartData: MonthManagerData[] = [];
 
       for (const month of sortedMonths) {
@@ -68,8 +56,7 @@ export default function ManagerMealRateCard({ messId, members }: ManagerMealRate
           const monthData = await fetchMonthData(month.id, messId);
           const summary = calculateMonthSummaryFromData(month.id, monthData);
 
-          // Find who was manager during this month
-          const managerId = findManagerForMonth(month, managerChanges, currentManagerId);
+          const { managerId, segments } = findManagerForMonth(month, managerChanges, currentManagerId);
           const manager = members.find(m => m.id === managerId);
 
           chartData.push({
@@ -77,6 +64,7 @@ export default function ManagerMealRateCard({ messId, members }: ManagerMealRate
             mealRate: Math.round(summary.mealRate * 100) / 100,
             managerName: manager?.fullName || 'Unknown',
             managerId,
+            managerSegments: segments.length > 1 ? segments : undefined,
           });
         } catch {
           // Skip months with errors
@@ -91,33 +79,111 @@ export default function ManagerMealRateCard({ messId, members }: ManagerMealRate
     }
   };
 
-  // Determine which manager was active during a given month
   const findManagerForMonth = (
     month: Month,
     changes: MessActivityLog[],
     currentManagerId: string
-  ): string => {
+  ): { managerId: string; segments: { name: string; startDate: string; endDate: string; days: number }[] } => {
     const monthStart = new Date(month.createdAt);
+    const monthEnd = (month as any).endDate ? new Date((month as any).endDate) : new Date();
 
-    // Walk backwards through changes to find the manager at monthStart
-    let managerId = currentManagerId;
-    // Reverse iterate: latest change first
+    // Find all manager changes within this month
+    const monthChanges = changes.filter(c => {
+      const d = new Date(c.createdAt);
+      return d >= monthStart && d <= monthEnd;
+    });
+
+    if (monthChanges.length === 0) {
+      // No changes in this month — find who was manager at start
+      let managerId = currentManagerId;
+      for (let i = changes.length - 1; i >= 0; i--) {
+        const changeDate = new Date(changes[i].createdAt);
+        if (changeDate <= monthStart) {
+          const desc = changes[i].description;
+          const match = desc.match(/to (.+)$/);
+          if (match) {
+            const found = members.find(m => m.fullName === match[1].trim());
+            if (found) managerId = found.id;
+          }
+          break;
+        }
+      }
+      const mgr = members.find(m => m.id === managerId);
+      const days = Math.ceil((monthEnd.getTime() - monthStart.getTime()) / (1000 * 60 * 60 * 24));
+      return {
+        managerId,
+        segments: [{ name: mgr?.fullName || 'Unknown', startDate: monthStart.toLocaleDateString(), endDate: monthEnd.toLocaleDateString(), days }],
+      };
+    }
+
+    // Multiple managers in this month — build segments
+    const segments: { name: string; startDate: string; endDate: string; days: number }[] = [];
+    let lastDate = monthStart;
+    let lastManagerName = '';
+
+    // Find initial manager before the first change
     for (let i = changes.length - 1; i >= 0; i--) {
       const changeDate = new Date(changes[i].createdAt);
       if (changeDate <= monthStart) {
-        // Extract new manager name from description
         const desc = changes[i].description;
-        const match = desc.match(/to (.+)$/);
-        if (match) {
-          const newManagerName = match[1].trim();
-          const found = members.find(m => m.fullName === newManagerName);
-          if (found) managerId = found.id;
-        }
+        const toMatch = desc.match(/to (.+)$/);
+        if (toMatch) lastManagerName = toMatch[1].trim();
         break;
       }
     }
+    if (!lastManagerName) {
+      // Derive from first change's "from" part
+      const fromMatch = monthChanges[0].description.match(/from (.+?) to/);
+      lastManagerName = fromMatch ? fromMatch[1].trim() : 'Unknown';
+    }
 
-    return managerId;
+    for (const change of monthChanges) {
+      const changeDate = new Date(change.createdAt);
+      const days = Math.max(1, Math.ceil((changeDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24)));
+      segments.push({
+        name: lastManagerName,
+        startDate: lastDate.toLocaleDateString(),
+        endDate: changeDate.toLocaleDateString(),
+        days,
+      });
+
+      const toMatch = change.description.match(/to (.+)$/);
+      lastManagerName = toMatch ? toMatch[1].trim() : 'Unknown';
+      lastDate = changeDate;
+    }
+
+    // Final segment to month end
+    const finalDays = Math.max(1, Math.ceil((monthEnd.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24)));
+    segments.push({
+      name: lastManagerName,
+      startDate: lastDate.toLocaleDateString(),
+      endDate: monthEnd.toLocaleDateString(),
+      days: finalDays,
+    });
+
+    // Primary manager = longest serving
+    const primaryManager = segments.reduce((a, b) => a.days >= b.days ? a : b);
+    const found = members.find(m => m.fullName === primaryManager.name);
+
+    return {
+      managerId: found?.id || currentManagerId,
+      segments,
+    };
+  };
+
+  // Average meal rate
+  const avgMealRate = useMemo(() => {
+    if (data.length === 0) return 0;
+    return data.reduce((sum, d) => sum + d.mealRate, 0) / data.length;
+  }, [data]);
+
+  // Color based on average comparison
+  const getBarColor = (rate: number) => {
+    if (avgMealRate === 0) return 'hsl(var(--primary))';
+    const diff = ((rate - avgMealRate) / avgMealRate) * 100;
+    if (diff < -5) return 'hsl(142 76% 36%)'; // GREEN - below avg (good)
+    if (diff > 5) return 'hsl(0 84% 60%)'; // RED - above avg (bad)
+    return 'hsl(38 92% 50%)'; // ORANGE - near avg
   };
 
   // Manager frequency count
@@ -132,71 +198,61 @@ export default function ManagerMealRateCard({ messId, members }: ManagerMealRate
     return Object.values(freq).sort((a, b) => b.count - a.count);
   }, [data]);
 
-  // Assign color per manager
-  const managerColorMap = useMemo(() => {
-    const uniqueManagers = [...new Set(data.map(d => d.managerId))];
-    const map: Record<string, string> = {};
-    uniqueManagers.forEach((id, i) => {
-      map[id] = COLORS[i % COLORS.length];
-    });
-    return map;
-  }, [data]);
-
-  const chartConfig = useMemo(() => {
-    const config: Record<string, { label: string; color: string }> = {};
-    Object.entries(managerColorMap).forEach(([id, color]) => {
-      const manager = data.find(d => d.managerId === id);
-      config[id] = { label: manager?.managerName || 'Unknown', color };
-    });
-    config.mealRate = { label: 'Meal Rate', color: 'hsl(var(--primary))' };
-    return config;
-  }, [managerColorMap, data]);
+  const chartConfig = useMemo(() => ({
+    mealRate: { label: 'Meal Rate', color: 'hsl(var(--primary))' },
+  }), []);
 
   if (loading) {
     return (
       <Card>
-        <CardContent className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <CardContent className="flex items-center justify-center py-10">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </CardContent>
       </Card>
     );
   }
 
-  if (data.length === 0) {
-    return null;
-  }
+  if (data.length === 0) return null;
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <TrendingUp className="h-5 w-5 text-primary" />
+      <CardHeader className="pb-2">
+        <CardTitle className="flex items-center gap-2 text-base">
+          <TrendingUp className="h-4 w-4 text-primary" />
           Manager & Meal Rate History
         </CardTitle>
+        <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mt-1">
+          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: 'hsl(142 76% 36%)' }} /> Below Avg</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: 'hsl(38 92% 50%)' }} /> Near Avg</span>
+          <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: 'hsl(0 84% 60%)' }} /> Above Avg</span>
+          <span className="ml-auto font-medium">Avg: {formatCurrency(avgMealRate)}</span>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-6">
-        {/* Chart */}
+      <CardContent className="space-y-4">
+        {/* Chart - compact height */}
         <div className="w-full overflow-x-auto">
-          <ChartContainer config={chartConfig} className="min-h-[300px] w-full">
-            <BarChart data={data} margin={{ top: 20, right: 20, bottom: 60, left: 20 }}>
+          <ChartContainer config={chartConfig} className="min-h-[200px] max-h-[250px] w-full">
+            <BarChart data={data} margin={{ top: 16, right: 10, bottom: 50, left: 10 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
               <XAxis
                 dataKey="monthLabel"
-                tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                 angle={-45}
                 textAnchor="end"
-                height={80}
+                height={60}
               />
               <YAxis
-                tick={{ fontSize: 11, fill: 'hsl(var(--muted-foreground))' }}
+                tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
                 tickFormatter={(v) => `৳${v}`}
+                width={45}
               />
+              <ReferenceLine y={avgMealRate} stroke="hsl(var(--muted-foreground))" strokeDasharray="4 4" strokeWidth={1.5} />
               <ChartTooltip
                 content={({ active, payload }) => {
                   if (!active || !payload?.length) return null;
                   const d = payload[0].payload as MonthManagerData;
                   return (
-                    <div className="rounded-lg border border-border/50 bg-background px-3 py-2 text-sm shadow-xl">
+                    <div className="rounded-lg border border-border/50 bg-background px-3 py-2 text-sm shadow-xl max-w-[250px]">
                       <p className="font-semibold text-foreground">{d.monthLabel}</p>
                       <p className="text-muted-foreground">
                         Manager: <span className="font-medium text-foreground">{d.managerName}</span>
@@ -204,56 +260,47 @@ export default function ManagerMealRateCard({ messId, members }: ManagerMealRate
                       <p className="text-muted-foreground">
                         Meal Rate: <span className="font-semibold text-primary">{formatCurrency(d.mealRate)}</span>
                       </p>
+                      {d.managerSegments && (
+                        <div className="mt-1.5 pt-1.5 border-t border-border/50 space-y-1">
+                          <p className="text-xs font-medium text-foreground">Multiple Managers:</p>
+                          {d.managerSegments.map((seg, i) => (
+                            <p key={i} className="text-xs text-muted-foreground">
+                              {seg.name}: {seg.days}d ({seg.startDate} → {seg.endDate})
+                            </p>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   );
                 }}
               />
-              <Bar dataKey="mealRate" radius={[6, 6, 0, 0]} maxBarSize={50}>
+              <Bar dataKey="mealRate" radius={[4, 4, 0, 0]} maxBarSize={40}>
                 {data.map((entry, index) => (
-                  <Cell key={index} fill={managerColorMap[entry.managerId] || COLORS[0]} />
+                  <Cell key={index} fill={getBarColor(entry.mealRate)} />
                 ))}
                 <LabelList
                   dataKey="managerName"
                   position="top"
-                  style={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
+                  style={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }}
                 />
               </Bar>
             </BarChart>
           </ChartContainer>
         </div>
 
-        {/* Manager Legend */}
-        <div className="flex flex-wrap gap-3">
-          {Object.entries(managerColorMap).map(([id, color]) => {
-            const manager = data.find(d => d.managerId === id);
-            return (
-              <div key={id} className="flex items-center gap-1.5 text-xs">
-                <div className="h-3 w-3 rounded-sm" style={{ backgroundColor: color }} />
-                <span className="text-muted-foreground">{manager?.managerName}</span>
-              </div>
-            );
-          })}
-        </div>
-
         {/* Manager Frequency Summary */}
-        <div className="border-t border-border pt-4">
-          <h3 className="text-sm font-semibold text-foreground mb-3 flex items-center gap-2">
-            <Crown className="h-4 w-4 text-warning" />
+        <div className="border-t border-border pt-3">
+          <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
+            <Crown className="h-3.5 w-3.5 text-warning" />
             Manager Frequency
           </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-            {managerFrequency.map((item, index) => (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2">
+            {managerFrequency.map((item) => (
               <div
                 key={item.name}
-                className="flex items-center justify-between p-3 rounded-lg bg-muted/50 border border-border/50"
+                className="flex items-center justify-between p-2.5 rounded-lg bg-muted/50 border border-border/50"
               >
-                <div className="flex items-center gap-2">
-                  <div
-                    className="h-2.5 w-2.5 rounded-full"
-                    style={{ backgroundColor: COLORS[index % COLORS.length] }}
-                  />
-                  <span className="text-sm font-medium text-foreground">{item.name}</span>
-                </div>
+                <span className="text-sm font-medium text-foreground">{item.name}</span>
                 <Badge variant="secondary" className="text-xs">
                   {item.count} {item.count === 1 ? 'time' : 'times'}
                 </Badge>
