@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useTransition, useMemo } from 'react';
 import { CalcCategory, CalcException, CalcPayment } from '@/lib/calculatorStorage';
+import { Switch } from '@/components/ui/switch';
 import { motion } from 'framer-motion';
 import gsap from 'gsap';
 import { useAuth } from '@/contexts/AuthContext';
