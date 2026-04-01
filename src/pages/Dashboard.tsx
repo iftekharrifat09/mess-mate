@@ -21,7 +21,8 @@ import {
 } from '@/lib/calculations';
 import * as dataService from '@/lib/dataService';
 import * as calcStore from '@/lib/calculatorStorage';
-import { Users } from 'lucide-react';
+import { Users, Loader2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import CalendarModal from '@/components/dashboard/CalendarModal';
 import { toBanglaDate, toBanglaDigits, toHijriDate, ENGLISH_MONTHS } from '@/lib/dateConversions';
 
