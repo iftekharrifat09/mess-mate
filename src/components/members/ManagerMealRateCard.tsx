@@ -85,7 +85,7 @@ export default function ManagerMealRateCard({ messId, members }: ManagerMealRate
     currentManagerId: string
   ): { managerId: string; segments: { name: string; startDate: string; endDate: string; days: number }[] } => {
     const monthStart = new Date(month.createdAt);
-    const monthEnd = month.endDate ? new Date(month.endDate) : new Date();
+    const monthEnd = (month as any).endDate ? new Date((month as any).endDate) : new Date();
 
     // Find all manager changes within this month
     const monthChanges = changes.filter(c => {
