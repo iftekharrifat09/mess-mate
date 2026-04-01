@@ -20,6 +20,7 @@ import * as dataService from '@/lib/dataService';
 import * as api from '@/lib/api';
 import { User } from '@/types';
 import { Users, UserPlus, Shield, Trash2, Mail, Phone, Crown, Loader2 } from 'lucide-react';
+import ManagerMealRateCard from '@/components/members/ManagerMealRateCard';
 
 export default function Members() {
   const { user, refreshUser } = useAuth();
@@ -301,6 +302,10 @@ export default function Members() {
             )}
           </CardContent>
         </Card>
+        {/* Manager & Meal Rate Graph */}
+        {user?.messId && (
+          <ManagerMealRateCard messId={user.messId} members={members} />
+        )}
       </div>
     </DashboardLayout>
   );

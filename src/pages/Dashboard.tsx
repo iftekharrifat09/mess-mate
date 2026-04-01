@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useTransition, useMemo } from 'react';
 import { CalcCategory, CalcException, CalcPayment } from '@/lib/calculatorStorage';
+import { Switch } from '@/components/ui/switch';
 import { motion } from 'framer-motion';
 import gsap from 'gsap';
 import { useAuth } from '@/contexts/AuthContext';
@@ -20,7 +21,8 @@ import {
 } from '@/lib/calculations';
 import * as dataService from '@/lib/dataService';
 import * as calcStore from '@/lib/calculatorStorage';
-import { Users } from 'lucide-react';
+import { Users, Loader2 } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import CalendarModal from '@/components/dashboard/CalendarModal';
 import { toBanglaDate, toBanglaDigits, toHijriDate, ENGLISH_MONTHS } from '@/lib/dateConversions';
 
@@ -259,6 +261,55 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
   calcExceptions: CalcException[];
   calcPayments: CalcPayment[];
 }) {
+  const [includePrevBalance, setIncludePrevBalance] = useState(false);
+  const [prevBalances, setPrevBalances] = useState<Record<string, number>>({});
+  const [loadingPrev, setLoadingPrev] = useState(false);
+
+  // Load previous month balances when toggle is turned on
+  useEffect(() => {
+    if (!includePrevBalance || !messId || Object.keys(prevBalances).length > 0) return;
+
+    const loadPrevMonth = async () => {
+      setLoadingPrev(true);
+      try {
+        const allMonths = await dataService.getMonthsByMessId(messId);
+        const inactiveMonths = allMonths
+          .filter(m => !m.isActive)
+          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+        if (inactiveMonths.length === 0) {
+          setPrevBalances({});
+          return;
+        }
+
+        const prevMonth = inactiveMonths[0];
+        const { fetchMonthData: fetchMD, getAllMembersSummaryFromData: getAllMS } = await import('@/lib/calculations');
+        const monthData = await fetchMD(prevMonth.id, messId);
+        const prevSummaries = getAllMS(monthData);
+
+        const balances: Record<string, number> = {};
+        prevSummaries.forEach(s => {
+          balances[s.userId] = s.balance;
+        });
+        setPrevBalances(balances);
+      } catch (error) {
+        console.error('Error loading previous month balances:', error);
+      } finally {
+        setLoadingPrev(false);
+      }
+    };
+    loadPrevMonth();
+  }, [includePrevBalance, messId]);
+
+  // Adjusted summaries when toggle is on
+  const adjustedSummaries = useMemo(() => {
+    if (!includePrevBalance || Object.keys(prevBalances).length === 0) return membersSummary;
+    return membersSummary.map(member => ({
+      ...member,
+      balance: member.balance + (prevBalances[member.userId] || 0),
+    }));
+  }, [membersSummary, includePrevBalance, prevBalances]);
+
   const memberDues = useMemo(() => {
     if (!messId || !activeMonthId) return {};
     const totalMembers = members.length;
@@ -279,13 +330,34 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
       transition={{ delay: 0.4 }}
       className="space-y-4"
     >
-      <div className="flex items-center gap-2">
-        <Users className="h-5 w-5 text-primary" />
-        <h2 className="text-xl font-semibold text-foreground">All Members</h2>
-        <span className="text-sm text-muted-foreground">({membersSummary.length} members)</span>
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+        <div className="flex items-center gap-2">
+          <Users className="h-5 w-5 text-primary" />
+          <h2 className="text-xl font-semibold text-foreground">All Members</h2>
+          <span className="text-sm text-muted-foreground">({adjustedSummaries.length} members)</span>
+        </div>
+        <div className="flex items-center gap-2 sm:ml-auto">
+          <Switch
+            checked={includePrevBalance}
+            onCheckedChange={setIncludePrevBalance}
+            id="prev-balance-toggle"
+          />
+          <label
+            htmlFor="prev-balance-toggle"
+            className="text-xs sm:text-sm font-medium text-muted-foreground cursor-pointer select-none"
+          >
+            Previous Month +/−
+          </label>
+          {includePrevBalance && (
+            <Badge variant="outline" className="text-xs border-primary/50 text-primary">
+              Active
+            </Badge>
+          )}
+          {loadingPrev && <Loader2 className="h-4 w-4 animate-spin text-primary" />}
+        </div>
       </div>
 
-      {membersSummary.length === 0 ? (
+      {adjustedSummaries.length === 0 ? (
         <div className="text-center py-12 bg-card rounded-lg border border-border">
           <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-muted-foreground">No members in this mess yet.</p>
@@ -295,10 +367,10 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {membersSummary.map((member) => {
+          {adjustedSummaries.map((member) => {
             // Crown logic: find single highest meal member
-            const maxMeals = Math.max(...membersSummary.map(m => m.totalMeals));
-            const topMembers = membersSummary.filter(m => m.totalMeals === maxMeals);
+            const maxMeals = Math.max(...adjustedSummaries.map(m => m.totalMeals));
+            const topMembers = adjustedSummaries.filter(m => m.totalMeals === maxMeals);
             const isMealKing = maxMeals > 0 && topMembers.length === 1 && member.userId === topMembers[0].userId;
             return (
               <MemberSummaryCard
