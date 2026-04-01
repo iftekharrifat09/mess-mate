@@ -301,6 +301,10 @@ export default function Members() {
             )}
           </CardContent>
         </Card>
+        {/* Manager & Meal Rate Graph */}
+        {user?.messId && (
+          <ManagerMealRateCard messId={user.messId} members={members} />
+        )}
       </div>
     </DashboardLayout>
   );
