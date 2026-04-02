@@ -244,10 +244,18 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
   calcExceptions: CalcException[];
   calcPayments: CalcPayment[];
 }) {
-  const [includePrevBalance, setIncludePrevBalance] = useState(false);
+  const toggleKey = `mess_prev_balance_toggle_${messId}`;
+  const [includePrevBalance, setIncludePrevBalance] = useState(() => {
+    try { return localStorage.getItem(toggleKey) === '1'; } catch { return false; }
+  });
   const [prevBalances, setPrevBalances] = useState<Record<string, number>>({});
   const [loadingPrev, setLoadingPrev] = useState(false);
   const [showConfirmOff, setShowConfirmOff] = useState(false);
+
+  // Persist toggle state
+  useEffect(() => {
+    try { localStorage.setItem(toggleKey, includePrevBalance ? '1' : '0'); } catch {}
+  }, [includePrevBalance, toggleKey]);
 
   // Load previous month balances when toggle is turned on
   useEffect(() => {
