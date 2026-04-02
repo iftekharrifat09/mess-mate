@@ -968,6 +968,62 @@ export default function CalculatorPage() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Clear Data Modal - Step 1: Choose Option */}
+      <Dialog open={clearDataModal && !clearConfirm} onOpenChange={(open) => { if (!open) { setClearDataModal(false); setClearOption('deposits'); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-destructive" /> Clear Data
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${clearOption === 'deposits' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}`}>
+              <input type="radio" name="clearOption" checked={clearOption === 'deposits'} onChange={() => setClearOption('deposits')} className="mt-1" />
+              <div>
+                <p className="font-medium text-foreground">Clear Deposits & Records Only</p>
+                <p className="text-xs text-muted-foreground">Clears all member deposits and bill payment records</p>
+              </div>
+            </label>
+            <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${clearOption === 'all' ? 'border-destructive bg-destructive/5' : 'border-border hover:border-destructive/50'}`}>
+              <input type="radio" name="clearOption" checked={clearOption === 'all'} onChange={() => setClearOption('all')} className="mt-1" />
+              <div>
+                <p className="font-medium text-foreground">Reset Entire Page (Clear All)</p>
+                <p className="text-xs text-muted-foreground">Clears all categories, exceptions, deposits, and payment records</p>
+              </div>
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClearDataModal(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => setClearConfirm(true)}>Continue</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Clear Data Modal - Step 2: Confirmation */}
+      <AlertDialog open={clearConfirm} onOpenChange={(open) => { if (!open && !isClearing) { setClearConfirm(false); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. {clearOption === 'all' 
+                ? 'All categories, exceptions, deposits, and payment records will be permanently deleted.'
+                : 'All deposit and bill payment records will be permanently deleted.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isClearing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => { e.preventDefault(); handleClearData(); }}
+              disabled={isClearing}
+            >
+              {isClearing && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+              {isClearing ? 'Clearing...' : 'Confirm Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <DeleteConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open) => { if (!open && !isDeleting) setDeleteTarget(null); }}
