@@ -404,6 +404,9 @@ export default function CalculatorPage() {
                 <span className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary-foreground/10 to-primary/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
                 <CreditCard className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1.5 transition-transform duration-300 group-hover:rotate-12" /> Pay Bill
               </Button>
+              <Button size="sm" variant="destructive" className="md:h-10 md:px-4 text-xs md:text-sm" onClick={() => setClearDataModal(true)}>
+                <Trash2 className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1.5" /> Clear Data
+              </Button>
             </div>
           )}
         </div>
