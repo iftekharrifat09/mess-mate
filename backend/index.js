@@ -2342,6 +2342,25 @@ app.delete("/api/months/:id", authMiddleware, async (req, res) => {
   try {
     const monthId = req.params.id;
     
+    // Protect the most recent previous month from deletion
+    const month = await collections.months.findOne({ _id: new ObjectId(monthId) });
+    if (!month) return res.status(404).json({ success: false, error: "Month not found" });
+    
+    if (!month.isActive) {
+      // Find all inactive months for this mess, sorted by most recent
+      const inactiveMonths = await collections.months.find({ 
+        messId: month.messId, 
+        isActive: false 
+      }).sort({ createdAt: -1 }).toArray();
+      
+      if (inactiveMonths.length > 0 && inactiveMonths[0]._id.toString() === monthId) {
+        return res.status(403).json({ 
+          success: false, 
+          error: "Cannot delete the most recent previous month. It is needed for balance calculations." 
+        });
+      }
+    }
+    
     // Delete all associated data in parallel
     await Promise.all([
       collections.meals.deleteMany({ monthId }),
@@ -2357,6 +2376,47 @@ app.delete("/api/months/:id", authMiddleware, async (req, res) => {
   } catch (error) {
     console.error("Delete month error:", error);
     res.status(500).json({ success: false, error: "Failed to delete month" });
+  }
+});
+
+// ============================================
+// CLEAR MESS EXPENSE DATA
+// ============================================
+
+app.post("/api/calc-clear", authMiddleware, async (req, res) => {
+  try {
+    const { messId, monthId, mode } = req.body;
+    if (!messId || !monthId || !mode) {
+      return res.status(400).json({ success: false, error: "messId, monthId, and mode are required" });
+    }
+    
+    if (mode === 'all') {
+      // Clear everything
+      await Promise.all([
+        collections.calcCategories.deleteMany({ messId, monthId }),
+        collections.calcExceptions.deleteMany({ messId, monthId }),
+        collections.calcPayments.deleteMany({ messId, monthId }),
+        collections.calcBillPayments.deleteMany({ messId, monthId }),
+      ]);
+    } else if (mode === 'deposits') {
+      // Clear deposits and bill payments only
+      await Promise.all([
+        collections.calcPayments.deleteMany({ messId, monthId }),
+        collections.calcBillPayments.deleteMany({ messId, monthId }),
+      ]);
+    }
+    
+    // Notify members
+    await notifyMembers(messId, req.userId, {
+      title: "Expense Data Cleared",
+      message: mode === 'all' ? "All expense data has been cleared" : "Deposit and payment records have been cleared",
+      type: "general",
+    });
+    
+    res.json({ success: true, message: "Data cleared successfully" });
+  } catch (error) {
+    console.error("Clear calc data error:", error);
+    res.status(500).json({ success: false, error: "Failed to clear data" });
   }
 });
 
