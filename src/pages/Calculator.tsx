@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction } from '@/components/ui/alert-dialog';
+import { AlertDialog, AlertDialogContent, AlertDialogHeader, AlertDialogTitle, AlertDialogDescription, AlertDialogFooter, AlertDialogAction, AlertDialogCancel } from '@/components/ui/alert-dialog';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Textarea } from '@/components/ui/textarea';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
@@ -16,6 +16,7 @@ import { toast } from '@/hooks/use-toast';
 import { User } from '@/types';
 import * as dataService from '@/lib/dataService';
 import { shouldUseBackend } from '@/lib/config';
+import * as api from '@/lib/api';
 import * as calcStore from '@/lib/calculatorStorage';
 import { CalcCategory, CalcException, CalcPayment, CalcBillPayment } from '@/lib/calculatorStorage';
 import { formatCurrency } from '@/lib/calculations';
@@ -75,6 +76,12 @@ export default function CalculatorPage() {
   // Warning modal states
   const [depositWarning, setDepositWarning] = useState(false);
   const [billWarning, setBillWarning] = useState(false);
+
+  // Clear Data modal states
+  const [clearDataModal, setClearDataModal] = useState(false);
+  const [clearOption, setClearOption] = useState<'deposits' | 'all'>('deposits');
+  const [clearConfirm, setClearConfirm] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
 
   const messId = user?.messId || '';
 
@@ -358,6 +365,38 @@ export default function CalculatorPage() {
     } finally { setIsDeleting(false); }
   };
 
+  const handleClearData = async () => {
+    setIsClearing(true);
+    try {
+      if (shouldUseBackend()) {
+        await api.clearCalcDataAPI(messId, activeMonthId, clearOption);
+      } else {
+        if (clearOption === 'all') {
+          await Promise.all([
+            ...categories.map(c => calcStore.deleteCategory(c.id)),
+            ...payments.map(p => calcStore.deletePayment(p.id)),
+            ...billPayments.map(bp => calcStore.deleteBillPayment(bp.id)),
+            ...allExceptions.map(e => calcStore.deleteException(e.id)),
+          ]);
+        } else {
+          await Promise.all([
+            ...payments.map(p => calcStore.deletePayment(p.id)),
+            ...billPayments.map(bp => calcStore.deleteBillPayment(bp.id)),
+          ]);
+        }
+      }
+      toast({ title: clearOption === 'all' ? 'All data cleared' : 'Records cleared', description: clearOption === 'all' ? 'The page has been completely reset.' : 'Deposits and payment records have been cleared.' });
+      setClearConfirm(false);
+      setClearDataModal(false);
+      setClearOption('deposits');
+      await reload();
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to clear data', variant: 'destructive' });
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
   const getExceptionsForCategory = (catId: string) => allExceptions.filter(e => e.categoryId === catId);
 
   if (isLoading) {
@@ -403,6 +442,9 @@ export default function CalculatorPage() {
               <Button size="sm" variant="secondary" className="md:h-10 md:px-4 text-xs md:text-sm relative overflow-hidden group transition-all duration-300 hover:shadow-lg hover:shadow-primary/25 hover:scale-105 hover:bg-primary hover:text-primary-foreground" onClick={handleOpenBillModal}>
                 <span className="absolute inset-0 bg-gradient-to-r from-primary/0 via-primary-foreground/10 to-primary/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-700" />
                 <CreditCard className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1.5 transition-transform duration-300 group-hover:rotate-12" /> Pay Bill
+              </Button>
+              <Button size="sm" variant="destructive" className="md:h-10 md:px-4 text-xs md:text-sm" onClick={() => setClearDataModal(true)}>
+                <Trash2 className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1.5" /> Clear Data
               </Button>
             </div>
           )}
@@ -924,6 +966,62 @@ export default function CalculatorPage() {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogAction>Understood</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Clear Data Modal - Step 1: Choose Option */}
+      <Dialog open={clearDataModal && !clearConfirm} onOpenChange={(open) => { if (!open) { setClearDataModal(false); setClearOption('deposits'); } }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Trash2 className="h-5 w-5 text-destructive" /> Clear Data
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${clearOption === 'deposits' ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/50'}`}>
+              <input type="radio" name="clearOption" checked={clearOption === 'deposits'} onChange={() => setClearOption('deposits')} className="mt-1" />
+              <div>
+                <p className="font-medium text-foreground">Clear Deposits & Records Only</p>
+                <p className="text-xs text-muted-foreground">Clears all member deposits and bill payment records</p>
+              </div>
+            </label>
+            <label className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all ${clearOption === 'all' ? 'border-destructive bg-destructive/5' : 'border-border hover:border-destructive/50'}`}>
+              <input type="radio" name="clearOption" checked={clearOption === 'all'} onChange={() => setClearOption('all')} className="mt-1" />
+              <div>
+                <p className="font-medium text-foreground">Reset Entire Page (Clear All)</p>
+                <p className="text-xs text-muted-foreground">Clears all categories, exceptions, deposits, and payment records</p>
+              </div>
+            </label>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClearDataModal(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => setClearConfirm(true)}>Continue</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Clear Data Modal - Step 2: Confirmation */}
+      <AlertDialog open={clearConfirm} onOpenChange={(open) => { if (!open && !isClearing) { setClearConfirm(false); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This action cannot be undone. {clearOption === 'all' 
+                ? 'All categories, exceptions, deposits, and payment records will be permanently deleted.'
+                : 'All deposit and bill payment records will be permanently deleted.'}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isClearing}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={(e) => { e.preventDefault(); handleClearData(); }}
+              disabled={isClearing}
+            >
+              {isClearing && <Loader2 className="h-4 w-4 animate-spin mr-1" />}
+              {isClearing ? 'Clearing...' : 'Confirm Delete'}
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
