@@ -16,6 +16,7 @@ import { toast } from '@/hooks/use-toast';
 import { User } from '@/types';
 import * as dataService from '@/lib/dataService';
 import { shouldUseBackend } from '@/lib/config';
+import * as api from '@/lib/api';
 import * as calcStore from '@/lib/calculatorStorage';
 import { CalcCategory, CalcException, CalcPayment, CalcBillPayment } from '@/lib/calculatorStorage';
 import { formatCurrency } from '@/lib/calculations';
