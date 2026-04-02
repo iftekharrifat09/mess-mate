@@ -426,37 +426,43 @@ export default function MonthDetails() {
                       <CalendarDays className="h-5 w-5 text-primary" />
                       {month.name}
                     </CardTitle>
-                    {isManager && (
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                            disabled={deletingMonthId === month.id}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete "{month.name}"?</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              This will permanently delete this month and all its meals, deposits, and costs. This action cannot be undone.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                              onClick={() => handleDeletePreviousMonth(month.id, month.name)}
+                    {isManager && (() => {
+                      // Check if this is the most recent previous month — protect it from deletion
+                      const isLatestPrev = previousMonths.length > 0 && previousMonths[0].month.id === month.id;
+                      if (isLatestPrev) return null;
+                      return (
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                              disabled={deletingMonthId === month.id}
                             >
-                              Delete
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    )}
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete "{month.name}"?</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This will permanently delete this month and all its meals, deposits, and costs. This action cannot be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                                onClick={() => handleDeletePreviousMonth(month.id, month.name)}
+                              >
+                                {deletingMonthId === month.id ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      );
+                    })()}
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {/* Summary Grid */}

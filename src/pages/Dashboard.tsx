@@ -350,7 +350,7 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
             Previous Month +/−
           </label>
           {includePrevBalance && (
-            <Badge variant="outline" className="text-xs border-primary/50 text-primary">
+            <Badge variant="outline" className="text-xs border-success/50 text-success animate-pulse">
               Active
             </Badge>
           )}
