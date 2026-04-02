@@ -364,6 +364,37 @@ export default function CalculatorPage() {
     } finally { setIsDeleting(false); }
   };
 
+  const handleClearData = async () => {
+    setIsClearing(true);
+    try {
+      if (clearOption === 'all') {
+        // Clear everything
+        await Promise.all([
+          ...categories.map(c => calcStore.deleteCategory(c.id)),
+          ...payments.map(p => calcStore.deletePayment(p.id)),
+          ...billPayments.map(bp => calcStore.deleteBillPayment(bp.id)),
+          ...allExceptions.map(e => calcStore.deleteException(e.id)),
+        ]);
+        toast({ title: 'All data cleared', description: 'The page has been completely reset.' });
+      } else {
+        // Clear deposits & payment records only
+        await Promise.all([
+          ...payments.map(p => calcStore.deletePayment(p.id)),
+          ...billPayments.map(bp => calcStore.deleteBillPayment(bp.id)),
+        ]);
+        toast({ title: 'Records cleared', description: 'Deposits and payment records have been cleared.' });
+      }
+      setClearConfirm(false);
+      setClearDataModal(false);
+      setClearOption('deposits');
+      await reload();
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to clear data', variant: 'destructive' });
+    } finally {
+      setIsClearing(false);
+    }
+  };
+
   const getExceptionsForCategory = (catId: string) => allExceptions.filter(e => e.categoryId === catId);
 
   if (isLoading) {
