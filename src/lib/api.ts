@@ -825,6 +825,10 @@ export async function deleteCalcBillPaymentAPI(id: string) {
   return apiRequest(`/calc-bill-payments/${id}`, { method: 'DELETE' });
 }
 
+export async function clearCalcDataAPI(messId: string, monthId: string, mode: 'deposits' | 'all') {
+  return apiRequest('/calc-clear', { method: 'POST', body: JSON.stringify({ messId, monthId, mode }) });
+}
+
 // ============================================
 // CHAT API
 // ============================================
