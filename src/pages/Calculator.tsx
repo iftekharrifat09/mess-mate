@@ -76,6 +76,12 @@ export default function CalculatorPage() {
   const [depositWarning, setDepositWarning] = useState(false);
   const [billWarning, setBillWarning] = useState(false);
 
+  // Clear Data modal states
+  const [clearDataModal, setClearDataModal] = useState(false);
+  const [clearOption, setClearOption] = useState<'deposits' | 'all'>('deposits');
+  const [clearConfirm, setClearConfirm] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
+
   const messId = user?.messId || '';
 
   const reload = useCallback(async () => {
