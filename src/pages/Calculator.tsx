@@ -367,23 +367,24 @@ export default function CalculatorPage() {
   const handleClearData = async () => {
     setIsClearing(true);
     try {
-      if (clearOption === 'all') {
-        // Clear everything
-        await Promise.all([
-          ...categories.map(c => calcStore.deleteCategory(c.id)),
-          ...payments.map(p => calcStore.deletePayment(p.id)),
-          ...billPayments.map(bp => calcStore.deleteBillPayment(bp.id)),
-          ...allExceptions.map(e => calcStore.deleteException(e.id)),
-        ]);
-        toast({ title: 'All data cleared', description: 'The page has been completely reset.' });
+      if (shouldUseBackend()) {
+        await api.clearCalcDataAPI(messId, activeMonthId, clearOption);
       } else {
-        // Clear deposits & payment records only
-        await Promise.all([
-          ...payments.map(p => calcStore.deletePayment(p.id)),
-          ...billPayments.map(bp => calcStore.deleteBillPayment(bp.id)),
-        ]);
-        toast({ title: 'Records cleared', description: 'Deposits and payment records have been cleared.' });
+        if (clearOption === 'all') {
+          await Promise.all([
+            ...categories.map(c => calcStore.deleteCategory(c.id)),
+            ...payments.map(p => calcStore.deletePayment(p.id)),
+            ...billPayments.map(bp => calcStore.deleteBillPayment(bp.id)),
+            ...allExceptions.map(e => calcStore.deleteException(e.id)),
+          ]);
+        } else {
+          await Promise.all([
+            ...payments.map(p => calcStore.deletePayment(p.id)),
+            ...billPayments.map(bp => calcStore.deleteBillPayment(bp.id)),
+          ]);
+        }
       }
+      toast({ title: clearOption === 'all' ? 'All data cleared' : 'Records cleared', description: clearOption === 'all' ? 'The page has been completely reset.' : 'Deposits and payment records have been cleared.' });
       setClearConfirm(false);
       setClearDataModal(false);
       setClearOption('deposits');
