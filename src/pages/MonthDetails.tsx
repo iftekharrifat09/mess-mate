@@ -605,6 +605,16 @@ export default function MonthDetails() {
                     <AlertDialogTitle>Start New Month?</AlertDialogTitle>
                     <AlertDialogDescription className="space-y-3">
                       <p>This will close the current month and start a new one. All current month data will be preserved but the month will become inactive.</p>
+                      <div className="flex items-center gap-2 pt-2">
+                        <Checkbox
+                          id="clear-expenses"
+                          checked={clearExpenses}
+                          onCheckedChange={(checked) => setClearExpenses(checked === true)}
+                        />
+                        <label htmlFor="clear-expenses" className="text-sm font-medium text-foreground cursor-pointer">
+                          Clear Previous Month Mess Expenses Page Also
+                        </label>
+                      </div>
                       <p className="font-medium pt-2">Type "Sure" below to confirm:</p>
                       <input
                         type="text"
