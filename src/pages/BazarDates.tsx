@@ -320,25 +320,37 @@ export default function BazarDates() {
                   <Label>{editingBazar ? 'Select Date' : 'Select Dates (click multiple)'}</Label>
                   <TooltipProvider>
                     <div className="border rounded-md p-1">
-                      <CalendarComponent
-                        mode={editingBazar ? 'single' : 'multiple'}
-                        selected={editingBazar
-                          ? (formData.dates.length > 0 ? new Date(formData.dates[0] + 'T00:00:00') : undefined)
-                          : formData.dates.map(d => new Date(d + 'T00:00:00'))
-                        }
-                        onSelect={(value: any) => handleCalendarSelect(value)}
-                        disabled={(date) => {
-                          const dateStr = format(date, 'yyyy-MM-dd');
-                          return !!bookedDatesMap[dateStr];
-                        }}
-                        modifiers={{
-                          booked: bookedDateObjects,
-                        }}
-                        modifiersStyles={{
-                          booked: { opacity: 0.4, textDecoration: 'line-through' },
-                        }}
-                        className="pointer-events-auto"
-                      />
+                      {editingBazar ? (
+                        <CalendarComponent
+                          mode="single"
+                          selected={formData.dates.length > 0 ? new Date(formData.dates[0] + 'T00:00:00') : undefined}
+                          onSelect={(date: Date | undefined) => {
+                            if (date) handleCalendarSelect(date);
+                          }}
+                          disabled={(date) => {
+                            const dateStr = format(date, 'yyyy-MM-dd');
+                            return !!bookedDatesMap[dateStr];
+                          }}
+                          modifiers={{ booked: bookedDateObjects }}
+                          modifiersStyles={{ booked: { opacity: 0.4, textDecoration: 'line-through' } }}
+                          className="pointer-events-auto"
+                        />
+                      ) : (
+                        <CalendarComponent
+                          mode="multiple"
+                          selected={formData.dates.map(d => new Date(d + 'T00:00:00'))}
+                          onSelect={(dates: Date[] | undefined) => {
+                            if (dates) handleCalendarSelect(dates);
+                          }}
+                          disabled={(date) => {
+                            const dateStr = format(date, 'yyyy-MM-dd');
+                            return !!bookedDatesMap[dateStr];
+                          }}
+                          modifiers={{ booked: bookedDateObjects }}
+                          modifiersStyles={{ booked: { opacity: 0.4, textDecoration: 'line-through' } }}
+                          className="pointer-events-auto"
+                        />
+                      )}
                     </div>
                   </TooltipProvider>
                   {dateError && (
