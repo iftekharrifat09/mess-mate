@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -31,6 +31,12 @@ import { ShoppingCart, Plus, Edit2, Trash2, Calendar, CalendarIcon, AlertCircle,
 import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
 import { format, isToday, isFuture, isPast } from 'date-fns';
 import { Navigate } from 'react-router-dom';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 export default function BazarDates() {
   const { user, isLoading: authLoading } = useAuth();
@@ -41,13 +47,29 @@ export default function BazarDates() {
   const [editingBazar, setEditingBazar] = useState<BazarDate | null>(null);
   const [formData, setFormData] = useState<{ userId: string; dates: string[] }>({ userId: '', dates: [] });
   const [dateError, setDateError] = useState<string | null>(null);
-  const [currentDate, setCurrentDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<BazarDate | null>(null);
+  const [bulkDeleteType, setBulkDeleteType] = useState<'past' | 'upcoming' | null>(null);
+  const [isBulkDeleting, setIsBulkDeleting] = useState(false);
 
   const isManager = user?.role === 'manager';
+
+  const getMemberName = (userId: string) => {
+    return members.find(m => m.id === userId)?.fullName || 'Unknown';
+  };
+
+  // Build a set of booked dates for calendar disabling
+  const bookedDatesMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    bazarDates.forEach(b => {
+      if (!editingBazar || b.id !== editingBazar.id) {
+        map[b.date] = getMemberName(b.userId);
+      }
+    });
+    return map;
+  }, [bazarDates, editingBazar, members]);
 
   useEffect(() => {
     if (!authLoading && isManager) {
@@ -55,7 +77,6 @@ export default function BazarDates() {
     }
   }, [user, isManager, authLoading]);
 
-  // Wait for auth to finish loading
   if (authLoading) {
     return (
       <DashboardLayout>
@@ -72,7 +93,6 @@ export default function BazarDates() {
 
   const loadData = async () => {
     if (!user) return;
-    
     setIsLoading(true);
     try {
       const dates = await dataService.getBazarDatesByMessId(user.messId);
@@ -81,11 +101,7 @@ export default function BazarDates() {
       setMembers(membersData);
     } catch (error) {
       console.error('Error loading bazar dates:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to load bazar dates',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Failed to load bazar dates', variant: 'destructive' });
     } finally {
       setIsLoading(false);
     }
@@ -95,44 +111,38 @@ export default function BazarDates() {
     setFormData({ userId: '', dates: [] });
     setEditingBazar(null);
     setDateError(null);
-    setCurrentDate(format(new Date(), 'yyyy-MM-dd'));
   };
 
-  const getMemberName = (userId: string) => {
-    return members.find(m => m.id === userId)?.fullName || 'Unknown';
-  };
-
-  // Check if date is already assigned to another member
   const isDateAssigned = (date: string, excludeBazarId?: string): boolean => {
     return bazarDates.some(b => b.date === date && b.id !== excludeBazarId);
   };
 
-  // Get the member assigned to a specific date
   const getAssignedMemberForDate = (date: string, excludeBazarId?: string): string | null => {
     const bazar = bazarDates.find(b => b.date === date && b.id !== excludeBazarId);
     return bazar ? getMemberName(bazar.userId) : null;
   };
 
-  const handleAddDate = () => {
-    // Check if date is already assigned
-    const assignedMember = getAssignedMemberForDate(currentDate, editingBazar?.id);
-    if (assignedMember) {
-      setDateError(`This date is already assigned to ${assignedMember}.`);
-      return;
-    }
+  const handleCalendarSelect = (dates: Date[] | Date | undefined) => {
+    if (!dates) return;
     
-    // Check if date already selected
-    if (formData.dates.includes(currentDate)) {
-      setDateError('This date is already selected.');
-      return;
+    if (editingBazar) {
+      // Single select for editing
+      const date = dates as Date;
+      const dateStr = format(date, 'yyyy-MM-dd');
+      if (isDateAssigned(dateStr, editingBazar.id)) {
+        setDateError(`This date is already assigned to ${getAssignedMemberForDate(dateStr, editingBazar.id)}`);
+        return;
+      }
+      setFormData(prev => ({ ...prev, dates: [dateStr] }));
+      setDateError(null);
+    } else {
+      // Multi select for adding
+      const selectedDates = (dates as Date[]).map(d => format(d, 'yyyy-MM-dd'));
+      // Filter out booked dates
+      const validDates = selectedDates.filter(d => !isDateAssigned(d));
+      setFormData(prev => ({ ...prev, dates: validDates.sort() }));
+      setDateError(null);
     }
-    
-    setFormData(prev => ({ ...prev, dates: [...prev.dates, currentDate].sort() }));
-    setDateError(null);
-  };
-
-  const handleRemoveDate = (dateToRemove: string) => {
-    setFormData(prev => ({ ...prev, dates: prev.dates.filter(d => d !== dateToRemove) }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -144,12 +154,11 @@ export default function BazarDates() {
       const member = members.find(m => m.id === formData.userId);
 
       if (editingBazar) {
-        // For editing, we only update a single date
         if (formData.dates.length === 0) {
           toast({ title: 'Please select a date', variant: 'destructive' });
+          setIsSaving(false);
           return;
         }
-        
         await dataService.updateBazarDate(editingBazar.id, { userId: formData.userId, date: formData.dates[0] });
         await dataService.notifyMessMembers(user.messId, user.id, {
           type: 'bazar',
@@ -158,16 +167,14 @@ export default function BazarDates() {
         });
         toast({ title: 'Bazar date updated', variant: 'success' });
       } else {
-        // Create multiple bazar dates
         if (formData.dates.length === 0) {
           toast({ title: 'Please add at least one date', variant: 'destructive' });
+          setIsSaving(false);
           return;
         }
-        
         for (const date of formData.dates) {
           await dataService.createBazarDate({ messId: user.messId, userId: formData.userId, date });
         }
-        
         await dataService.notifyMessMembers(user.messId, user.id, {
           type: 'bazar',
           title: 'Bazar Dates Set',
@@ -181,11 +188,7 @@ export default function BazarDates() {
       loadData();
     } catch (error) {
       console.error('Error saving bazar date:', error);
-      toast({
-        title: 'Error',
-        description: 'Failed to save bazar date',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Failed to save bazar date', variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
@@ -195,7 +198,6 @@ export default function BazarDates() {
     setFormData({ userId: bazar.userId, dates: [bazar.date] });
     setEditingBazar(bazar);
     setDateError(null);
-    setCurrentDate(bazar.date);
     setIsAddDialogOpen(true);
   };
 
@@ -208,33 +210,48 @@ export default function BazarDates() {
       toast({ title: 'Bazar date deleted', variant: 'success' });
       loadData();
     } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to delete bazar date',
-        variant: 'destructive',
-      });
+      toast({ title: 'Error', description: 'Failed to delete bazar date', variant: 'destructive' });
     } finally {
       setDeletingId(null);
     }
   };
 
-  const sortedDates = [...bazarDates].sort((a, b) => 
-    new Date(b.date).getTime() - new Date(a.date).getTime()
-  );
+  const handleBulkDelete = async () => {
+    if (!user || !bulkDeleteType || isBulkDeleting) return;
+    setIsBulkDeleting(true);
+    try {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const targetDates = bazarDates.filter(d => {
+        const dateObj = new Date(d.date + 'T00:00:00');
+        return bulkDeleteType === 'past' ? dateObj < today : dateObj >= today;
+      });
 
-  // Use startOfDay to properly compare dates ignoring time component
+      for (const bazar of targetDates) {
+        await dataService.deleteBazarDate(bazar.id);
+      }
+
+      toast({ title: `${targetDates.length} ${bulkDeleteType} bazar date(s) deleted`, variant: 'success' });
+      setBulkDeleteType(null);
+      loadData();
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to delete bazar dates', variant: 'destructive' });
+    } finally {
+      setIsBulkDeleting(false);
+    }
+  };
+
+  // Sort ascending for upcoming, descending for past
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  
-  const upcomingDates = sortedDates.filter(d => {
-    const dateObj = new Date(d.date + 'T00:00:00'); // Ensure local timezone
-    return dateObj >= today;
-  });
-  
-  const pastDates = sortedDates.filter(d => {
-    const dateObj = new Date(d.date + 'T00:00:00'); // Ensure local timezone
-    return dateObj < today;
-  });
+
+  const upcomingDates = bazarDates
+    .filter(d => new Date(d.date + 'T00:00:00') >= today)
+    .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+
+  const pastDates = bazarDates
+    .filter(d => new Date(d.date + 'T00:00:00') < today)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   if (isLoading) {
     return (
@@ -245,6 +262,9 @@ export default function BazarDates() {
       </DashboardLayout>
     );
   }
+
+  // Calendar modifiers for disabled/booked dates
+  const bookedDateObjects = Object.keys(bookedDatesMap).map(d => new Date(d + 'T00:00:00'));
 
   return (
     <DashboardLayout>
@@ -272,16 +292,16 @@ export default function BazarDates() {
               <DialogHeader>
                 <DialogTitle>{editingBazar ? 'Edit Bazar Date' : 'Add Bazar Dates'}</DialogTitle>
                 <DialogDescription>
-                  {editingBazar 
+                  {editingBazar
                     ? 'Update bazar date. Each date can only be assigned to one member.'
-                    : 'Select multiple dates for a member. Each date can only be assigned to one member.'}
+                    : 'Select multiple dates for a member. Already booked dates are disabled.'}
                 </DialogDescription>
               </DialogHeader>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="space-y-2">
                   <Label>Member</Label>
-                  <Select 
-                    value={formData.userId} 
+                  <Select
+                    value={formData.userId}
                     onValueChange={(v) => setFormData(prev => ({ ...prev, userId: v }))}
                   >
                     <SelectTrigger>
@@ -297,42 +317,42 @@ export default function BazarDates() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>{editingBazar ? 'Date' : 'Add Dates'}</Label>
-                  <div className="flex gap-2">
-                    <Popover>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="outline"
-                          className={cn(
-                            "flex-1 justify-start text-left font-normal",
-                            !currentDate && "text-muted-foreground"
-                          )}
-                        >
-                          <CalendarIcon className="mr-2 h-4 w-4 text-foreground" />
-                          {currentDate ? format(new Date(currentDate + 'T00:00:00'), 'PPP') : <span>Pick a date</span>}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
+                  <Label>{editingBazar ? 'Select Date' : 'Select Dates (click multiple)'}</Label>
+                  <TooltipProvider>
+                    <div className="border rounded-md p-1">
+                      {editingBazar ? (
                         <CalendarComponent
                           mode="single"
-                          selected={currentDate ? new Date(currentDate + 'T00:00:00') : undefined}
-                          onSelect={(date) => {
-                            if (date) {
-                              setCurrentDate(format(date, 'yyyy-MM-dd'));
-                              setDateError(null);
-                            }
+                          selected={formData.dates.length > 0 ? new Date(formData.dates[0] + 'T00:00:00') : undefined}
+                          onSelect={(date: Date | undefined) => {
+                            if (date) handleCalendarSelect(date);
                           }}
-                          initialFocus
-                          className={cn("p-3 pointer-events-auto")}
+                          disabled={(date) => {
+                            const dateStr = format(date, 'yyyy-MM-dd');
+                            return !!bookedDatesMap[dateStr];
+                          }}
+                          modifiers={{ booked: bookedDateObjects }}
+                          modifiersStyles={{ booked: { opacity: 0.4, textDecoration: 'line-through' } }}
+                          className="pointer-events-auto"
                         />
-                      </PopoverContent>
-                    </Popover>
-                    {!editingBazar && (
-                      <Button type="button" onClick={handleAddDate} variant="outline" size="icon">
-                        <Plus className="h-4 w-4" />
-                      </Button>
-                    )}
-                  </div>
+                      ) : (
+                        <CalendarComponent
+                          mode="multiple"
+                          selected={formData.dates.map(d => new Date(d + 'T00:00:00'))}
+                          onSelect={(dates: Date[] | undefined) => {
+                            if (dates) handleCalendarSelect(dates);
+                          }}
+                          disabled={(date) => {
+                            const dateStr = format(date, 'yyyy-MM-dd');
+                            return !!bookedDatesMap[dateStr];
+                          }}
+                          modifiers={{ booked: bookedDateObjects }}
+                          modifiersStyles={{ booked: { opacity: 0.4, textDecoration: 'line-through' } }}
+                          className="pointer-events-auto"
+                        />
+                      )}
+                    </div>
+                  </TooltipProvider>
                   {dateError && (
                     <motion.div
                       initial={{ opacity: 0, y: -10 }}
@@ -344,7 +364,7 @@ export default function BazarDates() {
                     </motion.div>
                   )}
                 </div>
-                
+
                 {/* Selected dates list */}
                 {formData.dates.length > 0 && (
                   <div className="space-y-2">
@@ -362,7 +382,7 @@ export default function BazarDates() {
                           {!editingBazar && (
                             <button
                               type="button"
-                              onClick={() => handleRemoveDate(date)}
+                              onClick={() => setFormData(prev => ({ ...prev, dates: prev.dates.filter(d => d !== date) }))}
                               className="ml-1 hover:bg-primary/20 rounded p-0.5"
                             >
                               <X className="h-3 w-3" />
@@ -373,11 +393,11 @@ export default function BazarDates() {
                     </div>
                   </div>
                 )}
-                
+
                 <DialogFooter>
-                  <Button 
-                    type="submit" 
-                    className="gradient-primary" 
+                  <Button
+                    type="submit"
+                    className="gradient-primary"
                     disabled={!formData.userId || formData.dates.length === 0 || isSaving}
                   >
                     {isSaving ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Saving...</> : (<>{editingBazar ? 'Update' : `Add ${formData.dates.length || ''}`} Bazar Date{formData.dates.length !== 1 ? 's' : ''}</>)}
@@ -391,11 +411,21 @@ export default function BazarDates() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Upcoming */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="flex items-center gap-2">
                 <Calendar className="h-5 w-5 text-primary" />
-                Upcoming
+                Upcoming ({upcomingDates.length})
               </CardTitle>
+              {upcomingDates.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setBulkDeleteType('upcoming')}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" /> Clear All
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               {upcomingDates.length === 0 ? (
@@ -414,7 +444,7 @@ export default function BazarDates() {
                           initial={{ opacity: 0, x: -20 }}
                           animate={{ opacity: 1, x: 0 }}
                           exit={{ opacity: 0, x: 20 }}
-                          transition={{ delay: index * 0.1 }}
+                          transition={{ delay: index * 0.05 }}
                           className={`flex items-center justify-between p-3 rounded-lg ${
                             isTodayDate ? 'bg-primary/10 border-2 border-primary' : 'bg-muted/50'
                           }`}
@@ -460,11 +490,21 @@ export default function BazarDates() {
 
           {/* Past */}
           <Card>
-            <CardHeader>
+            <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="flex items-center gap-2 text-muted-foreground">
                 <Calendar className="h-5 w-5" />
-                Past Bazar Dates
+                Past Bazar Dates ({pastDates.length})
               </CardTitle>
+              {pastDates.length > 0 && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={() => setBulkDeleteType('past')}
+                >
+                  <Trash2 className="h-4 w-4 mr-1" /> Clear All
+                </Button>
+              )}
             </CardHeader>
             <CardContent>
               {pastDates.length === 0 ? (
@@ -473,7 +513,7 @@ export default function BazarDates() {
                 </div>
               ) : (
                 <div className="space-y-2 max-h-[300px] overflow-y-auto">
-                  {pastDates.reverse().slice(0, 10).map((bazar) => (
+                  {pastDates.slice(0, 20).map((bazar) => (
                     <div
                       key={bazar.id}
                       className="flex items-center justify-between p-3 rounded-lg bg-muted/30"
@@ -494,12 +534,23 @@ export default function BazarDates() {
         </div>
       </motion.div>
 
+      {/* Single delete dialog */}
       <DeleteConfirmDialog
         open={!!deleteTarget}
         onOpenChange={(open) => !open && setDeleteTarget(null)}
         onConfirm={() => deleteTarget && handleDelete(deleteTarget)}
         title="Delete this bazar date?"
         description="This bazar date entry will be permanently deleted. This action cannot be undone."
+      />
+
+      {/* Bulk delete dialog */}
+      <DeleteConfirmDialog
+        open={!!bulkDeleteType}
+        onOpenChange={(open) => !open && setBulkDeleteType(null)}
+        onConfirm={handleBulkDelete}
+        isDeleting={isBulkDeleting}
+        title={`Delete all ${bulkDeleteType} bazar dates?`}
+        description={`Are you sure you want to delete all ${bulkDeleteType} bazar dates? This action cannot be undone.`}
       />
     </DashboardLayout>
   );

@@ -21,7 +21,7 @@ import {
 } from '@/lib/calculations';
 import * as dataService from '@/lib/dataService';
 import * as calcStore from '@/lib/calculatorStorage';
-import { Users, Loader2 } from 'lucide-react';
+import { Users, Loader2, Lock } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import CalendarModal from '@/components/dashboard/CalendarModal';
 import { toBanglaDate, toBanglaDigits, toHijriDate, ENGLISH_MONTHS } from '@/lib/dateConversions';
@@ -35,6 +35,12 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 // Default empty states to show UI immediately
 const EMPTY_MONTH_SUMMARY: MonthSummary = {
@@ -244,7 +250,7 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
   calcExceptions: CalcException[];
   calcPayments: CalcPayment[];
 }) {
-  const toggleKey = `mess_prev_balance_toggle_${messId}`;
+  const toggleKey = `mess_prev_balance_toggle_${messId}_${activeMonthId}`;
   const [includePrevBalance, setIncludePrevBalance] = useState(() => {
     try { return localStorage.getItem(toggleKey) === '1'; } catch { return false; }
   });
@@ -252,7 +258,7 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
   const [loadingPrev, setLoadingPrev] = useState(false);
   const [showConfirmOff, setShowConfirmOff] = useState(false);
 
-  // Persist toggle state
+  // Persist toggle state per month
   useEffect(() => {
     try { localStorage.setItem(toggleKey, includePrevBalance ? '1' : '0'); } catch {}
   }, [includePrevBalance, toggleKey]);
@@ -274,14 +280,28 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
           return;
         }
 
+        // Use the most recent previous month
         const prevMonth = inactiveMonths[0];
         const { fetchMonthData: fetchMD, getAllMembersSummaryFromData: getAllMS } = await import('@/lib/calculations');
         const monthData = await fetchMD(prevMonth.id, messId);
         const prevSummaries = getAllMS(monthData);
 
+        // Check if adjusted balances exist for that month (stored when toggle was ON)
+        const adjustedKey = `mess_adjusted_balances_${messId}_${prevMonth.id}`;
+        let storedAdjusted: Record<string, number> | null = null;
+        try {
+          const stored = localStorage.getItem(adjustedKey);
+          if (stored) storedAdjusted = JSON.parse(stored);
+        } catch {}
+
         const balances: Record<string, number> = {};
         prevSummaries.forEach(s => {
-          balances[s.userId] = s.balance;
+          // Use adjusted balance if available, otherwise base balance
+          if (storedAdjusted && storedAdjusted[s.userId] !== undefined) {
+            balances[s.userId] = storedAdjusted[s.userId];
+          } else {
+            balances[s.userId] = s.balance;
+          }
         });
         setPrevBalances(balances);
       } catch (error) {
@@ -292,6 +312,17 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
     };
     loadPrevMonth();
   }, [includePrevBalance, messId]);
+
+  // Save adjusted balances when toggle is ON so next month can use them
+  useEffect(() => {
+    if (!includePrevBalance || !activeMonthId || !messId || Object.keys(prevBalances).length === 0) return;
+    const adjustedKey = `mess_adjusted_balances_${messId}_${activeMonthId}`;
+    const adjusted: Record<string, number> = {};
+    membersSummary.forEach(m => {
+      adjusted[m.userId] = m.balance + (prevBalances[m.userId] || 0);
+    });
+    try { localStorage.setItem(adjustedKey, JSON.stringify(adjusted)); } catch {}
+  }, [includePrevBalance, membersSummary, prevBalances, activeMonthId, messId]);
 
   // Adjusted summaries when toggle is on
   const adjustedSummaries = useMemo(() => {
@@ -315,8 +346,8 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
   }, [messId, activeMonthId, members, calcCategories, calcExceptions, calcPayments]);
 
   const handleToggleChange = (checked: boolean) => {
+    if (!isManager) return; // Members can't toggle
     if (!checked && includePrevBalance) {
-      // Show confirmation before turning off
       setShowConfirmOff(true);
     } else {
       setIncludePrevBalance(checked);
@@ -337,18 +368,34 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
           <span className="text-sm text-muted-foreground">({adjustedSummaries.length} members)</span>
         </div>
         <div className="flex items-center gap-2 sm:ml-auto">
-          <Switch
-            checked={includePrevBalance}
-            onCheckedChange={handleToggleChange}
-            disabled={loadingPrev}
-            id="prev-balance-toggle"
-          />
-          <label
-            htmlFor="prev-balance-toggle"
-            className="text-xs sm:text-sm font-medium text-muted-foreground cursor-pointer select-none"
-          >
-            Previous Month +/−
-          </label>
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={includePrevBalance}
+                    onCheckedChange={handleToggleChange}
+                    disabled={loadingPrev || !isManager}
+                    id="prev-balance-toggle"
+                  />
+                  <label
+                    htmlFor="prev-balance-toggle"
+                    className="text-xs sm:text-sm font-medium text-muted-foreground cursor-pointer select-none"
+                  >
+                    Previous Month +/−
+                  </label>
+                  {!isManager && (
+                    <Lock className="h-3 w-3 text-muted-foreground" />
+                  )}
+                </div>
+              </TooltipTrigger>
+              {!isManager && (
+                <TooltipContent>
+                  <p>Only Manager can control this</p>
+                </TooltipContent>
+              )}
+            </Tooltip>
+          </TooltipProvider>
           {includePrevBalance && (
             <Badge variant="outline" className="text-xs border-success/50 text-success animate-pulse">
               Active

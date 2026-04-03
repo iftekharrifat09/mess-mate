@@ -3237,6 +3237,28 @@ app.post("/api/chat/messages/:id/react", authMiddleware, async (req, res) => {
   }
 });
 
+// Bulk delete bazar dates (past or upcoming)
+app.post("/api/bazar-dates/bulk-delete", authMiddleware, async (req, res) => {
+  try {
+    const { type } = req.body; // 'past' or 'upcoming'
+    const today = new Date().toISOString().split('T')[0];
+    
+    let filter = { messId: req.user.messId };
+    if (type === 'past') {
+      filter.date = { $lt: today };
+    } else if (type === 'upcoming') {
+      filter.date = { $gte: today };
+    } else {
+      return res.status(400).json({ success: false, error: "Invalid type. Use 'past' or 'upcoming'" });
+    }
+    
+    const result = await collections.bazarDates.deleteMany(filter);
+    res.json({ success: true, deletedCount: result.deletedCount });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to bulk delete bazar dates" });
+  }
+});
+
 
 
 async function startServer() {

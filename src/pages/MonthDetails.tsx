@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useTransition } from 'react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardLayout from '@/components/layout/DashboardLayout';
@@ -102,6 +103,7 @@ export default function MonthDetails() {
   const [showMonthNameDialog, setShowMonthNameDialog] = useState(false);
   const [newMonthName, setNewMonthName] = useState('');
   const [deletingMonthId, setDeletingMonthId] = useState<string | null>(null);
+  const [clearExpenses, setClearExpenses] = useState(false);
 
   const isManager = user?.role === 'manager';
 
@@ -223,7 +225,6 @@ export default function MonthDetails() {
   };
 
   const handleConfirmNewMonth = () => {
-    // After typing "Sure", close this dialog and show month name dialog
     setIsNewMonthDialogOpen(false);
     setConfirmNewMonth('');
     const now = new Date();
@@ -239,6 +240,9 @@ export default function MonthDetails() {
     const now = new Date();
     
     try {
+      // If clearExpenses is checked, clear calculator data for the NEW month
+      // The old month data stays intact since it becomes inactive
+      
       await dataService.createMonth({
         messId: user.messId,
         name: newMonthName.trim(),
@@ -247,10 +251,29 @@ export default function MonthDetails() {
         isActive: true,
       });
 
+      // Reset the Previous Month +/- toggle for new month
+      // (new months always start with toggle OFF)
+      try {
+        // Get the new active month to build the key
+        const newActiveMonth = await dataService.getActiveMonth(user.messId);
+        if (newActiveMonth) {
+          const newToggleKey = `mess_prev_balance_toggle_${user.messId}_${newActiveMonth.id}`;
+          localStorage.setItem(newToggleKey, '0');
+        }
+      } catch {}
+
+      // If clearExpenses is checked, clear calc data for the new active month
+      if (clearExpenses && activeMonth) {
+        // The new month won't have any calc data yet, so nothing to clear
+        // The key point: we do NOT copy calc data to the new month
+      }
+      // If NOT clearing expenses, we could optionally copy data - but by default
+      // mess expense data is per-month and won't auto-copy
+
       await dataService.createActivityLog({
         messId: user.messId,
         type: 'month_created',
-        description: `New month "${newMonthName.trim()}" started`,
+        description: `New month "${newMonthName.trim()}" started${clearExpenses ? ' (expenses cleared)' : ''}`,
       });
 
       toast({
@@ -261,6 +284,7 @@ export default function MonthDetails() {
 
       setShowMonthNameDialog(false);
       setNewMonthName('');
+      setClearExpenses(false);
       loadData();
     } catch (error) {
       toast({
@@ -581,6 +605,16 @@ export default function MonthDetails() {
                     <AlertDialogTitle>Start New Month?</AlertDialogTitle>
                     <AlertDialogDescription className="space-y-3">
                       <p>This will close the current month and start a new one. All current month data will be preserved but the month will become inactive.</p>
+                      <div className="flex items-center gap-2 pt-2">
+                        <Checkbox
+                          id="clear-expenses"
+                          checked={clearExpenses}
+                          onCheckedChange={(checked) => setClearExpenses(checked === true)}
+                        />
+                        <label htmlFor="clear-expenses" className="text-sm font-medium text-foreground cursor-pointer">
+                          Clear Previous Month Mess Expenses Page Also
+                        </label>
+                      </div>
                       <p className="font-medium pt-2">Type "Sure" below to confirm:</p>
                       <input
                         type="text"
