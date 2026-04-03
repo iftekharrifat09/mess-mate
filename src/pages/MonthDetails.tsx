@@ -224,8 +224,14 @@ export default function MonthDetails() {
   };
 
   const handleConfirmNewMonth = () => {
-    // After typing "Sure", close this dialog and show month name dialog
     setIsNewMonthDialogOpen(false);
+    setConfirmNewMonth('');
+    const now = new Date();
+    const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
+                        'July', 'August', 'September', 'October', 'November', 'December'];
+    setNewMonthName(`${monthNames[now.getMonth()]} ${now.getFullYear()}`);
+    setShowMonthNameDialog(true);
+  };
     setConfirmNewMonth('');
     const now = new Date();
     const monthNames = ['January', 'February', 'March', 'April', 'May', 'June', 
