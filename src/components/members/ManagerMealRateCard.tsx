@@ -66,17 +66,14 @@ export default function ManagerMealRateCard({ messId, members }: ManagerMealRate
           const { managerId, segments } = findManagerForMonth(month, managerChanges, currentManagerId);
           const manager = members.find(m => m.id === managerId);
 
-          // Calculate active/inactive days
           const monthStart = new Date(month.createdAt);
           const monthEnd = month.isActive ? new Date() : (() => {
-            // Estimate end from next month or 30 days
             const idx = sortedMonths.indexOf(month);
             if (idx < sortedMonths.length - 1) return new Date(sortedMonths[idx + 1].createdAt);
             return new Date(monthStart.getTime() + 30 * 24 * 60 * 60 * 1000);
           })();
           const totalDays = Math.max(1, Math.ceil((monthEnd.getTime() - monthStart.getTime()) / (1000 * 60 * 60 * 24)));
 
-          // Count unique active dates from all records
           const activeDates = new Set<string>();
           monthData.meals.forEach(m => activeDates.add(m.date));
           monthData.deposits.forEach(d => activeDates.add(d.date));
@@ -96,7 +93,7 @@ export default function ManagerMealRateCard({ messId, members }: ManagerMealRate
             activeDays,
             inactiveDays,
             totalDays,
-            managerSegments: segments.length > 1 ? segments : undefined,
+            managerSegments: segments.length > 0 ? segments : undefined,
           });
         } catch {
           // Skip months with errors
@@ -195,25 +192,21 @@ export default function ManagerMealRateCard({ messId, members }: ManagerMealRate
     };
   };
 
-  // Available years
   const availableYears = useMemo(() => {
     const years = [...new Set(allData.map(d => d.year))].sort((a, b) => b - a);
     return years.length > 0 ? years : [new Date().getFullYear()];
   }, [allData]);
 
-  // Filtered data by selected year
   const data = useMemo(() => {
     if (selectedYear === 'all') return allData;
     return allData.filter(d => d.year === Number(selectedYear));
   }, [allData, selectedYear]);
 
-  // Average meal rate
   const avgMealRate = useMemo(() => {
     if (data.length === 0) return 0;
     return data.reduce((sum, d) => sum + d.mealRate, 0) / data.length;
   }, [data]);
 
-  // Color based on average comparison (GREEN = below avg = good, RED = above avg = bad)
   const getBarColor = (rate: number) => {
     if (avgMealRate === 0) return 'hsl(var(--primary))';
     const diff = ((rate - avgMealRate) / avgMealRate) * 100;
@@ -222,7 +215,6 @@ export default function ManagerMealRateCard({ messId, members }: ManagerMealRate
     return 'hsl(38 92% 50%)';
   };
 
-  // Manager frequency count (filtered by year)
   const managerFrequency = useMemo(() => {
     const freq: Record<string, { name: string; count: number }> = {};
     data.forEach(d => {
@@ -285,7 +277,6 @@ export default function ManagerMealRateCard({ messId, members }: ManagerMealRate
           <p className="text-center text-muted-foreground py-6 text-sm">No data for {selectedYear}</p>
         ) : (
           <>
-            {/* Chart */}
             <div className="w-full overflow-x-auto">
               <ChartContainer config={chartConfig} className="min-h-[200px] max-h-[250px] w-full">
                 <BarChart data={data} margin={{ top: 16, right: 10, bottom: 50, left: 10 }}>
@@ -321,14 +312,19 @@ export default function ManagerMealRateCard({ messId, members }: ManagerMealRate
                             <span className="text-destructive">Inactive: {d.inactiveDays}d</span>
                             <span className="text-muted-foreground">Total: {d.totalDays}d</span>
                           </div>
-                          {d.managerSegments && (
+                          {d.managerSegments && d.managerSegments.length > 1 && (
                             <div className="mt-1.5 pt-1.5 border-t border-border/50 space-y-1">
-                              <p className="text-xs font-medium text-foreground">Multiple Managers:</p>
+                              <p className="text-xs font-medium text-foreground">Manager Timeline:</p>
                               {d.managerSegments.map((seg, i) => (
                                 <p key={i} className="text-xs text-muted-foreground">
                                   {seg.name}: {seg.days}d ({seg.startDate} → {seg.endDate})
                                 </p>
                               ))}
+                            </div>
+                          )}
+                          {d.managerSegments && d.managerSegments.length === 1 && (
+                            <div className="mt-1 text-xs text-muted-foreground">
+                              Period: {d.managerSegments[0].startDate} → {d.managerSegments[0].endDate}
                             </div>
                           )}
                         </div>
