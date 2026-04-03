@@ -102,6 +102,7 @@ export default function MonthDetails() {
   const [showMonthNameDialog, setShowMonthNameDialog] = useState(false);
   const [newMonthName, setNewMonthName] = useState('');
   const [deletingMonthId, setDeletingMonthId] = useState<string | null>(null);
+  const [clearExpenses, setClearExpenses] = useState(false);
 
   const isManager = user?.role === 'manager';
 
