@@ -56,6 +56,21 @@ export default function BazarDates() {
 
   const isManager = user?.role === 'manager';
 
+  const getMemberName = (userId: string) => {
+    return members.find(m => m.id === userId)?.fullName || 'Unknown';
+  };
+
+  // Build a set of booked dates for calendar disabling
+  const bookedDatesMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    bazarDates.forEach(b => {
+      if (!editingBazar || b.id !== editingBazar.id) {
+        map[b.date] = getMemberName(b.userId);
+      }
+    });
+    return map;
+  }, [bazarDates, editingBazar, members]);
+
   useEffect(() => {
     if (!authLoading && isManager) {
       loadData();
@@ -98,10 +113,6 @@ export default function BazarDates() {
     setDateError(null);
   };
 
-  const getMemberName = (userId: string) => {
-    return members.find(m => m.id === userId)?.fullName || 'Unknown';
-  };
-
   const isDateAssigned = (date: string, excludeBazarId?: string): boolean => {
     return bazarDates.some(b => b.date === date && b.id !== excludeBazarId);
   };
@@ -110,17 +121,6 @@ export default function BazarDates() {
     const bazar = bazarDates.find(b => b.date === date && b.id !== excludeBazarId);
     return bazar ? getMemberName(bazar.userId) : null;
   };
-
-  // Build a set of booked dates for calendar disabling
-  const bookedDatesMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    bazarDates.forEach(b => {
-      if (!editingBazar || b.id !== editingBazar.id) {
-        map[b.date] = getMemberName(b.userId);
-      }
-    });
-    return map;
-  }, [bazarDates, editingBazar, members]);
 
   const handleCalendarSelect = (dates: Date[] | Date | undefined) => {
     if (!dates) return;
