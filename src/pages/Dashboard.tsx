@@ -250,18 +250,35 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
   calcExceptions: CalcException[];
   calcPayments: CalcPayment[];
 }) {
-  const toggleKey = `mess_prev_balance_toggle_${messId}_${activeMonthId}`;
-  const [includePrevBalance, setIncludePrevBalance] = useState(() => {
-    try { return localStorage.getItem(toggleKey) === '1'; } catch { return false; }
-  });
+  const [includePrevBalance, setIncludePrevBalance] = useState(false);
   const [prevBalances, setPrevBalances] = useState<Record<string, number>>({});
   const [loadingPrev, setLoadingPrev] = useState(false);
   const [showConfirmOff, setShowConfirmOff] = useState(false);
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
 
-  // Persist toggle state per month
+  // Load toggle state from DB on mount
   useEffect(() => {
-    try { localStorage.setItem(toggleKey, includePrevBalance ? '1' : '0'); } catch {}
-  }, [includePrevBalance, toggleKey]);
+    if (!messId || !activeMonthId || settingsLoaded) return;
+    const loadSettings = async () => {
+      try {
+        const result = await import('@/lib/api').then(api => api.getMessSettingsAPI(messId, activeMonthId));
+        if (result.success && result.data) {
+          const setting = (result.data as any).setting;
+          setIncludePrevBalance(setting?.prevBalanceEnabled || false);
+        }
+      } catch {}
+      setSettingsLoaded(true);
+    };
+    loadSettings();
+  }, [messId, activeMonthId, settingsLoaded]);
+
+  // Save toggle state to DB when changed
+  useEffect(() => {
+    if (!messId || !activeMonthId || !settingsLoaded) return;
+    import('@/lib/api').then(api => {
+      api.updateMessSettingsAPI({ messId, monthId: activeMonthId, prevBalanceEnabled: includePrevBalance }).catch(() => {});
+    });
+  }, [includePrevBalance, messId, activeMonthId, settingsLoaded]);
 
   // Load previous month balances when toggle is turned on
   useEffect(() => {
@@ -282,21 +299,24 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
 
         // Use the most recent previous month
         const prevMonth = inactiveMonths[0];
+        
+        // Check if adjusted balances were stored in DB for previous month
+        const api = await import('@/lib/api');
+        const prevSettingResult = await api.getMessSettingsAPI(messId, prevMonth.id);
+        let storedAdjusted: Record<string, number> | null = null;
+        if (prevSettingResult.success && prevSettingResult.data) {
+          const prevSetting = (prevSettingResult.data as any).setting;
+          if (prevSetting?.adjustedBalances) {
+            storedAdjusted = prevSetting.adjustedBalances;
+          }
+        }
+
         const { fetchMonthData: fetchMD, getAllMembersSummaryFromData: getAllMS } = await import('@/lib/calculations');
         const monthData = await fetchMD(prevMonth.id, messId);
         const prevSummaries = getAllMS(monthData);
 
-        // Check if adjusted balances exist for that month (stored when toggle was ON)
-        const adjustedKey = `mess_adjusted_balances_${messId}_${prevMonth.id}`;
-        let storedAdjusted: Record<string, number> | null = null;
-        try {
-          const stored = localStorage.getItem(adjustedKey);
-          if (stored) storedAdjusted = JSON.parse(stored);
-        } catch {}
-
         const balances: Record<string, number> = {};
         prevSummaries.forEach(s => {
-          // Use adjusted balance if available, otherwise base balance
           if (storedAdjusted && storedAdjusted[s.userId] !== undefined) {
             balances[s.userId] = storedAdjusted[s.userId];
           } else {
@@ -313,15 +333,16 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
     loadPrevMonth();
   }, [includePrevBalance, messId]);
 
-  // Save adjusted balances when toggle is ON so next month can use them
+  // Save adjusted balances to DB when toggle is ON
   useEffect(() => {
     if (!includePrevBalance || !activeMonthId || !messId || Object.keys(prevBalances).length === 0) return;
-    const adjustedKey = `mess_adjusted_balances_${messId}_${activeMonthId}`;
     const adjusted: Record<string, number> = {};
     membersSummary.forEach(m => {
       adjusted[m.userId] = m.balance + (prevBalances[m.userId] || 0);
     });
-    try { localStorage.setItem(adjustedKey, JSON.stringify(adjusted)); } catch {}
+    import('@/lib/api').then(api => {
+      api.updateMessSettingsAPI({ messId, monthId: activeMonthId, adjustedBalances: adjusted }).catch(() => {});
+    });
   }, [includePrevBalance, membersSummary, prevBalances, activeMonthId, messId]);
 
   // Adjusted summaries when toggle is on
@@ -449,6 +470,7 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
                 shouldPay={memberDues[member.userId]?.shouldPay}
                 totalPaid={memberDues[member.userId]?.totalPaid}
                 isMealKing={isMealKing}
+                carryOverBalance={includePrevBalance ? (prevBalances[member.userId] || undefined) : undefined}
               />
             );
           })}

@@ -11,6 +11,7 @@ interface MemberSummaryCardProps {
   shouldPay?: number;
   totalPaid?: number;
   isMealKing?: boolean;
+  carryOverBalance?: number;
 }
 
 const getBalanceStatus = (balance: number) => {
@@ -19,7 +20,7 @@ const getBalanceStatus = (balance: number) => {
   return { status: 'success', color: 'border-success/50 bg-success/5', icon: 'text-success' };
 };
 
-export default function MemberSummaryCard({ summary, isCurrentUser = false, shouldPay, totalPaid, isMealKing = false }: MemberSummaryCardProps) {
+export default function MemberSummaryCard({ summary, isCurrentUser = false, shouldPay, totalPaid, isMealKing = false, carryOverBalance }: MemberSummaryCardProps) {
   const totalCost = summary.mealCost + summary.individualCost + summary.sharedCost;
   const balanceStatus = getBalanceStatus(summary.balance);
   const isFullyPaid = shouldPay !== undefined && totalPaid !== undefined && (shouldPay > 0 ? totalPaid >= shouldPay : true);
@@ -156,6 +157,18 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
               <div className="flex justify-between text-xs">
                 <span className="text-muted-foreground">Individual: {formatCurrency(summary.individualCost)}</span>
                 <span className="text-muted-foreground">Shared: {formatCurrency(summary.sharedCost)}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Carry-over from previous month */}
+          {carryOverBalance !== undefined && carryOverBalance !== 0 && (
+            <div className="mt-3 pt-3 border-t border-border">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground font-medium">Prev Month Carry-over</span>
+                <span className={`font-bold ${carryOverBalance >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  {carryOverBalance >= 0 ? '+' : ''}{formatCurrency(carryOverBalance)}
+                </span>
               </div>
             </div>
           )}
