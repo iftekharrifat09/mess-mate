@@ -11,6 +11,7 @@ interface MemberSummaryCardProps {
   shouldPay?: number;
   totalPaid?: number;
   isMealKing?: boolean;
+  carryOverBalance?: number;
 }
 
 const getBalanceStatus = (balance: number) => {
