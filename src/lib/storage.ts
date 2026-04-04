@@ -17,6 +17,8 @@ const STORAGE_KEYS = {
   ACTIVITY_LOGS: 'mess_manager_activity_logs',
   CHAT_MESSAGES: 'mess_manager_chat_messages',
   CHAT_UNSYNCED: 'mess_manager_chat_unsynced',
+  MESS_SETTINGS: 'mess_manager_mess_settings',
+  PENDING_MONTHS: 'mess_manager_pending_months',
 };
 
 function getFromStorage<T>(key: string, defaultValue: T[] = []): T[] {
@@ -30,6 +32,26 @@ function saveToStorage<T>(key: string, data: T[]): void {
 
 function generateId(): string {
   return crypto.randomUUID();
+}
+
+export interface LocalMessSetting {
+  messId: string;
+  monthId: string;
+  prevBalanceEnabled: boolean;
+  adjustedBalances: Record<string, number> | null;
+  updatedAt: string;
+  pendingSync?: boolean;
+}
+
+export interface PendingMonthCreation {
+  tempMonthId: string;
+  messId: string;
+  name: string;
+  year: number;
+  month: number;
+  startDate?: string;
+  copyCalcData?: boolean;
+  createdAt: string;
 }
 
 // Users
@@ -526,6 +548,84 @@ export function setCurrentUser(user: User | null): void {
   } else {
     localStorage.removeItem(STORAGE_KEYS.CURRENT_USER);
   }
+}
+
+// ============ LOCAL MESS SETTINGS ============
+export function getLocalMessSettings(): LocalMessSetting[] {
+  return getFromStorage<LocalMessSetting>(STORAGE_KEYS.MESS_SETTINGS);
+}
+
+export function getLocalMessSetting(messId: string, monthId: string): LocalMessSetting | undefined {
+  return getLocalMessSettings().find(setting => setting.messId === messId && setting.monthId === monthId);
+}
+
+export function upsertLocalMessSetting(
+  data: Partial<LocalMessSetting> & Pick<LocalMessSetting, 'messId' | 'monthId'>,
+): LocalMessSetting {
+  const settings = getLocalMessSettings();
+  const index = settings.findIndex(setting => setting.messId === data.messId && setting.monthId === data.monthId);
+  const existing = index >= 0 ? settings[index] : undefined;
+
+  const next: LocalMessSetting = {
+    messId: data.messId,
+    monthId: data.monthId,
+    prevBalanceEnabled: data.prevBalanceEnabled ?? existing?.prevBalanceEnabled ?? false,
+    adjustedBalances: data.adjustedBalances ?? existing?.adjustedBalances ?? null,
+    updatedAt: data.updatedAt ?? new Date().toISOString(),
+    pendingSync: data.pendingSync ?? existing?.pendingSync ?? false,
+  };
+
+  if (index >= 0) {
+    settings[index] = next;
+  } else {
+    settings.push(next);
+  }
+
+  saveToStorage(STORAGE_KEYS.MESS_SETTINGS, settings);
+  return next;
+}
+
+export function markLocalMessSettingSynced(messId: string, monthId: string): void {
+  const setting = getLocalMessSetting(messId, monthId);
+  if (!setting) return;
+  upsertLocalMessSetting({ ...setting, pendingSync: false, updatedAt: new Date().toISOString() });
+}
+
+export function getPendingMessSettings(): LocalMessSetting[] {
+  return getLocalMessSettings().filter(setting => setting.pendingSync);
+}
+
+export function replaceMessSettingsMonthId(oldMonthId: string, newMonthId: string): void {
+  const settings = getLocalMessSettings().map(setting =>
+    setting.monthId === oldMonthId ? { ...setting, monthId: newMonthId, updatedAt: new Date().toISOString() } : setting,
+  );
+  saveToStorage(STORAGE_KEYS.MESS_SETTINGS, settings);
+}
+
+// ============ PENDING MONTH CREATIONS ============
+export function getPendingMonthCreations(): PendingMonthCreation[] {
+  return getFromStorage<PendingMonthCreation>(STORAGE_KEYS.PENDING_MONTHS);
+}
+
+export function addPendingMonthCreation(data: PendingMonthCreation): void {
+  const pending = getPendingMonthCreations().filter(item => item.tempMonthId !== data.tempMonthId);
+  pending.push(data);
+  saveToStorage(STORAGE_KEYS.PENDING_MONTHS, pending);
+}
+
+export function removePendingMonthCreation(tempMonthId: string): void {
+  saveToStorage(
+    STORAGE_KEYS.PENDING_MONTHS,
+    getPendingMonthCreations().filter(item => item.tempMonthId !== tempMonthId),
+  );
+}
+
+export function replaceMonthIdReferences(oldMonthId: string, newMonthId: string): void {
+  saveMonths(getMonths().map(month => (month.id === oldMonthId ? { ...month, id: newMonthId } : month)));
+  saveMeals(getMeals().map(meal => (meal.monthId === oldMonthId ? { ...meal, monthId: newMonthId } : meal)));
+  saveDeposits(getDeposits().map(deposit => (deposit.monthId === oldMonthId ? { ...deposit, monthId: newMonthId } : deposit)));
+  saveMealCosts(getMealCosts().map(cost => (cost.monthId === oldMonthId ? { ...cost, monthId: newMonthId } : cost)));
+  saveOtherCosts(getOtherCosts().map(cost => (cost.monthId === oldMonthId ? { ...cost, monthId: newMonthId } : cost)));
 }
 
 // Helper to get members of a mess
