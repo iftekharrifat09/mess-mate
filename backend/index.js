@@ -3326,6 +3326,47 @@ app.post("/api/bazar-dates/bulk-delete", authMiddleware, async (req, res) => {
 
 
 
+// ============================================
+// MESS SETTINGS (Toggle Persistence)
+// ============================================
+
+app.get("/api/mess-settings", authMiddleware, async (req, res) => {
+  try {
+    const messId = req.query.messId || req.user.messId;
+    const monthId = req.query.monthId;
+    if (!monthId) return res.status(400).json({ success: false, error: "monthId required" });
+    const setting = await collections.messSettings.findOne({ messId, monthId });
+    res.json({ success: true, setting: setting ? { prevBalanceEnabled: setting.prevBalanceEnabled, adjustedBalances: setting.adjustedBalances || null } : { prevBalanceEnabled: false, adjustedBalances: null } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to get settings" });
+  }
+});
+
+app.put("/api/mess-settings", authMiddleware, async (req, res) => {
+  try {
+    // Only manager can update
+    if (req.user.role !== 'manager') {
+      return res.status(403).json({ success: false, error: "Only manager can change this setting" });
+    }
+    const { messId, monthId, prevBalanceEnabled, adjustedBalances } = req.body;
+    const mId = messId || req.user.messId;
+    if (!monthId) return res.status(400).json({ success: false, error: "monthId required" });
+
+    const updateData = { updatedAt: new Date() };
+    if (prevBalanceEnabled !== undefined) updateData.prevBalanceEnabled = prevBalanceEnabled;
+    if (adjustedBalances !== undefined) updateData.adjustedBalances = adjustedBalances;
+
+    await collections.messSettings.updateOne(
+      { messId: mId, monthId },
+      { $set: { messId: mId, monthId, ...updateData } },
+      { upsert: true }
+    );
+    res.json({ success: true });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to update settings" });
+  }
+});
+
 async function startServer() {
   await connectToDatabase();
 
