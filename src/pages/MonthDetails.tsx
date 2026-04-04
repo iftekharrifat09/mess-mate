@@ -240,40 +240,20 @@ export default function MonthDetails() {
     const now = new Date();
     
     try {
-      // If clearExpenses is checked, clear calculator data for the NEW month
-      // The old month data stays intact since it becomes inactive
-      
+      // Pass copyCalcData flag: true when checkbox is NOT checked (keep data), false when checked (clear)
       await dataService.createMonth({
         messId: user.messId,
         name: newMonthName.trim(),
         year: now.getFullYear(),
         month: now.getMonth() + 1,
         isActive: true,
-      });
-
-      // Reset the Previous Month +/- toggle for new month
-      // (new months always start with toggle OFF)
-      try {
-        // Get the new active month to build the key
-        const newActiveMonth = await dataService.getActiveMonth(user.messId);
-        if (newActiveMonth) {
-          const newToggleKey = `mess_prev_balance_toggle_${user.messId}_${newActiveMonth.id}`;
-          localStorage.setItem(newToggleKey, '0');
-        }
-      } catch {}
-
-      // If clearExpenses is checked, clear calc data for the new active month
-      if (clearExpenses && activeMonth) {
-        // The new month won't have any calc data yet, so nothing to clear
-        // The key point: we do NOT copy calc data to the new month
-      }
-      // If NOT clearing expenses, we could optionally copy data - but by default
-      // mess expense data is per-month and won't auto-copy
+        copyCalcData: !clearExpenses, // Copy data when NOT clearing
+      } as any);
 
       await dataService.createActivityLog({
         messId: user.messId,
         type: 'month_created',
-        description: `New month "${newMonthName.trim()}" started${clearExpenses ? ' (expenses cleared)' : ''}`,
+        description: `New month "${newMonthName.trim()}" started${clearExpenses ? ' (expenses cleared)' : ' (expenses carried over)'}`,
       });
 
       toast({
