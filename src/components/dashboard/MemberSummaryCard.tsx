@@ -20,7 +20,7 @@ const getBalanceStatus = (balance: number) => {
   return { status: 'success', color: 'border-success/50 bg-success/5', icon: 'text-success' };
 };
 
-export default function MemberSummaryCard({ summary, isCurrentUser = false, shouldPay, totalPaid, isMealKing = false }: MemberSummaryCardProps) {
+export default function MemberSummaryCard({ summary, isCurrentUser = false, shouldPay, totalPaid, isMealKing = false, carryOverBalance }: MemberSummaryCardProps) {
   const totalCost = summary.mealCost + summary.individualCost + summary.sharedCost;
   const balanceStatus = getBalanceStatus(summary.balance);
   const isFullyPaid = shouldPay !== undefined && totalPaid !== undefined && (shouldPay > 0 ? totalPaid >= shouldPay : true);
