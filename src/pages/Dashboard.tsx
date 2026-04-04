@@ -470,6 +470,7 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
                 shouldPay={memberDues[member.userId]?.shouldPay}
                 totalPaid={memberDues[member.userId]?.totalPaid}
                 isMealKing={isMealKing}
+                carryOverBalance={includePrevBalance ? (prevBalances[member.userId] || undefined) : undefined}
               />
             );
           })}
