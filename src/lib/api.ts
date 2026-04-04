@@ -428,7 +428,7 @@ export async function getMonthsAPI(messId?: string) {
   return apiRequest('/months', { method: 'GET' });
 }
 
-export async function createMonthAPI(data: { name: string; startDate: string; messId?: string; copyCalcData?: boolean }) {
+export async function createMonthAPI(data: { name: string; startDate?: string; messId?: string; copyCalcData?: boolean; year?: number; month?: number }) {
   return apiRequest('/months', {
     method: 'POST',
     body: JSON.stringify(data),

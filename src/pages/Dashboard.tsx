@@ -261,11 +261,8 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
     if (!messId || !activeMonthId || settingsLoaded) return;
     const loadSettings = async () => {
       try {
-        const result = await import('@/lib/api').then(api => api.getMessSettingsAPI(messId, activeMonthId));
-        if (result.success && result.data) {
-          const setting = (result.data as any).setting;
-          setIncludePrevBalance(setting?.prevBalanceEnabled || false);
-        }
+        const setting = await dataService.getMessSettings(messId, activeMonthId);
+        setIncludePrevBalance(setting?.prevBalanceEnabled || false);
       } catch {}
       setSettingsLoaded(true);
     };
@@ -275,9 +272,7 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
   // Save toggle state to DB when changed
   useEffect(() => {
     if (!messId || !activeMonthId || !settingsLoaded) return;
-    import('@/lib/api').then(api => {
-      api.updateMessSettingsAPI({ messId, monthId: activeMonthId, prevBalanceEnabled: includePrevBalance }).catch(() => {});
-    });
+    dataService.updateMessSettings({ messId, monthId: activeMonthId, prevBalanceEnabled: includePrevBalance }).catch(() => {});
   }, [includePrevBalance, messId, activeMonthId, settingsLoaded]);
 
   // Load previous month balances when toggle is turned on
@@ -301,14 +296,10 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
         const prevMonth = inactiveMonths[0];
         
         // Check if adjusted balances were stored in DB for previous month
-        const api = await import('@/lib/api');
-        const prevSettingResult = await api.getMessSettingsAPI(messId, prevMonth.id);
         let storedAdjusted: Record<string, number> | null = null;
-        if (prevSettingResult.success && prevSettingResult.data) {
-          const prevSetting = (prevSettingResult.data as any).setting;
-          if (prevSetting?.adjustedBalances) {
-            storedAdjusted = prevSetting.adjustedBalances;
-          }
+        const prevSetting = await dataService.getMessSettings(messId, prevMonth.id);
+        if (prevSetting?.adjustedBalances) {
+          storedAdjusted = prevSetting.adjustedBalances;
         }
 
         const { fetchMonthData: fetchMD, getAllMembersSummaryFromData: getAllMS } = await import('@/lib/calculations');
@@ -340,9 +331,7 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
     membersSummary.forEach(m => {
       adjusted[m.userId] = m.balance + (prevBalances[m.userId] || 0);
     });
-    import('@/lib/api').then(api => {
-      api.updateMessSettingsAPI({ messId, monthId: activeMonthId, adjustedBalances: adjusted }).catch(() => {});
-    });
+    dataService.updateMessSettings({ messId, monthId: activeMonthId, adjustedBalances: adjusted }).catch(() => {});
   }, [includePrevBalance, membersSummary, prevBalances, activeMonthId, messId]);
 
   // Adjusted summaries when toggle is on
