@@ -102,6 +102,7 @@ async function connectToDatabase() {
       calcBillPayments: db.collection("calcBillPayments"),
       activityLogs: db.collection("activityLogs"),
       chatMessages: db.collection("chatMessages"),
+      messSettings: db.collection("messSettings"),
     };
 
     // Create indexes
