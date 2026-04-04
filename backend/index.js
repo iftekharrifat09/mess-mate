@@ -1107,10 +1107,14 @@ app.get("/api/months", authMiddleware, async (req, res) => {
 
 app.post("/api/months", authMiddleware, async (req, res) => {
   try {
-    const { name, startDate, year, month } = req.body;
+    const { name, startDate, year, month, copyCalcData } = req.body;
+    const messId = req.user.messId;
+
+    // Get current active month before deactivating
+    const currentActive = await collections.months.findOne({ messId, isActive: true });
 
     await collections.months.updateMany(
-      { messId: req.user.messId, isActive: true },
+      { messId, isActive: true },
       {
         $set: {
           isActive: false,
@@ -1119,8 +1123,16 @@ app.post("/api/months", authMiddleware, async (req, res) => {
       }
     );
 
+    // Save adjusted balances for the old month if toggle was on
+    if (currentActive) {
+      const oldSetting = await collections.messSettings.findOne({ messId, monthId: currentActive._id.toString() });
+      if (oldSetting && oldSetting.prevBalanceEnabled && oldSetting.adjustedBalances) {
+        // Already stored — no extra action needed
+      }
+    }
+
     const monthDoc = {
-      messId: req.user.messId,
+      messId,
       name,
       startDate,
       year: year || new Date().getFullYear(),
@@ -1131,9 +1143,60 @@ app.post("/api/months", authMiddleware, async (req, res) => {
     };
 
     const result = await collections.months.insertOne(monthDoc);
+    const newMonthId = result.insertedId.toString();
 
-    res.json({ success: true, month: { id: result.insertedId.toString(), ...monthDoc } });
+    // Initialize settings for new month (toggle OFF by default)
+    await collections.messSettings.updateOne(
+      { messId, monthId: newMonthId },
+      { $set: { messId, monthId: newMonthId, prevBalanceEnabled: false, adjustedBalances: null, updatedAt: new Date() } },
+      { upsert: true }
+    );
+
+    // Copy calc data from old month to new month if requested
+    if (copyCalcData && currentActive) {
+      const oldMonthId = currentActive._id.toString();
+      const [oldCats, oldPayments, oldBills] = await Promise.all([
+        collections.calcCategories.find({ messId, monthId: oldMonthId }).toArray(),
+        collections.calcPayments.find({ messId, monthId: oldMonthId }).toArray(),
+        collections.calcBillPayments.find({ messId, monthId: oldMonthId }).toArray(),
+      ]);
+
+      // Copy categories and map old IDs to new IDs
+      const catIdMap = {};
+      if (oldCats.length > 0) {
+        for (const cat of oldCats) {
+          const { _id, ...catData } = cat;
+          const newCat = { ...catData, monthId: newMonthId, createdAt: new Date() };
+          const r = await collections.calcCategories.insertOne(newCat);
+          catIdMap[_id.toString()] = r.insertedId.toString();
+        }
+
+        // Copy exceptions with updated categoryIds
+        for (const oldCatId of Object.keys(catIdMap)) {
+          const oldExcs = await collections.calcExceptions.find({ categoryId: oldCatId }).toArray();
+          if (oldExcs.length > 0) {
+            const newExcs = oldExcs.map(({ _id, ...exc }) => ({ ...exc, categoryId: catIdMap[oldCatId], createdAt: new Date() }));
+            await collections.calcExceptions.insertMany(newExcs);
+          }
+        }
+      }
+
+      // Copy payments
+      if (oldPayments.length > 0) {
+        const newPayments = oldPayments.map(({ _id, ...p }) => ({ ...p, monthId: newMonthId, createdAt: new Date() }));
+        await collections.calcPayments.insertMany(newPayments);
+      }
+
+      // Copy bill payments with updated categoryIds
+      if (oldBills.length > 0) {
+        const newBills = oldBills.map(({ _id, ...b }) => ({ ...b, monthId: newMonthId, categoryId: catIdMap[b.categoryId] || b.categoryId, createdAt: new Date() }));
+        await collections.calcBillPayments.insertMany(newBills);
+      }
+    }
+
+    res.json({ success: true, month: { id: newMonthId, ...monthDoc } });
   } catch (error) {
+    console.error("Create month error:", error);
     res.status(500).json({ success: false, error: "Failed to create month" });
   }
 });
