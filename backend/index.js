@@ -135,6 +135,7 @@ async function connectToDatabase() {
       collections.activityLogs.createIndex({ messId: 1 }),
       collections.chatMessages.createIndex({ messId: 1, createdAt: -1 }),
       collections.chatMessages.createIndex({ messId: 1, createdAt: 1 }),
+      collections.messSettings.createIndex({ messId: 1, monthId: 1 }, { unique: true }),
     ]);
   } catch (error) {
     console.error("❌ MongoDB Connection Error:", error);
