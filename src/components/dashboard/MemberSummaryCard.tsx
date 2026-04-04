@@ -160,6 +160,18 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
               </div>
             </div>
           )}
+
+          {/* Carry-over from previous month */}
+          {carryOverBalance !== undefined && carryOverBalance !== 0 && (
+            <div className="mt-3 pt-3 border-t border-border">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-muted-foreground font-medium">Prev Month Carry-over</span>
+                <span className={`font-bold ${carryOverBalance >= 0 ? 'text-success' : 'text-destructive'}`}>
+                  {carryOverBalance >= 0 ? '+' : ''}{formatCurrency(carryOverBalance)}
+                </span>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </motion.div>
