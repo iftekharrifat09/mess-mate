@@ -71,6 +71,91 @@ function saveLocal<T>(key: string, data: T[]) {
 }
 function genId() { return crypto.randomUUID(); }
 
+export function getLocalMonthData(messId: string, monthId: string) {
+  const categories = getLocal<CalcCategory>(KEYS.CATEGORIES).filter(c => c.messId === messId && c.monthId === monthId);
+  const categoryIds = new Set(categories.map(category => category.id));
+
+  return {
+    categories,
+    exceptions: getLocal<CalcException>(KEYS.EXCEPTIONS).filter(exception => categoryIds.has(exception.categoryId)),
+    payments: getLocal<CalcPayment>(KEYS.PAYMENTS).filter(payment => payment.messId === messId && payment.monthId === monthId),
+    billPayments: getLocal<CalcBillPayment>(KEYS.BILL_PAYMENTS).filter(payment => payment.messId === messId && payment.monthId === monthId),
+  };
+}
+
+export function copyMonthDataLocal(sourceMonthId: string, targetMonthId: string, messId: string): void {
+  const { categories, exceptions, payments, billPayments } = getLocalMonthData(messId, sourceMonthId);
+  const allCategories = getLocal<CalcCategory>(KEYS.CATEGORIES);
+  const allExceptions = getLocal<CalcException>(KEYS.EXCEPTIONS);
+  const allPayments = getLocal<CalcPayment>(KEYS.PAYMENTS);
+  const allBillPayments = getLocal<CalcBillPayment>(KEYS.BILL_PAYMENTS);
+  const categoryIdMap: Record<string, string> = {};
+
+  categories.forEach(category => {
+    const newId = genId();
+    categoryIdMap[category.id] = newId;
+    allCategories.push({
+      ...category,
+      id: newId,
+      monthId: targetMonthId,
+      createdAt: new Date().toISOString(),
+    });
+  });
+
+  exceptions.forEach(exception => {
+    allExceptions.push({
+      ...exception,
+      id: genId(),
+      categoryId: categoryIdMap[exception.categoryId] || exception.categoryId,
+    });
+  });
+
+  payments.forEach(payment => {
+    allPayments.push({
+      ...payment,
+      id: genId(),
+      monthId: targetMonthId,
+      createdAt: new Date().toISOString(),
+    });
+  });
+
+  billPayments.forEach(payment => {
+    allBillPayments.push({
+      ...payment,
+      id: genId(),
+      monthId: targetMonthId,
+      categoryId: categoryIdMap[payment.categoryId] || payment.categoryId,
+      createdAt: new Date().toISOString(),
+    });
+  });
+
+  saveLocal(KEYS.CATEGORIES, allCategories);
+  saveLocal(KEYS.EXCEPTIONS, allExceptions);
+  saveLocal(KEYS.PAYMENTS, allPayments);
+  saveLocal(KEYS.BILL_PAYMENTS, allBillPayments);
+}
+
+export function replaceLocalCalcMonthId(oldMonthId: string, newMonthId: string): void {
+  saveLocal(
+    KEYS.CATEGORIES,
+    getLocal<CalcCategory>(KEYS.CATEGORIES).map(category =>
+      category.monthId === oldMonthId ? { ...category, monthId: newMonthId } : category,
+    ),
+  );
+  saveLocal(
+    KEYS.PAYMENTS,
+    getLocal<CalcPayment>(KEYS.PAYMENTS).map(payment =>
+      payment.monthId === oldMonthId ? { ...payment, monthId: newMonthId } : payment,
+    ),
+  );
+  saveLocal(
+    KEYS.BILL_PAYMENTS,
+    getLocal<CalcBillPayment>(KEYS.BILL_PAYMENTS).map(payment =>
+      payment.monthId === oldMonthId ? { ...payment, monthId: newMonthId } : payment,
+    ),
+  );
+}
+
 // ============= Categories =============
 
 export async function getCategories(messId: string, monthId: string): Promise<CalcCategory[]> {

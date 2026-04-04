@@ -24,6 +24,7 @@ import { toast } from '@/hooks/use-toast';
 import { setNotificationSoundEnabled } from '@/lib/preferences';
 import { setBrowserNotificationsEnabled } from '@/lib/browserNotifications';
 import { setSelectedToneId, setCustomToneData, removeCustomTone } from '@/lib/notificationTones';
+import { syncPendingOfflineData } from '@/lib/dataService';
 
 // Sync notification preferences from backend API response to localStorage
 function syncNotificationPrefsFromApi(userId: string, apiUser: any) {
@@ -106,6 +107,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (USE_BACKEND) {
         const connected = await checkMongoDbStatus();
         setIsBackendConnected(connected);
+        if (connected) {
+          syncPendingOfflineData().catch((error) => console.error('Offline sync failed:', error));
+        }
         
         if (connected && getToken()) {
           // Try to get user from backend
@@ -146,6 +150,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
 
     initAuth();
+
+    const handleOnline = async () => {
+      if (!USE_BACKEND) return;
+      const connected = await checkMongoDbStatus();
+      setIsBackendConnected(connected);
+      if (connected) {
+        syncPendingOfflineData().catch((error) => console.error('Offline sync failed:', error));
+      }
+    };
+
+    window.addEventListener('online', handleOnline);
+    return () => window.removeEventListener('online', handleOnline);
   }, []);
 
   const refreshUser = async (): Promise<void> => {

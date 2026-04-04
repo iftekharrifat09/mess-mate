@@ -7,6 +7,7 @@
 import { shouldUseBackend, isBackendAvailable, isMongoDbConnected } from './config';
 import * as api from './api';
 import * as storage from './storage';
+import * as calcStorage from './calculatorStorage';
 import { apiCache, cacheKeys, invalidateMonthData, invalidateUserData } from './apiCache';
 import { User, Mess, Month, Meal, Deposit, MealCost, OtherCost, JoinRequest, Notice, BazarDate, Notification, Note, MessActivityLog, ChatMessage } from '@/types';
 import { toast } from '@/hooks/use-toast';
@@ -323,7 +324,34 @@ export async function createMonth(monthData: Omit<Month, 'id' | 'createdAt'>): P
       showFallbackAlert();
     }
   }
-  return storage.createMonth(monthData);
+
+  const currentActiveMonth = monthData.messId ? storage.getActiveMonth(monthData.messId) : undefined;
+  const createdMonth = storage.createMonth(monthData);
+
+  storage.upsertLocalMessSetting({
+    messId: createdMonth.messId,
+    monthId: createdMonth.id,
+    prevBalanceEnabled: false,
+    adjustedBalances: null,
+    pendingSync: true,
+  });
+
+  if ((monthData as any).copyCalcData && currentActiveMonth) {
+    calcStorage.copyMonthDataLocal(currentActiveMonth.id, createdMonth.id, createdMonth.messId);
+  }
+
+  storage.addPendingMonthCreation({
+    tempMonthId: createdMonth.id,
+    messId: createdMonth.messId,
+    name: createdMonth.name,
+    year: createdMonth.year,
+    month: createdMonth.month,
+    startDate: (monthData as any).startDate,
+    copyCalcData: Boolean((monthData as any).copyCalcData),
+    createdAt: createdMonth.createdAt,
+  });
+
+  return createdMonth;
 }
 
 export async function updateMonth(id: string, updates: Partial<Month>): Promise<Month | undefined> {
@@ -1545,4 +1573,104 @@ export async function syncUnsyncedChatMessages(): Promise<number> {
   }
 
   return syncedCount;
+}
+
+export async function getMessSettings(messId: string, monthId: string): Promise<{ prevBalanceEnabled: boolean; adjustedBalances: Record<string, number> | null }> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.getMessSettingsAPI(messId, monthId);
+      if (result.success && result.data) {
+        const setting = (result.data as any).setting || { prevBalanceEnabled: false, adjustedBalances: null };
+        storage.upsertLocalMessSetting({
+          messId,
+          monthId,
+          prevBalanceEnabled: Boolean(setting.prevBalanceEnabled),
+          adjustedBalances: setting.adjustedBalances || null,
+          pendingSync: false,
+        });
+        return setting;
+      }
+      if (result.usingLocalStorage) {
+        showFallbackAlert();
+      }
+    } catch (error) {
+      console.error('Error fetching mess settings:', error);
+    }
+  }
+
+  const local = storage.getLocalMessSetting(messId, monthId);
+  return {
+    prevBalanceEnabled: local?.prevBalanceEnabled ?? false,
+    adjustedBalances: local?.adjustedBalances ?? null,
+  };
+}
+
+export async function updateMessSettings(data: { messId: string; monthId: string; prevBalanceEnabled?: boolean; adjustedBalances?: Record<string, number> | null }): Promise<boolean> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.updateMessSettingsAPI(data);
+      if (result.success) {
+        storage.upsertLocalMessSetting({ ...data, pendingSync: false });
+        return true;
+      }
+      if (result.usingLocalStorage) {
+        showFallbackAlert();
+      }
+    } catch (error) {
+      console.error('Error updating mess settings:', error);
+    }
+  }
+
+  storage.upsertLocalMessSetting({ ...data, pendingSync: true });
+  return false;
+}
+
+export async function syncPendingOfflineData(): Promise<void> {
+  if (!shouldUseBackend()) return;
+
+  const pendingMonths = storage.getPendingMonthCreations();
+  for (const pendingMonth of pendingMonths) {
+    try {
+      const result = await api.createMonthAPI({
+        messId: pendingMonth.messId,
+        name: pendingMonth.name,
+        year: pendingMonth.year,
+        month: pendingMonth.month,
+        startDate: pendingMonth.startDate,
+        copyCalcData: pendingMonth.copyCalcData,
+      });
+
+      if (result.success && result.data) {
+        const syncedMonth = (result.data as any).month || result.data;
+        const newMonthId = syncedMonth.id;
+        storage.replaceMonthIdReferences(pendingMonth.tempMonthId, newMonthId);
+        calcStorage.replaceLocalCalcMonthId(pendingMonth.tempMonthId, newMonthId);
+        storage.replaceMessSettingsMonthId(pendingMonth.tempMonthId, newMonthId);
+        storage.removePendingMonthCreation(pendingMonth.tempMonthId);
+        apiCache.invalidatePrefix('month:');
+        apiCache.invalidatePrefix('months:');
+      }
+    } catch (error) {
+      console.error('Error syncing pending month creation:', error);
+      break;
+    }
+  }
+
+  const pendingSettings = storage.getPendingMessSettings();
+  for (const setting of pendingSettings) {
+    try {
+      const result = await api.updateMessSettingsAPI({
+        messId: setting.messId,
+        monthId: setting.monthId,
+        prevBalanceEnabled: setting.prevBalanceEnabled,
+        adjustedBalances: setting.adjustedBalances,
+      });
+      if (result.success) {
+        storage.markLocalMessSettingSynced(setting.messId, setting.monthId);
+      }
+    } catch (error) {
+      console.error('Error syncing pending mess settings:', error);
+      break;
+    }
+  }
 }
