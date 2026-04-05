@@ -133,6 +133,12 @@ export default function MonthDetails() {
         const memSummary = getAllMembersSummaryFromData(monthData);
         const { meals, deposits, mealCosts, otherCosts } = monthData;
         
+        // Check prev month toggle and auto deposits
+        const setting = await dataService.getMessSettings(user.messId, month.id);
+        const autoDepositTotal = deposits.filter(d => d.note === AUTO_DEPOSIT_NOTE).reduce((s, d) => s + d.amount, 0);
+        setPrevMonthToggleOn(setting?.prevBalanceEnabled || false);
+        setPrevMonthDepositTotal(autoDepositTotal);
+
         // Set summary data immediately
         startTransition(() => {
           setMonthSummary(summary);
