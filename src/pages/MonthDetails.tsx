@@ -104,7 +104,10 @@ export default function MonthDetails() {
   const [newMonthName, setNewMonthName] = useState('');
   const [deletingMonthId, setDeletingMonthId] = useState<string | null>(null);
   const [clearExpenses, setClearExpenses] = useState(false);
+  const [prevMonthToggleOn, setPrevMonthToggleOn] = useState(false);
+  const [prevMonthDepositTotal, setPrevMonthDepositTotal] = useState(0);
 
+  const AUTO_DEPOSIT_NOTE = 'Auto Previous Month +/- Adjustment';
   const isManager = user?.role === 'manager';
 
   const [isPending, startTransition] = useTransition();
