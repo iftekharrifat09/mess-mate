@@ -344,9 +344,16 @@ export default function Deposits() {
                           {formatCurrency(deposit.amount)}
                         </TableCell>
                         <TableCell className="text-muted-foreground max-w-[100px] sm:max-w-[150px] md:max-w-[200px]">
-                          <span className="block truncate" title={deposit.note || '-'}>
-                            {deposit.note || '-'}
-                          </span>
+                          {deposit.note === AUTO_DEPOSIT_NOTE ? (
+                            <Badge variant="outline" className="text-xs border-primary/50 text-primary gap-1">
+                              <ArrowLeftRight className="h-3 w-3" />
+                              Auto Adjustment
+                            </Badge>
+                          ) : (
+                            <span className="block truncate" title={deposit.note || '-'}>
+                              {deposit.note || '-'}
+                            </span>
+                          )}
                         </TableCell>
                         {isManager && (
                           <TableCell className="text-right">
