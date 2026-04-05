@@ -33,7 +33,10 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import * as dataService from '@/lib/dataService';
 import { Deposit, User } from '@/types';
-import { Wallet, Plus, Trash2, Edit2, Loader2 } from 'lucide-react';
+import { Wallet, Plus, Trash2, Edit2, Loader2, ArrowLeftRight } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+
+const AUTO_DEPOSIT_NOTE = 'Auto Previous Month +/- Adjustment';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/calculations';
 import { Navigate } from 'react-router-dom';
@@ -341,9 +344,16 @@ export default function Deposits() {
                           {formatCurrency(deposit.amount)}
                         </TableCell>
                         <TableCell className="text-muted-foreground max-w-[100px] sm:max-w-[150px] md:max-w-[200px]">
-                          <span className="block truncate" title={deposit.note || '-'}>
-                            {deposit.note || '-'}
-                          </span>
+                          {deposit.note === AUTO_DEPOSIT_NOTE ? (
+                            <Badge variant="outline" className="text-xs border-primary/50 text-primary gap-1">
+                              <ArrowLeftRight className="h-3 w-3" />
+                              Auto Adjustment
+                            </Badge>
+                          ) : (
+                            <span className="block truncate" title={deposit.note || '-'}>
+                              {deposit.note || '-'}
+                            </span>
+                          )}
                         </TableCell>
                         {isManager && (
                           <TableCell className="text-right">

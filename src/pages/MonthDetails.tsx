@@ -57,7 +57,7 @@ import {
 } from '@/lib/calculations';
 import { exportToPDF, exportToExcel } from '@/lib/export';
 import { Month, MonthSummary, MemberSummary, User, Meal, Deposit, MealCost, OtherCost } from '@/types';
-import { CalendarDays, Plus, TrendingUp, TrendingDown, Download, FileText, FileSpreadsheet, History, Filter, X, Trash2, Loader2 } from 'lucide-react';
+import { CalendarDays, Plus, TrendingUp, TrendingDown, Download, FileText, FileSpreadsheet, History, Filter, X, Trash2, Loader2, ArrowLeftRight } from 'lucide-react';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import {
   Select,
@@ -104,7 +104,10 @@ export default function MonthDetails() {
   const [newMonthName, setNewMonthName] = useState('');
   const [deletingMonthId, setDeletingMonthId] = useState<string | null>(null);
   const [clearExpenses, setClearExpenses] = useState(false);
+  const [prevMonthToggleOn, setPrevMonthToggleOn] = useState(false);
+  const [prevMonthDepositTotal, setPrevMonthDepositTotal] = useState(0);
 
+  const AUTO_DEPOSIT_NOTE = 'Auto Previous Month +/- Adjustment';
   const isManager = user?.role === 'manager';
 
   const [isPending, startTransition] = useTransition();
@@ -130,6 +133,12 @@ export default function MonthDetails() {
         const memSummary = getAllMembersSummaryFromData(monthData);
         const { meals, deposits, mealCosts, otherCosts } = monthData;
         
+        // Check prev month toggle and auto deposits
+        const setting = await dataService.getMessSettings(user.messId, month.id);
+        const autoDepositTotal = deposits.filter(d => d.note === AUTO_DEPOSIT_NOTE).reduce((s, d) => s + d.amount, 0);
+        setPrevMonthToggleOn(setting?.prevBalanceEnabled || false);
+        setPrevMonthDepositTotal(autoDepositTotal);
+
         // Set summary data immediately
         startTransition(() => {
           setMonthSummary(summary);
@@ -699,7 +708,22 @@ export default function MonthDetails() {
               </div>
             )}
 
-            {/* Cost Summary Cards */}
+            {/* Previous Month Deposit Card - visible only when toggle is ON */}
+            {prevMonthToggleOn && prevMonthDepositTotal !== 0 && (
+              <Card className="border-primary/20 bg-primary/5">
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-2 mb-2">
+                    <ArrowLeftRight className="h-5 w-5 text-primary" />
+                    <p className="text-sm font-medium text-muted-foreground">Total Deposit from Previous Month</p>
+                  </div>
+                  <p className={`text-2xl font-bold ${prevMonthDepositTotal >= 0 ? 'text-success' : 'text-destructive'}`}>
+                    {formatCurrency(prevMonthDepositTotal)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">Auto-generated via Previous Month +/− adjustment</p>
+                </CardContent>
+              </Card>
+            )}
+
             {monthSummary && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card>

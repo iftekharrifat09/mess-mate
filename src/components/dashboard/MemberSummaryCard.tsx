@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { MemberSummary } from '@/types';
 import { formatCurrency, formatNumber } from '@/lib/calculations';
-import { Utensils, Wallet, Receipt, TrendingUp, TrendingDown, CheckCircle, Crown } from 'lucide-react';
+import { Utensils, Wallet, Receipt, TrendingUp, TrendingDown, CheckCircle, Crown, ArrowLeftRight } from 'lucide-react';
 
 interface MemberSummaryCardProps {
   summary: MemberSummary;
@@ -11,7 +11,7 @@ interface MemberSummaryCardProps {
   shouldPay?: number;
   totalPaid?: number;
   isMealKing?: boolean;
-  carryOverBalance?: number;
+  prevMonthActive?: boolean;
 }
 
 const getBalanceStatus = (balance: number) => {
@@ -20,7 +20,7 @@ const getBalanceStatus = (balance: number) => {
   return { status: 'success', color: 'border-success/50 bg-success/5', icon: 'text-success' };
 };
 
-export default function MemberSummaryCard({ summary, isCurrentUser = false, shouldPay, totalPaid, isMealKing = false, carryOverBalance }: MemberSummaryCardProps) {
+export default function MemberSummaryCard({ summary, isCurrentUser = false, shouldPay, totalPaid, isMealKing = false, prevMonthActive }: MemberSummaryCardProps) {
   const totalCost = summary.mealCost + summary.individualCost + summary.sharedCost;
   const balanceStatus = getBalanceStatus(summary.balance);
   const isFullyPaid = shouldPay !== undefined && totalPaid !== undefined && (shouldPay > 0 ? totalPaid >= shouldPay : true);
@@ -37,7 +37,6 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
     >
       {isMealKing && (
         <>
-          {/* Multi-layer golden aura */}
           <div className="absolute -inset-[3px] rounded-xl bg-gradient-to-r from-yellow-500 via-amber-300 to-yellow-500 opacity-70 blur-md pointer-events-none animate-[pulse_2s_ease-in-out_infinite]" />
           <div className="absolute -inset-[2px] rounded-xl bg-gradient-to-br from-yellow-400 via-amber-200 to-yellow-500 opacity-80 pointer-events-none" />
           <div className="absolute -inset-[1px] rounded-xl bg-gradient-to-r from-yellow-400/60 via-transparent to-yellow-400/60 pointer-events-none golden-shimmer overflow-hidden" />
@@ -46,7 +45,6 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
       <Card className={`relative shadow-card hover:shadow-card-hover transition-all ${balanceStatus.color} ${isCurrentUser ? 'ring-2 ring-primary' : ''} ${isMealKing ? 'border-yellow-400/60 bg-gradient-to-br from-yellow-50/40 via-card to-amber-50/30 dark:from-yellow-900/20 dark:via-card dark:to-amber-900/15 overflow-hidden' : ''}`}
         style={isMealKing ? { boxShadow: '0 0 30px 6px rgba(234, 179, 8, 0.25), 0 0 80px 12px rgba(234, 179, 8, 0.1), inset 0 1px 0 rgba(255, 215, 0, 0.15)' } : undefined}
       >
-        {/* Subtle inner radial glow */}
         {isMealKing && (
           <div className="absolute inset-0 pointer-events-none rounded-xl" style={{ background: 'radial-gradient(ellipse at 30% 20%, rgba(255, 215, 0, 0.08) 0%, transparent 60%)' }} />
         )}
@@ -161,14 +159,12 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
             </div>
           )}
 
-          {/* Carry-over from previous month */}
-          {carryOverBalance !== undefined && carryOverBalance !== 0 && (
+          {/* Previous Month Carry-over indicator */}
+          {prevMonthActive && (
             <div className="mt-3 pt-3 border-t border-border">
-              <div className="flex items-center justify-between text-xs">
-                <span className="text-muted-foreground font-medium">Prev Month Carry-over</span>
-                <span className={`font-bold ${carryOverBalance >= 0 ? 'text-success' : 'text-destructive'}`}>
-                  {carryOverBalance >= 0 ? '+' : ''}{formatCurrency(carryOverBalance)}
-                </span>
+              <div className="flex items-center gap-1.5 text-xs text-primary">
+                <ArrowLeftRight className="h-3 w-3" />
+                <span className="font-medium">Previous Month Carry-over Applied (via Deposits)</span>
               </div>
             </div>
           )}
