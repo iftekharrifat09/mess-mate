@@ -57,7 +57,7 @@ import {
 } from '@/lib/calculations';
 import { exportToPDF, exportToExcel } from '@/lib/export';
 import { Month, MonthSummary, MemberSummary, User, Meal, Deposit, MealCost, OtherCost } from '@/types';
-import { CalendarDays, Plus, TrendingUp, TrendingDown, Download, FileText, FileSpreadsheet, History, Filter, X, Trash2, Loader2 } from 'lucide-react';
+import { CalendarDays, Plus, TrendingUp, TrendingDown, Download, FileText, FileSpreadsheet, History, Filter, X, Trash2, Loader2, ArrowLeftRight } from 'lucide-react';
 import { LoadingSkeleton } from '@/components/ui/loading-skeleton';
 import {
   Select,
