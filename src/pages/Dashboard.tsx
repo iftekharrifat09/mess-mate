@@ -41,6 +41,10 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { format } from 'date-fns';
+import { useToast } from '@/hooks/use-toast';
+
+const AUTO_DEPOSIT_NOTE = 'Auto Previous Month +/- Adjustment';
 
 // Default empty states to show UI immediately
 const EMPTY_MONTH_SUMMARY: MonthSummary = {
@@ -133,6 +137,14 @@ export default function Dashboard() {
       setLoading(false);
     }
   }, [user]);
+
+  // Reload data when needed (after toggle changes deposits)
+  const reloadDashboardData = useCallback(async () => {
+    if (!user) return;
+    dataLoadedRef.current = false;
+    setLoading(false); // Don't show full skeleton
+    await loadDashboardData();
+  }, [user, loadDashboardData]);
 
   useEffect(() => {
     if (!authLoading && user) {
@@ -233,13 +245,14 @@ export default function Dashboard() {
           calcCategories={calcCategories}
           calcExceptions={calcExceptions}
           calcPayments={calcPayments}
+          onDataChanged={reloadDashboardData}
         />
       </motion.div>
     </DashboardLayout>
   );
 }
 
-function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId, userId, isManager, calcCategories, calcExceptions, calcPayments }: {
+function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId, userId, isManager, calcCategories, calcExceptions, calcPayments, onDataChanged }: {
   membersSummary: MemberSummary[];
   members: User[];
   messId: string;
@@ -249,9 +262,10 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
   calcCategories: CalcCategory[];
   calcExceptions: CalcException[];
   calcPayments: CalcPayment[];
+  onDataChanged?: () => void;
 }) {
+  const { toast } = useToast();
   const [includePrevBalance, setIncludePrevBalance] = useState(false);
-  const [prevBalances, setPrevBalances] = useState<Record<string, number>>({});
   const [loadingPrev, setLoadingPrev] = useState(false);
   const [showConfirmOff, setShowConfirmOff] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
@@ -269,80 +283,6 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
     loadSettings();
   }, [messId, activeMonthId, settingsLoaded]);
 
-  // Save toggle state to DB when changed
-  useEffect(() => {
-    if (!messId || !activeMonthId || !settingsLoaded) return;
-    dataService.updateMessSettings({ messId, monthId: activeMonthId, prevBalanceEnabled: includePrevBalance }).catch(() => {});
-  }, [includePrevBalance, messId, activeMonthId, settingsLoaded]);
-
-  // Load previous month balances when toggle is turned on
-  useEffect(() => {
-    if (!includePrevBalance || !messId || Object.keys(prevBalances).length > 0) return;
-
-    const loadPrevMonth = async () => {
-      setLoadingPrev(true);
-      try {
-        const allMonths = await dataService.getMonthsByMessId(messId);
-        const inactiveMonths = allMonths
-          .filter(m => !m.isActive)
-          .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-        if (inactiveMonths.length === 0) {
-          setPrevBalances({});
-          return;
-        }
-
-        // Use the most recent previous month
-        const prevMonth = inactiveMonths[0];
-        
-        // Check if adjusted balances were stored in DB for previous month
-        let storedAdjusted: Record<string, number> | null = null;
-        const prevSetting = await dataService.getMessSettings(messId, prevMonth.id);
-        if (prevSetting?.adjustedBalances) {
-          storedAdjusted = prevSetting.adjustedBalances;
-        }
-
-        const { fetchMonthData: fetchMD, getAllMembersSummaryFromData: getAllMS } = await import('@/lib/calculations');
-        const monthData = await fetchMD(prevMonth.id, messId);
-        const prevSummaries = getAllMS(monthData);
-
-        const balances: Record<string, number> = {};
-        prevSummaries.forEach(s => {
-          if (storedAdjusted && storedAdjusted[s.userId] !== undefined) {
-            balances[s.userId] = storedAdjusted[s.userId];
-          } else {
-            balances[s.userId] = s.balance;
-          }
-        });
-        setPrevBalances(balances);
-      } catch (error) {
-        console.error('Error loading previous month balances:', error);
-      } finally {
-        setLoadingPrev(false);
-      }
-    };
-    loadPrevMonth();
-  }, [includePrevBalance, messId]);
-
-  // Save adjusted balances to DB when toggle is ON
-  useEffect(() => {
-    if (!includePrevBalance || !activeMonthId || !messId || Object.keys(prevBalances).length === 0) return;
-    const adjusted: Record<string, number> = {};
-    membersSummary.forEach(m => {
-      adjusted[m.userId] = m.balance + (prevBalances[m.userId] || 0);
-    });
-    dataService.updateMessSettings({ messId, monthId: activeMonthId, adjustedBalances: adjusted }).catch(() => {});
-  }, [includePrevBalance, membersSummary, prevBalances, activeMonthId, messId]);
-
-  // Adjusted summaries when toggle is on
-  const adjustedSummaries = useMemo(() => {
-    if (!includePrevBalance || Object.keys(prevBalances).length === 0) return membersSummary;
-    return membersSummary.map(member => ({
-      ...member,
-      balance: member.balance + (prevBalances[member.userId] || 0),
-    }));
-  }, [membersSummary, includePrevBalance, prevBalances]);
-
   const memberDues = useMemo(() => {
     if (!messId || !activeMonthId) return {};
     const totalMembers = members.length;
@@ -355,12 +295,113 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
     return dues;
   }, [messId, activeMonthId, members, calcCategories, calcExceptions, calcPayments]);
 
-  const handleToggleChange = (checked: boolean) => {
-    if (!isManager) return; // Members can't toggle
+  const handleToggleChange = async (checked: boolean) => {
+    if (!isManager) return;
     if (!checked && includePrevBalance) {
       setShowConfirmOff(true);
-    } else {
-      setIncludePrevBalance(checked);
+      return;
+    }
+    if (checked) {
+      await enablePrevBalance();
+    }
+  };
+
+  const enablePrevBalance = async () => {
+    if (!messId || !activeMonthId) return;
+    setLoadingPrev(true);
+
+    try {
+      // Get previous month balances
+      const allMonths = await dataService.getMonthsByMessId(messId);
+      const inactiveMonths = allMonths
+        .filter(m => !m.isActive)
+        .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      if (inactiveMonths.length === 0) {
+        toast({ title: 'No previous month found', variant: 'destructive' });
+        setLoadingPrev(false);
+        return;
+      }
+
+      const prevMonth = inactiveMonths[0];
+
+      // Check stored adjusted balances first
+      let storedAdjusted: Record<string, number> | null = null;
+      const prevSetting = await dataService.getMessSettings(messId, prevMonth.id);
+      if (prevSetting?.adjustedBalances) {
+        storedAdjusted = prevSetting.adjustedBalances;
+      }
+
+      const { fetchMonthData: fetchMD, getAllMembersSummaryFromData: getAllMS } = await import('@/lib/calculations');
+      const monthData = await fetchMD(prevMonth.id, messId);
+      const prevSummaries = getAllMS(monthData);
+
+      // First, remove any existing auto deposits to prevent duplicates
+      const currentDeposits = await dataService.getDepositsByMonthId(activeMonthId);
+      const existingAutoDeposits = currentDeposits.filter(d => d.note === AUTO_DEPOSIT_NOTE);
+      for (const dep of existingAutoDeposits) {
+        await dataService.deleteDeposit(dep.id);
+      }
+
+      // Create auto deposit entries for each member
+      const today = format(new Date(), 'yyyy-MM-dd');
+      for (const s of prevSummaries) {
+        let balance = 0;
+        if (storedAdjusted && storedAdjusted[s.userId] !== undefined) {
+          balance = storedAdjusted[s.userId];
+        } else {
+          balance = s.balance;
+        }
+        if (balance === 0) continue;
+
+        await dataService.createDeposit({
+          monthId: activeMonthId,
+          userId: s.userId,
+          amount: balance, // positive or negative
+          date: today,
+          note: AUTO_DEPOSIT_NOTE,
+        });
+      }
+
+      // Save toggle state
+      setIncludePrevBalance(true);
+      await dataService.updateMessSettings({ messId, monthId: activeMonthId, prevBalanceEnabled: true });
+
+      toast({ title: 'Previous month adjustments applied as deposits', variant: 'success' });
+
+      // Reload dashboard data to reflect new deposits
+      onDataChanged?.();
+    } catch (error) {
+      console.error('Error enabling prev balance:', error);
+      toast({ title: 'Error applying adjustments', variant: 'destructive' });
+    } finally {
+      setLoadingPrev(false);
+    }
+  };
+
+  const disablePrevBalance = async () => {
+    if (!messId || !activeMonthId) return;
+    setLoadingPrev(true);
+    setShowConfirmOff(false);
+
+    try {
+      // Delete only auto-generated deposits
+      const currentDeposits = await dataService.getDepositsByMonthId(activeMonthId);
+      const autoDeposits = currentDeposits.filter(d => d.note === AUTO_DEPOSIT_NOTE);
+      for (const dep of autoDeposits) {
+        await dataService.deleteDeposit(dep.id);
+      }
+
+      setIncludePrevBalance(false);
+      await dataService.updateMessSettings({ messId, monthId: activeMonthId, prevBalanceEnabled: false, adjustedBalances: null });
+
+      toast({ title: 'Previous month adjustments removed', variant: 'success' });
+      onDataChanged?.();
+    } catch (error) {
+      console.error('Error disabling prev balance:', error);
+      toast({ title: 'Error removing adjustments', variant: 'destructive' });
+    } finally {
+      setLoadingPrev(false);
     }
   };
 
@@ -375,7 +416,7 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
         <div className="flex items-center gap-2">
           <Users className="h-5 w-5 text-primary" />
           <h2 className="text-xl font-semibold text-foreground">All Members</h2>
-          <span className="text-sm text-muted-foreground">({adjustedSummaries.length} members)</span>
+          <span className="text-sm text-muted-foreground">({membersSummary.length} members)</span>
         </div>
         <div className="flex items-center gap-2 sm:ml-auto">
           <TooltipProvider>
@@ -421,23 +462,20 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
           <AlertDialogHeader>
             <AlertDialogTitle>Disable Previous Month Adjustment?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to disable Previous Month +/− adjustment? Member balances will show only the current month values.
+              This will remove all auto-generated deposit entries from the previous month adjustment. Manual deposits will remain unchanged.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={() => {
-              setIncludePrevBalance(false);
-              setPrevBalances({});
-              setShowConfirmOff(false);
-            }}>
+            <AlertDialogAction onClick={disablePrevBalance}>
+              {loadingPrev ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
               Disable
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {adjustedSummaries.length === 0 ? (
+      {membersSummary.length === 0 ? (
         <div className="text-center py-12 bg-card rounded-lg border border-border">
           <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-muted-foreground">No members in this mess yet.</p>
@@ -447,9 +485,9 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {adjustedSummaries.map((member) => {
-            const maxMeals = Math.max(...adjustedSummaries.map(m => m.totalMeals));
-            const topMembers = adjustedSummaries.filter(m => m.totalMeals === maxMeals);
+          {membersSummary.map((member) => {
+            const maxMeals = Math.max(...membersSummary.map(m => m.totalMeals));
+            const topMembers = membersSummary.filter(m => m.totalMeals === maxMeals);
             const isMealKing = maxMeals > 0 && topMembers.length === 1 && member.userId === topMembers[0].userId;
             return (
               <MemberSummaryCard
@@ -459,7 +497,7 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
                 shouldPay={memberDues[member.userId]?.shouldPay}
                 totalPaid={memberDues[member.userId]?.totalPaid}
                 isMealKing={isMealKing}
-                carryOverBalance={includePrevBalance ? (prevBalances[member.userId] || undefined) : undefined}
+                prevMonthActive={includePrevBalance}
               />
             );
           })}
