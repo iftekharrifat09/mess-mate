@@ -708,7 +708,22 @@ export default function MonthDetails() {
               </div>
             )}
 
-            {/* Cost Summary Cards */}
+            {/* Previous Month Deposit Card - visible only when toggle is ON */}
+            {prevMonthToggleOn && prevMonthDepositTotal !== 0 && (
+              <Card className="border-primary/20 bg-primary/5">
+                <CardContent className="pt-6">
+                  <div className="flex items-center gap-2 mb-2">
+                    <ArrowLeftRight className="h-5 w-5 text-primary" />
+                    <p className="text-sm font-medium text-muted-foreground">Total Deposit from Previous Month</p>
+                  </div>
+                  <p className={`text-2xl font-bold ${prevMonthDepositTotal >= 0 ? 'text-success' : 'text-destructive'}`}>
+                    {formatCurrency(prevMonthDepositTotal)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-1">Auto-generated via Previous Month +/− adjustment</p>
+                </CardContent>
+              </Card>
+            )}
+
             {monthSummary && (
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <Card>
