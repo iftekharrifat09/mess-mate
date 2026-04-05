@@ -33,7 +33,10 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import * as dataService from '@/lib/dataService';
 import { Deposit, User } from '@/types';
-import { Wallet, Plus, Trash2, Edit2, Loader2 } from 'lucide-react';
+import { Wallet, Plus, Trash2, Edit2, Loader2, ArrowLeftRight } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+
+const AUTO_DEPOSIT_NOTE = 'Auto Previous Month +/- Adjustment';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/calculations';
 import { Navigate } from 'react-router-dom';
