@@ -719,7 +719,7 @@ export default function MonthDetails() {
                   <p className={`text-2xl font-bold ${prevMonthDepositTotal >= 0 ? 'text-success' : 'text-destructive'}`}>
                     {formatCurrency(prevMonthDepositTotal)}
                   </p>
-                  <p className="text-xs text-muted-foreground mt-1">Auto-generated via Previous Month +/− adjustment</p>
+                  <p className="text-xs text-muted-foreground mt-1">Auto-generated via Previous Month Adjustment</p>
                 </CardContent>
               </Card>
             )}

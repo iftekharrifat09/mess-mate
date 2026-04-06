@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ChartContainer, ChartTooltip } from '@/components/ui/chart';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell, LabelList, ReferenceLine } from 'recharts';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Cell, ReferenceLine } from 'recharts';
 import { TrendingUp, Crown, Loader2, Calendar } from 'lucide-react';
 import * as dataService from '@/lib/dataService';
 import { fetchMonthData, calculateMonthSummaryFromData } from '@/lib/calculations';
@@ -279,14 +279,25 @@ export default function ManagerMealRateCard({ messId, members }: ManagerMealRate
           <>
             <div className="w-full overflow-x-auto">
               <ChartContainer config={chartConfig} className="min-h-[200px] max-h-[250px] w-full">
-                <BarChart data={data} margin={{ top: 16, right: 10, bottom: 50, left: 10 }}>
+                <BarChart data={data} margin={{ top: 16, right: 10, bottom: 80, left: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
                   <XAxis
                     dataKey="monthLabel"
-                    tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
-                    angle={-45}
-                    textAnchor="end"
-                    height={60}
+                    tick={({ x, y, payload }: any) => {
+                      const name = data.find(d => d.monthLabel === payload.value)?.managerName || '';
+                      return (
+                        <g transform={`translate(${x},${y})`}>
+                          <text x={0} y={0} dy={10} textAnchor="end" fill="hsl(var(--muted-foreground))" fontSize={9} transform="rotate(-35)">
+                            {payload.value}
+                          </text>
+                          <text x={0} y={0} dy={24} textAnchor="end" fill="hsl(var(--muted-foreground))" fontSize={8} transform="rotate(-35)" opacity={0.7}>
+                            {name}
+                          </text>
+                        </g>
+                      );
+                    }}
+                    height={80}
+                    interval={0}
                   />
                   <YAxis
                     tick={{ fontSize: 10, fill: 'hsl(var(--muted-foreground))' }}
@@ -335,11 +346,6 @@ export default function ManagerMealRateCard({ messId, members }: ManagerMealRate
                     {data.map((entry, index) => (
                       <Cell key={index} fill={getBarColor(entry.mealRate)} />
                     ))}
-                    <LabelList
-                      dataKey="managerName"
-                      position="top"
-                      style={{ fontSize: 9, fill: 'hsl(var(--muted-foreground))' }}
-                    />
                   </Bar>
                 </BarChart>
               </ChartContainer>
