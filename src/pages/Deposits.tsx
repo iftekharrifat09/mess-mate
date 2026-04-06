@@ -336,11 +336,19 @@ export default function Deposits() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {deposits.map(deposit => (
-                      <TableRow key={deposit.id}>
+                    {deposits.map(deposit => {
+                      const isAutoDeposit = deposit.note === AUTO_DEPOSIT_NOTE;
+                      const isNegative = deposit.amount < 0;
+                      const rowClass = isAutoDeposit
+                        ? isNegative
+                          ? 'bg-destructive/5 hover:bg-destructive/10'
+                          : 'bg-success/5 hover:bg-success/10'
+                        : '';
+                      return (
+                      <TableRow key={deposit.id} className={rowClass}>
                         <TableCell>{format(new Date(deposit.date), 'MMM dd, yyyy')}</TableCell>
                         <TableCell>{getMemberName(deposit.userId)}</TableCell>
-                        <TableCell className="font-semibold text-success">
+                        <TableCell className={`font-semibold ${isNegative ? 'text-destructive' : 'text-success'}`}>
                           {formatCurrency(deposit.amount)}
                         </TableCell>
                         <TableCell className="text-muted-foreground max-w-[100px] sm:max-w-[150px] md:max-w-[200px]">
@@ -378,7 +386,8 @@ export default function Deposits() {
                           </TableCell>
                         )}
                       </TableRow>
-                    ))}
+                      );
+                    })}
                   </TableBody>
                 </Table>
               </div>

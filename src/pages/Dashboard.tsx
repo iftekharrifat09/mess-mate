@@ -269,6 +269,7 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
   const [loadingPrev, setLoadingPrev] = useState(false);
   const [showConfirmOff, setShowConfirmOff] = useState(false);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [autoDepositAmounts, setAutoDepositAmounts] = useState<Record<string, number>>({});
 
   // Load toggle state from DB on mount
   useEffect(() => {
@@ -276,7 +277,17 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
     const loadSettings = async () => {
       try {
         const setting = await dataService.getMessSettings(messId, activeMonthId);
-        setIncludePrevBalance(setting?.prevBalanceEnabled || false);
+        const enabled = setting?.prevBalanceEnabled || false;
+        setIncludePrevBalance(enabled);
+        if (enabled) {
+          // Load auto deposit amounts for carry-over display
+          const deposits = await dataService.getDepositsByMonthId(activeMonthId);
+          const autoAmounts: Record<string, number> = {};
+          deposits.filter(d => d.note === AUTO_DEPOSIT_NOTE).forEach(d => {
+            autoAmounts[d.userId] = (autoAmounts[d.userId] || 0) + d.amount;
+          });
+          setAutoDepositAmounts(autoAmounts);
+        }
       } catch {}
       setSettingsLoaded(true);
     };
@@ -367,6 +378,14 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
       setIncludePrevBalance(true);
       await dataService.updateMessSettings({ messId, monthId: activeMonthId, prevBalanceEnabled: true });
 
+      // Update auto deposit amounts for carry-over display
+      const updatedDeposits = await dataService.getDepositsByMonthId(activeMonthId);
+      const autoAmounts: Record<string, number> = {};
+      updatedDeposits.filter(d => d.note === AUTO_DEPOSIT_NOTE).forEach(d => {
+        autoAmounts[d.userId] = (autoAmounts[d.userId] || 0) + d.amount;
+      });
+      setAutoDepositAmounts(autoAmounts);
+
       toast({ title: 'Previous month adjustments applied as deposits', variant: 'success' });
 
       // Reload dashboard data to reflect new deposits
@@ -393,6 +412,7 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
       }
 
       setIncludePrevBalance(false);
+      setAutoDepositAmounts({});
       await dataService.updateMessSettings({ messId, monthId: activeMonthId, prevBalanceEnabled: false, adjustedBalances: null });
 
       toast({ title: 'Previous month adjustments removed', variant: 'success' });
@@ -433,7 +453,7 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
                     htmlFor="prev-balance-toggle"
                     className="text-xs sm:text-sm font-medium text-muted-foreground cursor-pointer select-none"
                   >
-                    Previous Month +/−
+                    Previous Month Adjustment
                   </label>
                   {!isManager && (
                     <Lock className="h-3 w-3 text-muted-foreground" />
@@ -498,6 +518,7 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
                 totalPaid={memberDues[member.userId]?.totalPaid}
                 isMealKing={isMealKing}
                 prevMonthActive={includePrevBalance}
+                carryOverAmount={includePrevBalance ? (autoDepositAmounts[member.userId] || 0) : undefined}
               />
             );
           })}

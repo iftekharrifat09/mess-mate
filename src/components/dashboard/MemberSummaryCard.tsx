@@ -12,6 +12,7 @@ interface MemberSummaryCardProps {
   totalPaid?: number;
   isMealKing?: boolean;
   prevMonthActive?: boolean;
+  carryOverAmount?: number;
 }
 
 const getBalanceStatus = (balance: number) => {
@@ -20,7 +21,7 @@ const getBalanceStatus = (balance: number) => {
   return { status: 'success', color: 'border-success/50 bg-success/5', icon: 'text-success' };
 };
 
-export default function MemberSummaryCard({ summary, isCurrentUser = false, shouldPay, totalPaid, isMealKing = false, prevMonthActive }: MemberSummaryCardProps) {
+export default function MemberSummaryCard({ summary, isCurrentUser = false, shouldPay, totalPaid, isMealKing = false, prevMonthActive, carryOverAmount }: MemberSummaryCardProps) {
   const totalCost = summary.mealCost + summary.individualCost + summary.sharedCost;
   const balanceStatus = getBalanceStatus(summary.balance);
   const isFullyPaid = shouldPay !== undefined && totalPaid !== undefined && (shouldPay > 0 ? totalPaid >= shouldPay : true);
@@ -162,9 +163,16 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
           {/* Previous Month Carry-over indicator */}
           {prevMonthActive && (
             <div className="mt-3 pt-3 border-t border-border">
-              <div className="flex items-center gap-1.5 text-xs text-primary">
-                <ArrowLeftRight className="h-3 w-3" />
-                <span className="font-medium">Previous Month Carry-over Applied (via Deposits)</span>
+              <div className="flex items-center justify-between text-xs">
+                <div className="flex items-center gap-1.5 text-primary">
+                  <ArrowLeftRight className="h-3 w-3" />
+                  <span className="font-medium">Previous Month Carry-over</span>
+                </div>
+                {carryOverAmount !== undefined && carryOverAmount !== 0 && (
+                  <span className={`font-bold ${carryOverAmount > 0 ? 'text-success' : 'text-destructive'}`}>
+                    {carryOverAmount > 0 ? '+' : ''}{formatCurrency(carryOverAmount)}
+                  </span>
+                )}
               </div>
             </div>
           )}
