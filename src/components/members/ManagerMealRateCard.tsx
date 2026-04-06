@@ -272,13 +272,13 @@ export default function ManagerMealRateCard({ messId, members }: ManagerMealRate
           <span className="ml-auto font-medium">Avg: {formatCurrency(avgMealRate)}</span>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-1.5">
         {data.length === 0 ? (
           <p className="text-center text-muted-foreground py-6 text-sm">No data for {selectedYear}</p>
         ) : (
           <>
             <div className="w-full overflow-x-auto">
-              <ChartContainer config={chartConfig} className="min-h-[200px] max-h-[250px] w-full">
+              <ChartContainer config={chartConfig} className="min-h-[280px] max-h-[350px] w-full">
                 <BarChart data={data} margin={{ top: 16, right: 10, bottom: 80, left: 10 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
                   <XAxis
