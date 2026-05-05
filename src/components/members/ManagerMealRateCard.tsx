@@ -63,7 +63,18 @@ export default function ManagerMealRateCard({ messId, members }: ManagerMealRate
           const monthData = await fetchMonthData(month.id, messId);
           const summary = calculateMonthSummaryFromData(month.id, monthData);
 
-          const { managerId, segments } = findManagerForMonth(month, managerChanges, currentManagerId);
+          let { managerId, segments } = findManagerForMonth(month, managerChanges, currentManagerId);
+          // For the currently-active month, always trust the live mess.managerId
+          if (month.isActive && currentManagerId) {
+            managerId = currentManagerId;
+            const liveMgr = members.find(m => m.id === currentManagerId);
+            if (liveMgr && segments.length > 0) {
+              segments[segments.length - 1] = {
+                ...segments[segments.length - 1],
+                name: liveMgr.fullName,
+              };
+            }
+          }
           const manager = members.find(m => m.id === managerId);
 
           const monthStart = new Date(month.createdAt);
