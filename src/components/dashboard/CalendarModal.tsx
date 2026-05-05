@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
-import { ChevronLeft, ChevronRight, CalendarDays, MapPin, Loader2, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, CalendarDays, MapPin, Loader2, X, Compass, Navigation } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Dialog,
@@ -14,6 +14,7 @@ import {
   toBanglaDate,
   toBanglaDigits,
   toHijriDate,
+  toHijriDateSaudi,
   getDaysInMonth,
   getFirstDayOfMonth,
   ENGLISH_MONTHS,
@@ -137,6 +138,61 @@ export default function CalendarModal() {
 
   const todayBangla = useMemo(() => toBanglaDate(today), []);
   const todayHijri = useMemo(() => toHijriDate(today), []);
+  const todayHijriSaudi = useMemo(() => toHijriDateSaudi(today), []);
+
+  // Qibla state
+  const [qiblaOpen, setQiblaOpen] = useState(false);
+  const [deviceHeading, setDeviceHeading] = useState<number | null>(null);
+  const [headingPermission, setHeadingPermission] = useState<'idle' | 'requesting' | 'granted' | 'denied'>('idle');
+
+  // Bearing from current location to Kaaba (21.4225°N, 39.8262°E)
+  const qiblaBearing = useMemo(() => {
+    const toRad = (d: number) => (d * Math.PI) / 180;
+    const toDeg = (r: number) => (r * 180) / Math.PI;
+    const lat1 = toRad(location.lat);
+    const lat2 = toRad(21.4225);
+    const dLon = toRad(39.8262 - location.lon);
+    const y = Math.sin(dLon) * Math.cos(lat2);
+    const x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+    return (toDeg(Math.atan2(y, x)) + 360) % 360;
+  }, [location.lat, location.lon]);
+
+  // Listen for device orientation while Qibla dialog is open
+  useEffect(() => {
+    if (!qiblaOpen) return;
+    const handler = (e: DeviceOrientationEvent) => {
+      // Prefer absolute compass heading (iOS webkitCompassHeading), fallback to alpha
+      const wkHeading = (e as unknown as { webkitCompassHeading?: number }).webkitCompassHeading;
+      if (typeof wkHeading === 'number') {
+        setDeviceHeading(wkHeading);
+      } else if (e.alpha != null) {
+        setDeviceHeading(360 - e.alpha);
+      }
+    };
+    window.addEventListener('deviceorientationabsolute' as keyof WindowEventMap, handler as EventListener);
+    window.addEventListener('deviceorientation', handler);
+    return () => {
+      window.removeEventListener('deviceorientationabsolute' as keyof WindowEventMap, handler as EventListener);
+      window.removeEventListener('deviceorientation', handler);
+    };
+  }, [qiblaOpen]);
+
+  const requestCompass = useCallback(async () => {
+    setHeadingPermission('requesting');
+    const anyDOE = DeviceOrientationEvent as unknown as { requestPermission?: () => Promise<string> };
+    if (typeof anyDOE.requestPermission === 'function') {
+      try {
+        const res = await anyDOE.requestPermission();
+        setHeadingPermission(res === 'granted' ? 'granted' : 'denied');
+      } catch {
+        setHeadingPermission('denied');
+      }
+    } else {
+      setHeadingPermission('granted');
+    }
+  }, []);
+
+  const compassRotation = deviceHeading == null ? qiblaBearing : qiblaBearing - deviceHeading;
 
   const fetchPrayerTimes = useCallback(async (lat: number, lon: number) => {
     setPrayerLoading(true);
@@ -403,8 +459,21 @@ export default function CalendarModal() {
               </p>
               <p className="text-[0.55rem] sm:text-xs font-bold text-warning leading-tight truncate">
                 {todayHijri.month} {todayHijri.day}, {todayHijri.year} AH
+                <span className="ml-1 text-muted-foreground font-medium opacity-70">
+                  · Saudi: {todayHijriSaudi.month} {todayHijriSaudi.day}
+                </span>
               </p>
             </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => { setQiblaOpen(true); requestCompass(); }}
+              className="h-8 sm:h-9 gap-1.5 px-2 sm:px-3 border-info/40 text-info hover:bg-info/10 shrink-0"
+              title="Qibla direction"
+            >
+              <Compass className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+              <span className="text-[0.65rem] sm:text-xs font-bold">Qibla</span>
+            </Button>
           </motion.div>
 
           {(viewMonth !== today.getMonth() || viewYear !== today.getFullYear()) && (
@@ -677,5 +746,63 @@ export default function CalendarModal() {
         </motion.div>
       </DialogContent>
     </Dialog>
+    {/* Qibla Dialog */}
+    <Dialog open={qiblaOpen} onOpenChange={setQiblaOpen}>
+      <DialogContent className="max-w-sm p-0 overflow-hidden bg-card border-border">
+        <DialogHeader className="px-5 pt-5 pb-2">
+          <DialogTitle className="flex items-center gap-2 text-lg">
+            <Compass className="h-5 w-5 text-info" /> Qibla Direction
+          </DialogTitle>
+        </DialogHeader>
+        <div className="px-5 pb-5 flex flex-col items-center gap-4">
+          <div className="text-xs text-muted-foreground text-center">
+            From <span className="font-semibold text-foreground">{location.name}</span>
+          </div>
+          <div className="relative w-56 h-56 rounded-full border-4 border-info/30 bg-gradient-to-br from-secondary/40 to-secondary/10 flex items-center justify-center shadow-[0_0_30px_hsl(var(--info)/0.15)]">
+            {/* Cardinal letters */}
+            {[
+              { l: 'N', cls: 'top-2 left-1/2 -translate-x-1/2 text-destructive' },
+              { l: 'S', cls: 'bottom-2 left-1/2 -translate-x-1/2' },
+              { l: 'E', cls: 'right-2 top-1/2 -translate-y-1/2' },
+              { l: 'W', cls: 'left-2 top-1/2 -translate-y-1/2' },
+            ].map(c => (
+              <span key={c.l} className={`absolute text-xs font-bold text-muted-foreground ${c.cls}`}>{c.l}</span>
+            ))}
+            <motion.div
+              animate={{ rotate: compassRotation }}
+              transition={{ type: 'spring', stiffness: 80, damping: 15 }}
+              className="absolute inset-0 flex items-start justify-center pt-3"
+            >
+              <div className="flex flex-col items-center">
+                <Navigation className="h-8 w-8 text-info fill-info drop-shadow-[0_0_6px_hsl(var(--info)/0.6)]" />
+                <div className="w-0.5 h-16 bg-gradient-to-b from-info to-transparent" />
+              </div>
+            </motion.div>
+            <div className="absolute inset-0 flex items-center justify-center">
+              <div className="text-center">
+                <div className="text-3xl">🕋</div>
+                <div className="text-[0.6rem] text-muted-foreground mt-1">Kaaba</div>
+              </div>
+            </div>
+          </div>
+          <div className="text-center space-y-1">
+            <div className="text-2xl font-bold text-info tabular-nums">{qiblaBearing.toFixed(1)}°</div>
+            <div className="text-xs text-muted-foreground">Bearing from True North</div>
+            {deviceHeading != null && (
+              <div className="text-[0.65rem] text-success">✓ Live compass active</div>
+            )}
+            {headingPermission === 'denied' && (
+              <div className="text-[0.65rem] text-warning">Compass permission denied — showing static bearing</div>
+            )}
+            {headingPermission === 'idle' && deviceHeading == null && (
+              <Button size="sm" variant="outline" onClick={requestCompass} className="mt-2 h-7 text-xs">
+                Enable Live Compass
+              </Button>
+            )}
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
