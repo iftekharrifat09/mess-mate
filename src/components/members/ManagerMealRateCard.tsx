@@ -289,25 +289,27 @@ export default function ManagerMealRateCard({ messId, members }: ManagerMealRate
         ) : (
           <>
             <div className="w-full overflow-x-auto">
-              <ChartContainer config={chartConfig} className="min-h-[280px] max-h-[350px] w-full">
-                <BarChart data={data} margin={{ top: 16, right: 10, bottom: 80, left: 10 }}>
+              <div style={{ minWidth: Math.max(320, data.length * 70) }}>
+              <ChartContainer config={chartConfig} className="h-[300px] sm:h-[340px] w-full">
+                <BarChart data={data} margin={{ top: 16, right: 8, bottom: 90, left: 4 }}>
                   <CartesianGrid strokeDasharray="3 3" className="stroke-border/30" />
                   <XAxis
                     dataKey="monthLabel"
                     tick={({ x, y, payload }: any) => {
                       const name = data.find(d => d.monthLabel === payload.value)?.managerName || '';
+                      const shortName = name.length > 14 ? name.slice(0, 13) + '…' : name;
                       return (
                         <g transform={`translate(${x},${y})`}>
                           <text x={0} y={0} dy={10} textAnchor="end" fill="hsl(var(--muted-foreground))" fontSize={9} transform="rotate(-35)">
                             {payload.value}
                           </text>
                           <text x={0} y={0} dy={24} textAnchor="end" fill="hsl(var(--muted-foreground))" fontSize={8} transform="rotate(-35)" opacity={0.7}>
-                            {name}
+                            {shortName}
                           </text>
                         </g>
                       );
                     }}
-                    height={80}
+                    height={90}
                     interval={0}
                   />
                   <YAxis
@@ -360,6 +362,7 @@ export default function ManagerMealRateCard({ messId, members }: ManagerMealRate
                   </Bar>
                 </BarChart>
               </ChartContainer>
+              </div>
             </div>
 
             {/* Active/Inactive Summary Row */}
