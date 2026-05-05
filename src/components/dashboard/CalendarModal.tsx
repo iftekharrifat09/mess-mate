@@ -339,6 +339,7 @@ export default function CalendarModal() {
   const iftarLabel = isSelectedPast ? 'Iftar was' : isSelectedFuture ? 'Iftar will be' : 'Iftar time';
 
   return (
+    <>
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <motion.div
