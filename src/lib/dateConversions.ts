@@ -63,23 +63,53 @@ export function toBanglaDate(date: Date): { day: number; month: string; year: nu
   };
 }
 
-// Hijri (Islamic) calendar conversion - civil approximation
-export function toHijriDate(date: Date): { day: number; month: string; year: number } {
-  const hijriMonths = [
-    'Muh.',
-    'Saf.',
-    'Rab. I',
-    'Rab. II',
-    'Jum. I',
-    'Jum. II',
-    'Raj.',
-    'Sha.',
-    'Ram.',
-    'Shaw.',
-    'Dhul-Q.',
-    'Dhul-H.',
-  ];
+// Hijri month short names
+const HIJRI_SHORT = [
+  'Muh.', 'Saf.', 'Rab. I', 'Rab. II', 'Jum. I', 'Jum. II',
+  'Raj.', 'Sha.', 'Ram.', 'Shaw.', 'Dhul-Q.', 'Dhul-H.',
+];
 
+// Map Intl umalqura month names → 0-based index
+const UMALQURA_NAME_TO_INDEX: Record<string, number> = {
+  'Muharram': 0, 'Safar': 1,
+  "Rabi' I": 2, 'Rabiʻ I': 2, "Rabi' al-awwal": 2,
+  "Rabi' II": 3, 'Rabiʻ II': 3, "Rabi' al-thani": 3,
+  'Jumada I': 4, 'Jumada al-awwal': 4,
+  'Jumada II': 5, 'Jumada al-thani': 5,
+  'Rajab': 6, "Sha'ban": 7, 'Shaʻban': 7,
+  'Ramadan': 8, 'Shawwal': 9,
+  "Dhu al-Qi'dah": 10, 'Dhuʻl-Qiʻdah': 10, "Dhu al-Qa'dah": 10,
+  'Dhu al-Hijjah': 11, 'Dhuʻl-Hijjah': 11,
+};
+
+// Saudi (Umm al-Qura) Hijri date — uses Intl
+export function toHijriDateSaudi(date: Date): { day: number; month: string; year: number } {
+  try {
+    const parts = new Intl.DateTimeFormat('en-u-ca-islamic-umalqura', {
+      day: 'numeric', month: 'long', year: 'numeric',
+    }).formatToParts(date);
+    const day = parseInt(parts.find(p => p.type === 'day')?.value || '1', 10);
+    const monthName = parts.find(p => p.type === 'month')?.value || '';
+    const yearStr = (parts.find(p => p.type === 'year')?.value || '0').replace(/[^\d]/g, '');
+    const year = parseInt(yearStr, 10);
+    let idx = UMALQURA_NAME_TO_INDEX[monthName];
+    if (idx === undefined) {
+      const k = Object.keys(UMALQURA_NAME_TO_INDEX).find(n => monthName.startsWith(n));
+      idx = k ? UMALQURA_NAME_TO_INDEX[k] : 0;
+    }
+    return { day, month: HIJRI_SHORT[idx], year };
+  } catch {
+    return toHijriDateCivil(date);
+  }
+}
+
+// Default Hijri (Bangladesh / South Asia) — typically 1 day behind Saudi
+export function toHijriDate(date: Date): { day: number; month: string; year: number } {
+  return toHijriDateSaudi(new Date(date.getTime() - 24 * 60 * 60 * 1000));
+}
+
+// Civil arithmetic fallback
+function toHijriDateCivil(date: Date): { day: number; month: string; year: number } {
   const a = Math.floor((14 - (date.getMonth() + 1)) / 12);
   const y = date.getFullYear() + 4800 - a;
   const m = date.getMonth() + 1 + 12 * a - 3;
@@ -91,7 +121,6 @@ export function toHijriDate(date: Date): { day: number; month: string; year: num
     Math.floor(y / 100) +
     Math.floor(y / 400) -
     32045;
-
   const l = jd - 1948440 + 10632;
   const n = Math.floor((l - 1) / 10631);
   const l2 = l - 10631 * n + 354;
@@ -106,10 +135,9 @@ export function toHijriDate(date: Date): { day: number; month: string; year: num
   const hijriMonth = Math.floor((24 * l3) / 709);
   const hijriDay = l3 - Math.floor((709 * hijriMonth) / 24);
   const hijriYear = 30 * n + j - 30;
-
   return {
     day: hijriDay,
-    month: hijriMonths[hijriMonth - 1] || hijriMonths[0],
+    month: HIJRI_SHORT[hijriMonth - 1] || HIJRI_SHORT[0],
     year: hijriYear,
   };
 }
