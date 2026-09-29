@@ -21,6 +21,10 @@ import * as api from '@/lib/api';
 import { User } from '@/types';
 import { Users, UserPlus, Shield, Trash2, Mail, Phone, Crown, Loader2 } from 'lucide-react';
 import ManagerMealRateCard from '@/components/members/ManagerMealRateCard';
+import ServiceSettingDialog from '@/components/members/ServiceSettingDialog';
+import { getServiceStatus, serviceLabel } from '@/lib/serviceStatus';
+import { ServiceStatus } from '@/types';
+import { Settings2 } from 'lucide-react';
 
 export default function Members() {
   const { user, refreshUser } = useAuth();
@@ -32,6 +36,7 @@ export default function Members() {
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [promotingId, setPromotingId] = useState<string | null>(null);
+  const [serviceOpen, setServiceOpen] = useState(false);
 
   const isManager = user?.role === 'manager';
 
@@ -135,6 +140,21 @@ export default function Members() {
     }
   };
 
+  const handleServiceSubmit = async (ids: string[], status: ServiceStatus) => {
+    if (!user) return;
+    try {
+      await dataService.updateMembersServiceStatus(user.messId, ids, status);
+      setMembers(prev => prev.map(m => (ids.includes(m.id) ? { ...m, serviceStatus: status } : m)));
+      toast({ title: 'Service updated', description: `${ids.length} member(s) set to ${serviceLabel(status)}.`, variant: 'success' });
+    } catch (error) {
+      toast({ title: 'Error', description: 'Failed to update service status', variant: 'destructive' });
+      throw error;
+    }
+  };
+
+  const serviceBadgeClass = (s: ServiceStatus) =>
+    s === 'meals_only' ? 'border-primary/40 text-primary' : s === 'expenses_only' ? 'border-warning/50 text-warning' : 'border-success/40 text-success';
+
   if (isLoading) {
     return (
       <DashboardLayout>
@@ -155,6 +175,12 @@ export default function Members() {
               {isManager ? 'Manage your mess members' : 'View all mess members'}
             </p>
           </div>
+          {isManager && (
+            <Button size="sm" variant="outline" onClick={() => setServiceOpen(true)}>
+              <Settings2 className="h-4 w-4 sm:mr-1" />
+              <span className="hidden sm:inline">Member's Service Setting</span>
+            </Button>
+          )}
         </div>
 
         {/* Pending Requests - Manager Only */}
@@ -242,7 +268,14 @@ export default function Members() {
                         </div>
                       </div>
                     </div>
-                    
+
+                    <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
+                    <div className="flex flex-col items-start sm:items-end">
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Service</span>
+                      <Badge variant="outline" className={`text-xs ${serviceBadgeClass(getServiceStatus(member))}`}>
+                        {serviceLabel(getServiceStatus(member))}
+                      </Badge>
+                    </div>
                     {isManager && member.id !== user?.id && member.role !== 'manager' && (
                       <div className="flex gap-2 flex-shrink-0">
                         <AlertDialog>
@@ -296,12 +329,14 @@ export default function Members() {
                         </AlertDialog>
                       </div>
                     )}
+                    </div>
                   </div>
                 ))}
               </div>
             )}
           </CardContent>
         </Card>
+        <ServiceSettingDialog open={serviceOpen} onOpenChange={setServiceOpen} members={members} onSubmit={handleServiceSubmit} />
         {/* Manager & Meal Rate Graph */}
         {user?.messId && (
           <ManagerMealRateCard messId={user.messId} members={members} />
