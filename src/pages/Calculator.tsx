@@ -15,6 +15,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { toast } from '@/hooks/use-toast';
 import { User } from '@/types';
 import * as dataService from '@/lib/dataService';
+import { hasExpenseService } from '@/lib/serviceStatus';
 import { shouldUseBackend } from '@/lib/config';
 import * as api from '@/lib/api';
 import * as calcStore from '@/lib/calculatorStorage';
@@ -107,7 +108,7 @@ export default function CalculatorPage() {
         dataService.getMessMembers(messId),
         dataService.getActiveMonth(messId),
       ]);
-      setMembers(m || []);
+      setMembers((m || []).filter(hasExpenseService));
       if (month) setActiveMonthId(month.id);
       else setIsLoading(false);
     })();

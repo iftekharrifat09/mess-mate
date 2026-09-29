@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import * as dataService from '@/lib/dataService';
+import { hasMealService } from '@/lib/serviceStatus';
 import { Meal, User } from '@/types';
 import { Utensils, Plus, Trash2, Edit2, Minus, Coffee, Sun, Moon, Settings2, Calendar, CalendarIcon, Loader2 } from 'lucide-react';
 import { format, isToday, isBefore } from 'date-fns';
@@ -104,7 +105,7 @@ export default function Meals() {
         dataService.getActiveMonth(user.messId),
         dataService.getMessMembers(user.messId),
       ]);
-      setMembers(membersData);
+      setMembers(membersData.filter(hasMealService));
       if (activeMonth) {
         const mealsData = await dataService.getMealsByMonthId(activeMonth.id);
         setMeals(mealsData.sort((a, b) => 

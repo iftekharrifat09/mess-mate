@@ -34,6 +34,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import * as dataService from '@/lib/dataService';
+import { hasExpenseService } from '@/lib/serviceStatus';
 import { OtherCost, User } from '@/types';
 import { Receipt, Plus, Trash2, Edit2, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -95,7 +96,7 @@ export default function OtherCosts() {
           new Date(b.date).getTime() - new Date(a.date).getTime()
         ));
       }
-      setMembers(membersData);
+      setMembers(membersData.filter(hasExpenseService));
     } catch (error) {
       console.error('Error loading other costs:', error);
       toast({
