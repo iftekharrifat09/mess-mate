@@ -1267,6 +1267,11 @@ app.post("/api/meals", authMiddleware, async (req, res) => {
   try {
     const { monthId, userId, date, breakfast, lunch, dinner } = req.body;
 
+    const mealUser = await collections.users.findOne({ _id: new ObjectId(userId) });
+    if (mealUser && !memberHasService(mealUser, "meal")) {
+      return res.status(400).json({ success: false, error: "This member is set to Expenses Only and cannot have meals" });
+    }
+
     let existingMeal = await collections.meals.findOne({ monthId, userId, date });
 
     if (existingMeal) {
@@ -1541,6 +1546,12 @@ app.post("/api/other-costs", authMiddleware, async (req, res) => {
   try {
     const { monthId, userId, amount, date, description, isShared } = req.body;
 
+    if (!isShared && userId) {
+      const costUser = await collections.users.findOne({ _id: new ObjectId(userId) });
+      if (costUser && !memberHasService(costUser, "expense")) {
+        return res.status(400).json({ success: false, error: "This member is set to Meals Only and cannot have expenses" });
+      }
+    }
     const cost = {
       monthId,
       userId,
