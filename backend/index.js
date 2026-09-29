@@ -239,13 +239,22 @@ async function sendNotificationEmail(user, notification) {
 }
 
 // Notify Members Helper (with email for verified users)
-async function notifyMembers(messId, excludeUserId, notification) {
-  const members = await collections.users
+// service: 'meal' | 'expense' | undefined — filters recipients by member serviceStatus
+function memberHasService(member, service) {
+  const st = member.serviceStatus || "default";
+  if (service === "meal") return st !== "expenses_only";
+  if (service === "expense") return st !== "meals_only";
+  return true;
+}
+
+async function notifyMembers(messId, excludeUserId, notification, service) {
+  const allMembers = await collections.users
     .find({
       messId,
       _id: { $ne: new ObjectId(excludeUserId) },
     })
     .toArray();
+  const members = allMembers.filter((m) => memberHasService(m, service));
 
   const notifications = members.map((member) => ({
     userId: member._id.toString(),
@@ -945,6 +954,7 @@ app.get("/api/mess/:id/members", authMiddleware, async (req, res) => {
         messId: m.messId,
         isApproved: m.isApproved !== false,
         isActive: m.isActive !== false,
+        serviceStatus: m.serviceStatus || "default",
       })),
     });
   } catch (error) {
@@ -1080,6 +1090,7 @@ app.get("/api/mess/members", authMiddleware, async (req, res) => {
         messId: m.messId,
         isApproved: m.isApproved !== false,
         isActive: m.isActive !== false,
+        serviceStatus: m.serviceStatus || "default",
       })),
     });
   } catch (error) {
@@ -1255,6 +1266,11 @@ app.get("/api/meals", authMiddleware, async (req, res) => {
 app.post("/api/meals", authMiddleware, async (req, res) => {
   try {
     const { monthId, userId, date, breakfast, lunch, dinner } = req.body;
+
+    const mealUser = await collections.users.findOne({ _id: new ObjectId(userId) });
+    if (mealUser && !memberHasService(mealUser, "meal")) {
+      return res.status(400).json({ success: false, error: "This member is set to Expenses Only and cannot have meals" });
+    }
 
     let existingMeal = await collections.meals.findOne({ monthId, userId, date });
 
@@ -1458,7 +1474,7 @@ app.post("/api/meal-costs", authMiddleware, async (req, res) => {
       title: "Meal Cost Added",
       message: `${shopperName} spent ৳${amount} on bazar${description ? `: ${description}` : ""}`,
       type: "cost",
-    });
+    }, "meal");
 
     // Also notify the shopper specifically if they're not the manager
     if (userId !== req.userId) {
@@ -1530,6 +1546,12 @@ app.post("/api/other-costs", authMiddleware, async (req, res) => {
   try {
     const { monthId, userId, amount, date, description, isShared } = req.body;
 
+    if (!isShared && userId) {
+      const costUser = await collections.users.findOne({ _id: new ObjectId(userId) });
+      if (costUser && !memberHasService(costUser, "expense")) {
+        return res.status(400).json({ success: false, error: "This member is set to Meals Only and cannot have expenses" });
+      }
+    }
     const cost = {
       monthId,
       userId,
@@ -1547,7 +1569,7 @@ app.post("/api/other-costs", authMiddleware, async (req, res) => {
       title: "Other Cost Added",
       message: `A new cost of ৳${amount} has been added: ${description}`,
       type: "cost",
-    });
+    }, "expense");
 
     res.json({ success: true, cost: { id: result.insertedId.toString(), ...cost } });
   } catch (error) {
@@ -2078,6 +2100,26 @@ app.delete("/api/notes/:id", authMiddleware, async (req, res) => {
 // MEMBER MANAGEMENT ROUTES
 // ============================================
 
+// Bulk update member service status (manager only)
+app.put("/api/members/service-status", authMiddleware, async (req, res) => {
+  try {
+    if (req.user.role !== "manager") return res.status(403).json({ success: false, error: "Only manager can change service status" });
+    const { memberIds, serviceStatus } = req.body;
+    const allowed = ["default", "meals_only", "expenses_only"];
+    if (!Array.isArray(memberIds) || memberIds.length === 0 || !allowed.includes(serviceStatus)) {
+      return res.status(400).json({ success: false, error: "Invalid memberIds or serviceStatus" });
+    }
+    const ids = memberIds.map((id) => new ObjectId(id));
+    const result = await collections.users.updateMany(
+      { _id: { $in: ids }, messId: req.user.messId },
+      { $set: { serviceStatus, updatedAt: new Date() } }
+    );
+    res.json({ success: true, updated: result.modifiedCount });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to update service status" });
+  }
+});
+
 app.put("/api/members/:id", authMiddleware, async (req, res) => {
   try {
     const { role, isApproved, isActive } = req.body;
@@ -2476,7 +2518,7 @@ app.post("/api/calc-clear", authMiddleware, async (req, res) => {
       title: "Expense Data Cleared",
       message: mode === 'all' ? "All expense data has been cleared" : "Deposit and payment records have been cleared",
       type: "general",
-    });
+    }, "expense");
     
     res.json({ success: true, message: "Data cleared successfully" });
   } catch (error) {
@@ -2513,7 +2555,7 @@ app.post("/api/calc-categories", authMiddleware, async (req, res) => {
       title: "Expense Category Added",
       message: `New expense category "${title}" added (৳${totalCost})`,
       type: "general",
-    });
+    }, "expense");
 
     res.json({ success: true, category: { id: result.insertedId.toString(), ...doc } });
   } catch (error) {
@@ -2562,7 +2604,7 @@ app.delete("/api/calc-categories/:id", authMiddleware, async (req, res) => {
         title: "Expense Category Deleted",
         message: `Expense category "${cat.title}" has been removed`,
         type: "general",
-      });
+      }, "expense");
     }
 
     res.json({ success: true, message: "Category deleted" });
@@ -2658,7 +2700,7 @@ app.post("/api/calc-payments", authMiddleware, async (req, res) => {
       title: "Member Deposit Recorded",
       message: `${userName} deposited ৳${amount}${description ? ` - ${description}` : ""}`,
       type: "general",
-    });
+    }, "expense");
 
     res.json({ success: true, payment: { id: result.insertedId.toString(), ...doc } });
   } catch (error) {
@@ -2731,7 +2773,7 @@ app.post("/api/calc-bill-payments", authMiddleware, async (req, res) => {
       title: "Bill Payment Recorded",
       message: `৳${amount} paid for "${categoryName}"${description ? ` - ${description}` : ""}`,
       type: "general",
-    });
+    }, "expense");
 
     res.json({ success: true, billPayment: { id: result.insertedId.toString(), ...doc } });
   } catch (error) {

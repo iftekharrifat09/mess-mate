@@ -1,5 +1,6 @@
 import { MemberSummary, MonthSummary, User, Meal, Deposit, MealCost, OtherCost } from '@/types';
 import * as dataService from '@/lib/dataService';
+import { hasMealService, hasExpenseService } from '@/lib/serviceStatus';
 
 /**
  * Pre-fetched data bundle to avoid redundant API calls.
@@ -46,25 +47,29 @@ export function calculateMemberSummaryFromData(
   data: MonthData
 ): MemberSummary {
   const user = data.members.find(m => m.id === userId);
-  const userMeals = data.meals.filter(m => m.userId === userId);
+  const mealsOn = hasMealService(user);
+  const expensesOn = hasExpenseService(user);
+  const mealMemberIds = new Set(data.members.filter(hasMealService).map(m => m.id));
+  const validMeals = data.meals.filter(m => mealMemberIds.has(m.userId) || !data.members.some(u => u.id === m.userId));
+  const userMeals = mealsOn ? data.meals.filter(m => m.userId === userId) : [];
   const userDeposits = data.deposits.filter(d => d.userId === userId);
 
   const totalMeals = userMeals.reduce((sum, m) => sum + m.breakfast + m.lunch + m.dinner, 0);
   const totalDeposit = userDeposits.reduce((sum, d) => sum + d.amount, 0);
   const totalMealCost = data.mealCosts.reduce((sum, c) => sum + c.amount, 0);
-  const totalMonthMeals = data.meals.reduce((sum, m) => sum + m.breakfast + m.lunch + m.dinner, 0);
+  const totalMonthMeals = validMeals.reduce((sum, m) => sum + m.breakfast + m.lunch + m.dinner, 0);
   const mealRate = totalMonthMeals > 0 ? totalMealCost / totalMonthMeals : 0;
   const userMealCost = totalMeals * mealRate;
 
-  const individualCost = data.otherCosts
-    .filter(c => c.userId === userId && !c.isShared)
-    .reduce((sum, c) => sum + c.amount, 0);
+  const individualCost = expensesOn
+    ? data.otherCosts.filter(c => c.userId === userId && !c.isShared).reduce((sum, c) => sum + c.amount, 0)
+    : 0;
 
-  const memberCount = data.members.length || 1;
+  const memberCount = data.members.filter(hasExpenseService).length || 1;
   const totalSharedCost = data.otherCosts
     .filter(c => c.isShared)
     .reduce((sum, c) => sum + c.amount, 0);
-  const sharedCostPerMember = totalSharedCost / memberCount;
+  const sharedCostPerMember = expensesOn ? totalSharedCost / memberCount : 0;
 
   const totalCost = userMealCost + individualCost + sharedCostPerMember;
   const balance = totalDeposit - totalCost;
@@ -88,13 +93,15 @@ export function calculateMonthSummaryFromData(
   monthId: string,
   data: MonthData
 ): MonthSummary {
-  const totalMeals = data.meals.reduce((sum, m) => sum + m.breakfast + m.lunch + m.dinner, 0);
+  const excludedMeal = new Set(data.members.filter(m => !hasMealService(m)).map(m => m.id));
+  const excludedExpense = new Set(data.members.filter(m => !hasExpenseService(m)).map(m => m.id));
+  const totalMeals = data.meals.filter(m => !excludedMeal.has(m.userId)).reduce((sum, m) => sum + m.breakfast + m.lunch + m.dinner, 0);
   const totalDeposit = data.deposits.reduce((sum, d) => sum + d.amount, 0);
   const totalMealCost = data.mealCosts.reduce((sum, c) => sum + c.amount, 0);
   const mealRate = totalMeals > 0 ? totalMealCost / totalMeals : 0;
 
   const totalIndividualCost = data.otherCosts
-    .filter(c => !c.isShared)
+    .filter(c => !c.isShared && !excludedExpense.has(c.userId))
     .reduce((sum, c) => sum + c.amount, 0);
 
   const totalSharedCost = data.otherCosts

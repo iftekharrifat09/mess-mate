@@ -1,4 +1,5 @@
 export type UserRole = 'manager' | 'member';
+export type ServiceStatus = 'default' | 'meals_only' | 'expenses_only';
 
 export interface User {
   id: string;
@@ -10,6 +11,7 @@ export interface User {
   isApproved: boolean;
   isActive: boolean;
   emailVerified: boolean;
+  serviceStatus?: ServiceStatus;
   createdAt: string;
 }
 
