@@ -1674,3 +1674,22 @@ export async function syncPendingOfflineData(): Promise<void> {
     }
   }
 }
+
+// Bulk update members' service status (Default / Meals Only / Expenses Only)
+export async function updateMembersServiceStatus(
+  messId: string,
+  memberIds: string[],
+  serviceStatus: import('@/types').ServiceStatus
+): Promise<boolean> {
+  apiCache.invalidate(cacheKeys.messMembers(messId));
+  memberIds.forEach(id => apiCache.invalidate(cacheKeys.user(id)));
+  // Always keep local copy in sync
+  memberIds.forEach(id => storage.updateUser(id, { serviceStatus }));
+  if (shouldUseBackend()) {
+    const result = await api.updateServiceStatusAPI(memberIds, serviceStatus);
+    if (result.success) return true;
+    if (!result.usingLocalStorage) throw new Error(result.error || 'Failed to update service status');
+    showFallbackAlert();
+  }
+  return true;
+}
