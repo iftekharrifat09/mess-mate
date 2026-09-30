@@ -83,6 +83,7 @@ export function calculateMemberSummaryFromData(
     individualCost,
     sharedCost: sharedCostPerMember,
     balance,
+    serviceStatus: user?.serviceStatus || 'default',
   };
 }
 

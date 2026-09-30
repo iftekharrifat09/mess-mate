@@ -34,6 +34,7 @@ import {
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import * as dataService from '@/lib/dataService';
+import { hasMealService } from '@/lib/serviceStatus';
 import { MealCost, User } from '@/types';
 import { ShoppingCart, Plus, Trash2, Edit2, Wallet, Loader2 } from 'lucide-react';
 import { format } from 'date-fns';
@@ -95,7 +96,7 @@ export default function MealCosts() {
           new Date(b.date).getTime() - new Date(a.date).getTime()
         ));
       }
-      setMembers(membersData);
+      setMembers(membersData.filter(hasMealService));
     } catch (error) {
       console.error('Error loading meal costs:', error);
       toast({

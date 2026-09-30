@@ -131,6 +131,7 @@ export interface MemberSummary {
   individualCost: number;
   sharedCost: number;
   balance: number;
+  serviceStatus?: ServiceStatus;
 }
 
 export interface MonthSummary {
