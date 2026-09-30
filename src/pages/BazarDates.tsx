@@ -26,6 +26,7 @@ import { Calendar as CalendarComponent } from '@/components/ui/calendar';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import * as dataService from '@/lib/dataService';
+import { hasMealService } from '@/lib/serviceStatus';
 import { BazarDate, User } from '@/types';
 import { ShoppingCart, Plus, Edit2, Trash2, Calendar, CalendarIcon, AlertCircle, X, Loader2 } from 'lucide-react';
 import DeleteConfirmDialog from '@/components/DeleteConfirmDialog';
@@ -98,7 +99,7 @@ export default function BazarDates() {
       const dates = await dataService.getBazarDatesByMessId(user.messId);
       setBazarDates(dates);
       const membersData = await dataService.getMessMembers(user.messId);
-      setMembers(membersData);
+      setMembers(membersData.filter(hasMealService));
     } catch (error) {
       console.error('Error loading bazar dates:', error);
       toast({ title: 'Error', description: 'Failed to load bazar dates', variant: 'destructive' });

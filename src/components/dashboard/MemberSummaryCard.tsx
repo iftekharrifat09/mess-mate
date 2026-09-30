@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { MemberSummary } from '@/types';
 import { formatCurrency, formatNumber } from '@/lib/calculations';
+import { serviceLabel } from '@/lib/serviceStatus';
 import { Utensils, Wallet, Receipt, TrendingUp, TrendingDown, CheckCircle, Crown, ArrowLeftRight } from 'lucide-react';
 
 interface MemberSummaryCardProps {
@@ -26,8 +27,11 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
   const balanceStatus = getBalanceStatus(summary.balance);
   const isFullyPaid = shouldPay !== undefined && totalPaid !== undefined && (shouldPay > 0 ? totalPaid >= shouldPay : true);
   const overpaid = isFullyPaid && totalPaid !== undefined && shouldPay !== undefined && totalPaid > shouldPay ? totalPaid - shouldPay : 0;
-  const showUtility = shouldPay !== undefined && shouldPay > 0;
-  const showIndividualShared = summary.individualCost > 0 || summary.sharedCost > 0;
+  const svc = summary.serviceStatus || 'default';
+  const mealsOn = svc !== 'expenses_only';
+  const expensesOn = svc !== 'meals_only';
+  const showUtility = expensesOn && shouldPay !== undefined && shouldPay > 0;
+  const showIndividualShared = expensesOn && (summary.individualCost > 0 || summary.sharedCost > 0);
 
   return (
     <motion.div
@@ -66,6 +70,11 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
                   <span className="ml-2 text-xs font-normal text-primary">(You)</span>
                 )}
               </CardTitle>
+              {svc !== 'default' && (
+                <Badge variant="outline" className={`text-[10px] flex-shrink-0 ${svc === 'meals_only' ? 'border-primary/40 text-primary' : 'border-warning/50 text-warning'}`}>
+                  {serviceLabel(svc)}
+                </Badge>
+              )}
             </div>
             <motion.div
               initial={{ scale: 0 }}
@@ -88,6 +97,7 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
           </div>
         </CardHeader>
         <CardContent>
+          {mealsOn ? (
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="flex items-center gap-2">
               <div className="p-1.5 rounded-md bg-primary/10">
@@ -126,6 +136,9 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
               </div>
             </div>
           </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">Expenses only — not included in meals, deposits or bazar.</p>
+          )}
 
           {/* Utility Expenses - only show when > 0 */}
           {showUtility && (

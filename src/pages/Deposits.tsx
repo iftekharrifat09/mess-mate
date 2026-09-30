@@ -32,6 +32,7 @@ import {
 } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
 import * as dataService from '@/lib/dataService';
+import { hasMealService } from '@/lib/serviceStatus';
 import { Deposit, User } from '@/types';
 import { Wallet, Plus, Trash2, Edit2, Loader2, ArrowLeftRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
@@ -77,7 +78,7 @@ export default function Deposits() {
         dataService.getActiveMonth(user.messId),
         dataService.getMessMembers(user.messId),
       ]);
-      setMembers(membersData);
+      setMembers(membersData.filter(hasMealService));
       
       if (activeMonth) {
         const depositsData = await dataService.getDepositsByMonthId(activeMonth.id);
