@@ -38,7 +38,7 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ scale: 1.02, transition: { duration: 0.2 } }}
-      className={isMealKing ? 'relative' : ''}
+      className={`h-full ${isMealKing ? 'relative' : ''}`}
     >
       {isMealKing && (
         <>
@@ -47,15 +47,15 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
           <div className="absolute -inset-[1px] rounded-xl bg-gradient-to-r from-yellow-400/60 via-transparent to-yellow-400/60 pointer-events-none golden-shimmer overflow-hidden" />
         </>
       )}
-      <Card className={`relative shadow-card hover:shadow-card-hover transition-all ${balanceStatus.color} ${isCurrentUser ? 'ring-2 ring-primary' : ''} ${isMealKing ? 'border-yellow-400/60 bg-gradient-to-br from-yellow-50/40 via-card to-amber-50/30 dark:from-yellow-900/20 dark:via-card dark:to-amber-900/15 overflow-hidden' : ''}`}
+      <Card className={`relative flex h-full min-h-[236px] flex-col shadow-card hover:shadow-card-hover transition-all ${balanceStatus.color} ${isCurrentUser ? 'ring-2 ring-primary' : ''} ${isMealKing ? 'border-yellow-400/60 bg-gradient-to-br from-yellow-50/40 via-card to-amber-50/30 dark:from-yellow-900/20 dark:via-card dark:to-amber-900/15 overflow-hidden' : ''}`}
         style={isMealKing ? { boxShadow: '0 0 30px 6px rgba(234, 179, 8, 0.25), 0 0 80px 12px rgba(234, 179, 8, 0.1), inset 0 1px 0 rgba(255, 215, 0, 0.15)' } : undefined}
       >
         {isMealKing && (
           <div className="absolute inset-0 pointer-events-none rounded-xl" style={{ background: 'radial-gradient(ellipse at 30% 20%, rgba(255, 215, 0, 0.08) 0%, transparent 60%)' }} />
         )}
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2 min-w-0">
+        <CardHeader className="pb-3 p-4 sm:p-6 sm:pb-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2 min-w-0">
               {isMealKing && (
                 <motion.div
                   animate={{ rotate: [0, -8, 8, -5, 5, 0], scale: [1, 1.1, 1] }}
@@ -64,7 +64,7 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
                   <Crown className="h-6 w-6 flex-shrink-0" style={{ color: '#f59e0b', filter: 'drop-shadow(0 0 8px rgba(245,158,11,0.8)) drop-shadow(0 0 16px rgba(234,179,8,0.5))' }} />
                 </motion.div>
               )}
-              <CardTitle className="text-lg font-semibold truncate">
+              <CardTitle className="min-w-0 text-base sm:text-lg font-semibold break-words">
                 {summary.userName}
                 {isCurrentUser && (
                   <span className="ml-2 text-xs font-normal text-primary">(You)</span>
@@ -80,15 +80,15 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-              className="flex-shrink-0"
+              className="flex-shrink-0 pt-0.5"
             >
               {summary.balance >= 0 ? (
-                <div className={`flex items-center gap-1 ${balanceStatus.icon} text-sm font-semibold`}>
+                <div className={`flex items-center gap-1 ${balanceStatus.icon} text-sm font-semibold whitespace-nowrap`}>
                   <TrendingUp className="h-4 w-4" />
                   <span>+{formatCurrency(summary.balance)}</span>
                 </div>
               ) : (
-                <div className={`flex items-center gap-1 ${balanceStatus.icon} text-sm font-semibold`}>
+                <div className={`flex items-center gap-1 ${balanceStatus.icon} text-sm font-semibold whitespace-nowrap`}>
                   <TrendingDown className="h-4 w-4" />
                   <span>{formatCurrency(summary.balance)}</span>
                 </div>
@@ -96,7 +96,7 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
             </motion.div>
           </div>
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-1 flex-col p-4 pt-0 sm:p-6 sm:pt-0">
           {mealsOn ? (
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div className="flex items-center gap-2">
@@ -137,7 +137,9 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
             </div>
           </div>
           ) : (
-            <p className="text-xs text-muted-foreground">Expenses only — not included in meals, deposits or bazar.</p>
+            <div className="flex min-h-[88px] items-center rounded-md border border-warning/20 bg-warning/5 px-3 py-4">
+              <p className="text-xs leading-relaxed text-muted-foreground">Expenses only — not included in meals, deposits or bazar.</p>
+            </div>
           )}
 
           {/* Utility Expenses - only show when > 0 */}
@@ -145,7 +147,7 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
             <div className="mt-3 pt-3 border-t border-border">
               <div className="flex items-center justify-between text-xs">
                 <span className="text-muted-foreground">
-                  Utility Expenses: <span className="font-semibold text-foreground">{formatCurrency(shouldPay!)}</span>
+                  Utility Expenses: <span className="font-semibold text-foreground">{formatCurrency(shouldPay)}</span>
                 </span>
                 {isFullyPaid ? (
                   <div className="flex items-center gap-1.5">
@@ -156,8 +158,8 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
                       <span className="text-success font-semibold text-xs">+{formatCurrency(overpaid)}</span>
                     )}
                   </div>
-                ) : totalPaid !== undefined && shouldPay! > 0 ? (
-                  <span className="text-destructive font-semibold">Due: {formatCurrency(Math.max(0, shouldPay! - totalPaid))}</span>
+                ) : totalPaid !== undefined && shouldPay > 0 ? (
+                  <span className="text-destructive font-semibold whitespace-nowrap">Due: {formatCurrency(Math.max(0, shouldPay - totalPaid))}</span>
                 ) : null}
               </div>
             </div>
