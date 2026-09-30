@@ -168,7 +168,7 @@ export default function Members() {
   return (
     <DashboardLayout>
       <div className="space-y-6 animate-fade-in">
-        <div className="flex items-center justify-between">
+        <div className="flex items-start justify-between gap-3">
           <div>
             <h1 className="text-3xl font-bold text-foreground">Members</h1>
             <p className="text-muted-foreground">
@@ -224,31 +224,31 @@ export default function Members() {
 
         {/* Active Members */}
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+          <CardHeader className="p-4 sm:p-6">
+            <CardTitle className="flex items-center gap-2 text-xl sm:text-2xl">
               <Users className="h-5 w-5 text-primary" />
               Active Members ({members.length})
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-3 pb-3 sm:px-6 sm:pb-6">
             {members.length === 0 ? (
               <div className="text-center py-12">
                 <Users className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <p className="text-muted-foreground">No members yet.</p>
               </div>
             ) : (
-              <div className="space-y-3">
+              <div className="grid gap-3">
                 {members.map(member => (
-                  <div key={member.id} className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 bg-muted/30 rounded-lg">
-                    <div className="flex items-center gap-3 min-w-0 flex-1">
-                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                        <span className="text-primary font-semibold">
+                  <div key={member.id} className="grid gap-4 rounded-lg border border-border/60 bg-muted/30 p-4 transition-colors hover:bg-muted/50 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-center">
+                    <div className="flex items-start gap-3 min-w-0">
+                      <div className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full border border-border bg-background shadow-sm">
+                        <span className="text-sm font-semibold text-foreground">
                           {member.fullName.charAt(0).toUpperCase()}
                         </span>
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <p className="font-medium truncate">{member.fullName}</p>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <p className="max-w-full break-words font-semibold leading-tight">{member.fullName}</p>
                           {member.role === 'manager' && (
                             <Badge variant="default" className="text-xs flex-shrink-0">
                               <Crown className="h-3 w-3 mr-1" /> Manager
@@ -258,35 +258,35 @@ export default function Members() {
                             <Badge variant="secondary" className="text-xs flex-shrink-0">You</Badge>
                           )}
                         </div>
-                        <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1 truncate">
-                            <Mail className="h-3 w-3 flex-shrink-0" /> <span className="truncate">{member.email}</span>
+                        <div className="mt-1.5 flex flex-col gap-1 text-xs text-muted-foreground sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4">
+                          <span className="flex min-w-0 items-center gap-1.5">
+                            <Mail className="h-3.5 w-3.5 flex-shrink-0" /> <span className="break-all">{member.email}</span>
                           </span>
-                          <span className="flex items-center gap-1">
-                            <Phone className="h-3 w-3 flex-shrink-0" /> {member.phone}
+                          <span className="flex items-center gap-1.5">
+                            <Phone className="h-3.5 w-3.5 flex-shrink-0" /> {member.phone}
                           </span>
                         </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
-                    <div className="flex flex-col items-start sm:items-end">
-                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">Service</span>
-                      <Badge variant="outline" className={`text-xs ${serviceBadgeClass(getServiceStatus(member))}`}>
+                    <div className="flex items-end justify-between gap-3 border-t border-border/60 pt-3 lg:justify-end lg:border-0 lg:pt-0">
+                    <div className="flex min-w-0 flex-col items-start lg:items-end">
+                      <span className="text-[10px] font-medium uppercase text-muted-foreground">Service</span>
+                      <Badge variant="outline" className={`mt-1 max-w-full text-xs ${serviceBadgeClass(getServiceStatus(member))}`}>
                         {serviceLabel(getServiceStatus(member))}
                       </Badge>
                     </div>
                     {isManager && member.id !== user?.id && member.role !== 'manager' && (
-                      <div className="flex gap-2 flex-shrink-0">
+                      <div className="flex flex-shrink-0 gap-2">
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button size="sm" variant="outline" className="hidden sm:flex">
+                            <Button size="sm" variant="outline" className="hidden sm:inline-flex">
                               <Shield className="h-4 w-4 mr-1" />
                               Make Manager
                             </Button>
                           </AlertDialogTrigger>
                           <AlertDialogTrigger asChild>
-                            <Button size="sm" variant="outline" className="sm:hidden">
+                            <Button size="icon" variant="outline" className="h-9 w-9 sm:hidden" aria-label={`Make ${member.fullName} manager`} title="Make manager">
                               <Shield className="h-4 w-4" />
                             </Button>
                           </AlertDialogTrigger>
@@ -308,7 +308,7 @@ export default function Members() {
                         
                         <AlertDialog>
                           <AlertDialogTrigger asChild>
-                            <Button size="sm" variant="destructive">
+                            <Button size="icon" variant="destructive" className="h-9 w-9" aria-label={`Remove ${member.fullName}`} title="Remove member">
                               <Trash2 className="h-4 w-4" />
                             </Button>
                           </AlertDialogTrigger>

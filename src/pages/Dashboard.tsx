@@ -43,6 +43,7 @@ import {
 } from '@/components/ui/tooltip';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { hasExpenseService } from '@/lib/serviceStatus';
 
 const AUTO_DEPOSIT_NOTE = 'Auto Previous Month +/- Adjustment';
 
@@ -74,6 +75,7 @@ export default function Dashboard() {
   const [isPending, startTransition] = useTransition();
   const headerRef = useRef<HTMLDivElement>(null);
   const dataLoadedRef = useRef(false);
+  const expenseMembers = useMemo(() => members.filter(hasExpenseService), [members]);
 
   const loadDashboardData = useCallback(async () => {
     if (!user || dataLoadedRef.current) return;
@@ -203,8 +205,8 @@ export default function Dashboard() {
               <PersonalInfoCard
                 summary={personalSummary}
                 utilityExpenses={(() => {
-                  if (!user?.messId || !monthSummary?.monthId) return undefined;
-                  return calcStore.calculateMemberDues(calcCategories, calcExceptions, members.length, user.id);
+                  if (!user?.messId || !monthSummary?.monthId || !hasExpenseService(user)) return undefined;
+                  return calcStore.calculateMemberDues(calcCategories, calcExceptions, expenseMembers.length, user.id);
                 })()}
                 utilityPaid={(() => {
                   if (!user?.messId || !monthSummary?.monthId) return undefined;
@@ -296,9 +298,10 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
 
   const memberDues = useMemo(() => {
     if (!messId || !activeMonthId) return {};
-    const totalMembers = members.length;
+    const expenseMembers = members.filter(hasExpenseService);
+    const totalMembers = expenseMembers.length;
     const dues: Record<string, { shouldPay: number; totalPaid: number }> = {};
-    for (const m of members) {
+    for (const m of expenseMembers) {
       const shouldPay = calcStore.calculateMemberDues(calcCategories, calcExceptions, totalMembers, m.id);
       const totalPaid = calcPayments.filter(p => p.userId === m.id).reduce((s, p) => s + p.amount, 0);
       dues[m.id] = { shouldPay, totalPaid };
@@ -504,7 +507,7 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 items-stretch">
           {membersSummary.map((member) => {
             const maxMeals = Math.max(...membersSummary.map(m => m.totalMeals));
             const topMembers = membersSummary.filter(m => m.totalMeals === maxMeals);
