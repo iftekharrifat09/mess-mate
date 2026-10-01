@@ -507,7 +507,7 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
           )}
         </div>
       ) : (
-        <div className="grid grid-cols-1 items-start gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 items-stretch gap-4 md:grid-cols-2 xl:grid-cols-3">
           {membersSummary.map((member) => {
             const maxMeals = Math.max(...membersSummary.map(m => m.totalMeals));
             const topMembers = membersSummary.filter(m => m.totalMeals === maxMeals);
