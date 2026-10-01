@@ -205,7 +205,7 @@ export default function Dashboard() {
               <PersonalInfoCard
                 summary={personalSummary}
                 utilityExpenses={(() => {
-                  if (!user?.messId || !monthSummary?.monthId || !hasExpenseService(user)) return undefined;
+                  if (!user?.messId || !monthSummary?.monthId || !hasExpenseService(members.find(member => member.id === user.id) || user)) return undefined;
                   return calcStore.calculateMemberDues(calcCategories, calcExceptions, expenseMembers.length, user.id);
                 })()}
                 utilityPaid={(() => {
