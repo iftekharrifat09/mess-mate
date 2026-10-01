@@ -54,7 +54,7 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
           <div className="absolute inset-0 pointer-events-none rounded-xl" style={{ background: 'radial-gradient(ellipse at 30% 20%, rgba(255, 215, 0, 0.08) 0%, transparent 60%)' }} />
         )}
         <CardHeader className="pb-3 p-4 sm:p-6 sm:pb-3">
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-wrap items-start justify-between gap-2">
             <div className="flex flex-wrap items-center gap-2 min-w-0">
               {isMealKing && (
                 <motion.div
@@ -80,7 +80,7 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
               initial={{ scale: 0 }}
               animate={{ scale: 1 }}
               transition={{ type: 'spring', stiffness: 500, damping: 30 }}
-              className="flex-shrink-0 pt-0.5"
+              className="flex-shrink-0 pt-0.5 sm:ml-auto"
             >
               {summary.balance >= 0 ? (
                 <div className={`flex items-center gap-1 ${balanceStatus.icon} text-sm font-semibold whitespace-nowrap`}>
@@ -145,7 +145,7 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
           {/* Utility Expenses - only show when > 0 */}
           {showUtility && (
             <div className="mt-3 pt-3 border-t border-border">
-              <div className="flex items-center justify-between text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                 <span className="text-muted-foreground">
                   Utility Expenses: <span className="font-semibold text-foreground">{formatCurrency(shouldPay)}</span>
                 </span>
@@ -168,7 +168,7 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
           {/* Individual & Shared - only show when at least one > 0 */}
           {showIndividualShared && (
             <div className="mt-3 pt-3 border-t border-border">
-              <div className="flex justify-between text-xs">
+              <div className="flex flex-wrap justify-between gap-2 text-xs">
                 <span className="text-muted-foreground">Individual: {formatCurrency(summary.individualCost)}</span>
                 <span className="text-muted-foreground">Shared: {formatCurrency(summary.sharedCost)}</span>
               </div>
@@ -178,7 +178,7 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
           {/* Previous Month Carry-over indicator */}
           {prevMonthActive && (
             <div className="mt-3 pt-3 border-t border-border">
-              <div className="flex items-center justify-between text-xs">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs">
                 <div className="flex items-center gap-1.5 text-primary">
                   <ArrowLeftRight className="h-3 w-3" />
                   <span className="font-medium">Previous Month Carry-over</span>
