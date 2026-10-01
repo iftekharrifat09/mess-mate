@@ -47,7 +47,7 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
           <div className="absolute -inset-[1px] rounded-xl bg-gradient-to-r from-yellow-400/60 via-transparent to-yellow-400/60 pointer-events-none golden-shimmer overflow-hidden" />
         </>
       )}
-      <Card className={`relative h-full shadow-card hover:shadow-card-hover transition-all ${balanceStatus.color} ${isCurrentUser ? 'ring-2 ring-primary' : ''} ${isMealKing ? 'border-yellow-400/60 bg-gradient-to-br from-yellow-50/40 via-card to-amber-50/30 dark:from-yellow-900/20 dark:via-card dark:to-amber-900/15 overflow-hidden' : ''}`}
+      <Card className={`relative flex h-full flex-col shadow-card hover:shadow-card-hover transition-all ${balanceStatus.color} ${isCurrentUser ? 'ring-2 ring-primary' : ''} ${isMealKing ? 'border-yellow-400/60 bg-gradient-to-br from-yellow-50/40 via-card to-amber-50/30 dark:from-yellow-900/20 dark:via-card dark:to-amber-900/15 overflow-hidden' : ''}`}
         style={isMealKing ? { boxShadow: '0 0 30px 6px rgba(234, 179, 8, 0.25), 0 0 80px 12px rgba(234, 179, 8, 0.1), inset 0 1px 0 rgba(255, 215, 0, 0.15)' } : undefined}
       >
         {isMealKing && (
@@ -96,9 +96,9 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
             </motion.div>
           </div>
         </CardHeader>
-        <CardContent className="p-4 pt-0 sm:p-6 sm:pt-0">
+        <CardContent className="flex flex-1 flex-col p-4 pt-0 sm:p-6 sm:pt-0">
           {mealsOn ? (
-          <div className="grid grid-cols-2 gap-3 text-sm">
+          <div className="grid flex-1 grid-cols-2 content-start gap-3 text-sm">
             <div className="flex items-center gap-2">
               <div className="p-1.5 rounded-md bg-primary/10">
                 <Utensils className="h-3.5 w-3.5 text-primary" />
@@ -137,7 +137,7 @@ export default function MemberSummaryCard({ summary, isCurrentUser = false, shou
             </div>
           </div>
           ) : (
-            <div className="flex min-h-[88px] items-center rounded-md border border-warning/20 bg-warning/5 px-3 py-4">
+            <div className="flex flex-1 items-center rounded-md border border-warning/20 bg-warning/5 px-3 py-4">
               <p className="text-xs leading-relaxed text-muted-foreground">Expenses only — not included in meals, deposits or bazar.</p>
             </div>
           )}
