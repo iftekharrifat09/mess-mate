@@ -2617,11 +2617,13 @@ app.post("/api/notify-bulk-meals", authMiddleware, async (req, res) => {
 
 app.delete("/api/months/:id", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
     const monthId = req.params.id;
     
     // Protect the most recent previous month from deletion
     const month = await collections.months.findOne({ _id: new ObjectId(monthId) });
     if (!month) return res.status(404).json({ success: false, error: "Month not found" });
+    if (month.messId !== req.user.messId) return res.status(403).json({ success: false, error: "Month is not in your mess" });
     
     if (!month.isActive) {
       // Find all inactive months for this mess, sorted by most recent
@@ -2644,10 +2646,17 @@ app.delete("/api/months/:id", authMiddleware, async (req, res) => {
       collections.deposits.deleteMany({ monthId }),
       collections.mealCosts.deleteMany({ monthId }),
       collections.otherCosts.deleteMany({ monthId }),
+      collections.messSettings.deleteMany({ messId: req.user.messId, monthId }),
+      collections.calcPayments.deleteMany({ messId: req.user.messId, monthId }),
+      collections.calcBillPayments.deleteMany({ messId: req.user.messId, monthId }),
     ]);
+    const categories = await collections.calcCategories.find({ messId: req.user.messId, monthId }).project({ _id: 1 }).toArray();
+    await collections.calcExceptions.deleteMany({ categoryId: { $in: categories.map((category) => category._id.toString()) } });
+    await collections.calcCategories.deleteMany({ messId: req.user.messId, monthId });
     
     // Delete the month itself
     await collections.months.deleteOne({ _id: new ObjectId(monthId) });
+    await writeActivityLog(req.user.messId, "month_deleted", `${month.name} was deleted`, { monthId });
     
     res.json({ success: true, message: "Month and all associated data deleted" });
   } catch (error) {
@@ -3000,8 +3009,9 @@ app.delete("/api/calc-bill-payments/:id", authMiddleware, async (req, res) => {
 // ============================================
 
 // Get activity logs by mess ID
-app.get("/api/activity-logs/:messId", authenticateToken, async (req, res) => {
+app.get("/api/activity-logs/:messId", authMiddleware, async (req, res) => {
   try {
+    if (req.params.messId !== req.user.messId) return res.status(403).json({ success: false, error: "Access denied" });
     const logs = await collections.activityLogs
       .find({ messId: req.params.messId })
       .sort({ createdAt: -1 })
@@ -3013,9 +3023,10 @@ app.get("/api/activity-logs/:messId", authenticateToken, async (req, res) => {
 });
 
 // Create activity log
-app.post("/api/activity-logs", authenticateToken, async (req, res) => {
+app.post("/api/activity-logs", authMiddleware, async (req, res) => {
   try {
     const { messId, type, description } = req.body;
+    if (messId !== req.user.messId) return res.status(403).json({ success: false, error: "Access denied" });
     const result = await collections.activityLogs.insertOne({
       messId,
       type,
@@ -3030,9 +3041,11 @@ app.post("/api/activity-logs", authenticateToken, async (req, res) => {
 });
 
 // Delete activity log
-app.delete("/api/activity-logs/:id", authenticateToken, async (req, res) => {
+app.delete("/api/activity-logs/:id", authMiddleware, async (req, res) => {
   try {
-    await collections.activityLogs.deleteOne({ _id: new ObjectId(req.params.id) });
+    if (!requireManager(req, res)) return;
+    const result = await collections.activityLogs.deleteOne({ _id: new ObjectId(req.params.id), messId: req.user.messId });
+    if (!result.deletedCount) return res.status(404).json({ success: false, error: "Activity log not found" });
     res.json({ success: true, message: "Activity log deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to delete activity log" });
@@ -3517,6 +3530,7 @@ app.post("/api/chat/messages/:id/react", authMiddleware, async (req, res) => {
 // Bulk delete bazar dates (past or upcoming)
 app.post("/api/bazar-dates/bulk-delete", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
     const { type } = req.body; // 'past' or 'upcoming'
     const today = new Date().toISOString().split('T')[0];
     
@@ -3545,6 +3559,7 @@ app.post("/api/bazar-dates/bulk-delete", authMiddleware, async (req, res) => {
 app.get("/api/mess-settings", authMiddleware, async (req, res) => {
   try {
     const messId = req.query.messId || req.user.messId;
+    if (messId !== req.user.messId) return res.status(403).json({ success: false, error: "Access denied" });
     const monthId = req.query.monthId;
     if (!monthId) return res.status(400).json({ success: false, error: "monthId required" });
     const setting = await collections.messSettings.findOne({ messId, monthId });
@@ -3562,6 +3577,7 @@ app.put("/api/mess-settings", authMiddleware, async (req, res) => {
     }
     const { messId, monthId, prevBalanceEnabled, adjustedBalances } = req.body;
     const mId = messId || req.user.messId;
+    if (mId !== req.user.messId) return res.status(403).json({ success: false, error: "Access denied" });
     if (!monthId) return res.status(400).json({ success: false, error: "monthId required" });
 
     const updateData = { updatedAt: new Date() };
@@ -3576,6 +3592,62 @@ app.put("/api/mess-settings", authMiddleware, async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to update settings" });
+  }
+});
+
+// Replace only previous-month auto adjustments and persist the toggle as one request.
+app.put("/api/mess-settings/previous-month-adjustment", authMiddleware, async (req, res) => {
+  try {
+    if (!requireManager(req, res)) return;
+    const { monthId, enabled, adjustments = [] } = req.body;
+    const month = ObjectId.isValid(monthId)
+      ? await collections.months.findOne({ _id: new ObjectId(monthId), messId: req.user.messId })
+      : null;
+    if (!month || typeof enabled !== "boolean" || !Array.isArray(adjustments)) {
+      return res.status(400).json({ success: false, error: "Valid month, enabled state, and adjustments are required" });
+    }
+
+    const unique = new Map();
+    for (const adjustment of adjustments) {
+      const amount = Number(adjustment.amount);
+      if (!ObjectId.isValid(adjustment.userId) || !Number.isFinite(amount)) {
+        return res.status(400).json({ success: false, error: "Invalid adjustment" });
+      }
+      const member = await collections.users.findOne({ _id: new ObjectId(adjustment.userId), messId: req.user.messId, isActive: { $ne: false } });
+      if (!member || !memberHasService(member, "meal")) {
+        return res.status(400).json({ success: false, error: "Adjustment member must have meal service" });
+      }
+      unique.set(adjustment.userId, amount);
+    }
+
+    await collections.deposits.deleteMany({
+      messId: req.user.messId,
+      monthId,
+      $or: [{ source: AUTO_ADJUSTMENT_SOURCE }, { source: { $exists: false }, note: AUTO_ADJUSTMENT_NOTE }],
+    });
+    if (enabled) {
+      const date = new Date().toISOString().split("T")[0];
+      const docs = [...unique.entries()].filter(([, amount]) => amount !== 0).map(([userId, amount]) => ({
+        messId: req.user.messId,
+        monthId,
+        userId,
+        amount,
+        date,
+        note: AUTO_ADJUSTMENT_NOTE,
+        source: AUTO_ADJUSTMENT_SOURCE,
+        createdAt: new Date(),
+      }));
+      if (docs.length) await collections.deposits.insertMany(docs);
+    }
+    await collections.messSettings.updateOne(
+      { messId: req.user.messId, monthId },
+      { $set: { messId: req.user.messId, monthId, prevBalanceEnabled: enabled, updatedAt: new Date() } },
+      { upsert: true }
+    );
+    const deposits = await collections.deposits.find({ messId: req.user.messId, monthId, source: AUTO_ADJUSTMENT_SOURCE }).toArray();
+    res.json({ success: true, deposits: transformDocs(deposits) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to update previous month adjustment" });
   }
 });
 
