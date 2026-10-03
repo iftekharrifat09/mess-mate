@@ -1625,6 +1625,52 @@ export async function updateMessSettings(data: { messId: string; monthId: string
   return false;
 }
 
+export async function updatePreviousMonthAdjustment(
+  messId: string,
+  monthId: string,
+  enabled: boolean,
+  adjustments: Array<{ userId: string; amount: number }>,
+): Promise<boolean> {
+  apiCache.invalidate(cacheKeys.deposits(monthId));
+
+  if (shouldUseBackend()) {
+    const result = await api.updatePreviousMonthAdjustmentAPI({ monthId, enabled, adjustments });
+    if (result.success) {
+      storage.upsertLocalMessSetting({ messId, monthId, prevBalanceEnabled: enabled, pendingSync: false });
+      return true;
+    }
+    if (!result.usingLocalStorage) throw new Error(result.error || 'Failed to update previous month adjustment');
+    showFallbackAlert();
+  }
+
+  const autoSource = 'previous_month_adjustment';
+  storage.saveDeposits(
+    storage.getDeposits().filter(deposit =>
+      deposit.monthId !== monthId
+      || (deposit.source !== autoSource && deposit.note !== 'Auto Previous Month +/- Adjustment'),
+    ),
+  );
+
+  if (enabled) {
+    const date = new Date().toISOString().split('T')[0];
+    adjustments.forEach(({ userId, amount }) => {
+      if (Number.isFinite(amount) && amount !== 0) {
+        storage.createDeposit({
+          monthId,
+          userId,
+          amount,
+          date,
+          note: 'Auto Previous Month +/- Adjustment',
+          source: autoSource,
+        });
+      }
+    });
+  }
+
+  storage.upsertLocalMessSetting({ messId, monthId, prevBalanceEnabled: enabled, pendingSync: true });
+  return true;
+}
+
 export async function syncPendingOfflineData(): Promise<void> {
   if (!shouldUseBackend()) return;
 
