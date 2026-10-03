@@ -41,6 +41,9 @@ app.use(express.json());
 const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/messDB";
 const JWT_SECRET = process.env.JWT_SECRET || "your-super-secret-jwt-key-change-this";
 const PORT = process.env.PORT || 5000;
+const AUTO_ADJUSTMENT_NOTE = "Auto Previous Month +/- Adjustment";
+const AUTO_ADJUSTMENT_SOURCE = "previous_month_adjustment";
+const SERVICE_STATUSES = ["default", "meals_only", "expenses_only"];
 
 let db;
 let collections = {};
@@ -105,6 +108,27 @@ async function connectToDatabase() {
       messSettings: db.collection("messSettings"),
     };
 
+    // Idempotent data upgrade for records created before service settings and
+    // explicit automatic-deposit sources were introduced.
+    await collections.users.updateMany(
+      { serviceStatus: { $nin: SERVICE_STATUSES } },
+      { $set: { serviceStatus: "default" } }
+    );
+    await collections.deposits.updateMany(
+      { note: AUTO_ADJUSTMENT_NOTE, source: { $exists: false } },
+      { $set: { source: AUTO_ADJUSTMENT_SOURCE } }
+    );
+
+    // Remove legacy duplicate bazar assignments before installing the
+    // database-level one-date/one-member constraint.
+    const duplicateBazarDates = await collections.bazarDates.aggregate([
+      { $group: { _id: { messId: "$messId", date: "$date" }, ids: { $push: "$_id" }, count: { $sum: 1 } } },
+      { $match: { count: { $gt: 1 } } },
+    ]).toArray();
+    for (const duplicate of duplicateBazarDates) {
+      await collections.bazarDates.deleteMany({ _id: { $in: duplicate.ids.slice(1) } });
+    }
+
     // Create indexes
     await Promise.all([
       collections.users.createIndex({ email: 1 }, { unique: true }),
@@ -122,7 +146,7 @@ async function connectToDatabase() {
       collections.joinRequests.createIndex({ messId: 1 }),
       collections.joinRequests.createIndex({ userId: 1 }),
       collections.notices.createIndex({ messId: 1 }),
-      collections.bazarDates.createIndex({ messId: 1 }),
+      collections.bazarDates.createIndex({ messId: 1, date: 1 }, { unique: true }),
       collections.notifications.createIndex({ userId: 1 }),
       collections.notes.createIndex({ messId: 1 }),
       collections.otps.createIndex({ email: 1 }),
@@ -245,6 +269,29 @@ function memberHasService(member, service) {
   if (service === "meal") return st !== "expenses_only";
   if (service === "expense") return st !== "meals_only";
   return true;
+}
+
+function requireManager(req, res) {
+  if (req.user.role !== "manager") {
+    res.status(403).json({ success: false, error: "Only the manager can perform this action" });
+    return false;
+  }
+  return true;
+}
+
+async function findOwnedResource(collection, id, messId) {
+  if (!ObjectId.isValid(id)) return null;
+  return collection.findOne({ _id: new ObjectId(id), messId });
+}
+
+async function writeActivityLog(messId, type, description, metadata = undefined) {
+  await collections.activityLogs.insertOne({
+    messId,
+    type,
+    description,
+    ...(metadata ? { metadata } : {}),
+    createdAt: new Date(),
+  });
 }
 
 async function notifyMembers(messId, excludeUserId, notification, service) {
