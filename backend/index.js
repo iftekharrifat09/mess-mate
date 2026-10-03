@@ -1384,6 +1384,13 @@ app.post("/api/meals", authMiddleware, async (req, res) => {
 
 app.put("/api/meals/:id", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
+    const existing = await findOwnedResource(collections.meals, req.params.id, req.user.messId);
+    if (!existing) return res.status(404).json({ success: false, error: "Meal not found" });
+    const mealUser = await collections.users.findOne({ _id: new ObjectId(existing.userId), messId: req.user.messId });
+    if (!mealUser || !memberHasService(mealUser, "meal")) {
+      return res.status(400).json({ success: false, error: "This member cannot have meals" });
+    }
     const { breakfast, lunch, dinner } = req.body;
     await collections.meals.updateOne(
       { _id: new ObjectId(req.params.id) },
@@ -1402,7 +1409,9 @@ app.put("/api/meals/:id", authMiddleware, async (req, res) => {
 
 app.delete("/api/meals/:id", authMiddleware, async (req, res) => {
   try {
-    await collections.meals.deleteOne({ _id: new ObjectId(req.params.id) });
+    if (!requireManager(req, res)) return;
+    const result = await collections.meals.deleteOne({ _id: new ObjectId(req.params.id), messId: req.user.messId });
+    if (!result.deletedCount) return res.status(404).json({ success: false, error: "Meal not found" });
     res.json({ success: true, message: "Meal deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to delete meal" });
@@ -1425,22 +1434,31 @@ app.get("/api/deposits", authMiddleware, async (req, res) => {
 
 app.post("/api/deposits", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
     const { monthId, userId, amount, date, note } = req.body;
+    const depositUser = await collections.users.findOne({ _id: new ObjectId(userId), messId: req.user.messId });
+    if (!depositUser || !memberHasService(depositUser, "meal")) {
+      return res.status(400).json({ success: false, error: "Deposits are available only to members with meal service" });
+    }
+    const parsedAmount = Number(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ success: false, error: "Manual deposit amount must be greater than zero" });
+    }
     
     const deposit = {
       monthId,
       userId,
       messId: req.user.messId,
-      amount: parseFloat(amount),
+      amount: parsedAmount,
       date,
       note: note || "",
+      source: "manual",
       createdAt: new Date(),
     };
 
     const result = await collections.deposits.insertOne(deposit);
 
     // Get the member name for notification
-    const depositUser = await collections.users.findOne({ _id: new ObjectId(userId) });
     const memberName = depositUser?.name || "A member";
 
     // Notify all members about the deposit
@@ -1478,7 +1496,17 @@ app.post("/api/deposits", authMiddleware, async (req, res) => {
 
 app.put("/api/deposits/:id", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
+    const existing = await findOwnedResource(collections.deposits, req.params.id, req.user.messId);
+    if (!existing) return res.status(404).json({ success: false, error: "Deposit not found" });
+    if (existing.source === AUTO_ADJUSTMENT_SOURCE) {
+      return res.status(400).json({ success: false, error: "Automatic adjustment deposits cannot be edited manually" });
+    }
     const { userId, amount, date, note } = req.body;
+    const depositUser = await collections.users.findOne({ _id: new ObjectId(userId), messId: req.user.messId });
+    if (!depositUser || !memberHasService(depositUser, "meal") || !Number.isFinite(Number(amount)) || Number(amount) <= 0) {
+      return res.status(400).json({ success: false, error: "Invalid deposit member or amount" });
+    }
     await collections.deposits.updateOne(
       { _id: new ObjectId(req.params.id) },
       { $set: { userId, amount: parseFloat(amount), date, note: note || "" } }
@@ -1496,7 +1524,9 @@ app.put("/api/deposits/:id", authMiddleware, async (req, res) => {
 
 app.delete("/api/deposits/:id", authMiddleware, async (req, res) => {
   try {
-    await collections.deposits.deleteOne({ _id: new ObjectId(req.params.id) });
+    if (!requireManager(req, res)) return;
+    const result = await collections.deposits.deleteOne({ _id: new ObjectId(req.params.id), messId: req.user.messId });
+    if (!result.deletedCount) return res.status(404).json({ success: false, error: "Deposit not found" });
     res.json({ success: true, message: "Deposit deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to delete deposit" });
@@ -1519,7 +1549,12 @@ app.get("/api/meal-costs", authMiddleware, async (req, res) => {
 
 app.post("/api/meal-costs", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
     const { monthId, userId, amount, date, description, addAsDeposit } = req.body;
+    const shopperUser = await collections.users.findOne({ _id: new ObjectId(userId), messId: req.user.messId });
+    if (!shopperUser || !memberHasService(shopperUser, "meal")) {
+      return res.status(400).json({ success: false, error: "Meal costs are available only to members with meal service" });
+    }
 
     const cost = {
       monthId,
@@ -1548,7 +1583,6 @@ app.post("/api/meal-costs", authMiddleware, async (req, res) => {
     }
 
     // Get the shopper name for notification
-    const shopperUser = await collections.users.findOne({ _id: new ObjectId(userId) });
     const shopperName = shopperUser?.name || "Someone";
 
     // Notify all members about the meal cost
@@ -1585,7 +1619,12 @@ app.post("/api/meal-costs", authMiddleware, async (req, res) => {
 
 app.put("/api/meal-costs/:id", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
+    const existing = await findOwnedResource(collections.mealCosts, req.params.id, req.user.messId);
+    if (!existing) return res.status(404).json({ success: false, error: "Meal cost not found" });
     const { userId, amount, date, description } = req.body;
+    const shopper = await collections.users.findOne({ _id: new ObjectId(userId), messId: req.user.messId });
+    if (!shopper || !memberHasService(shopper, "meal")) return res.status(400).json({ success: false, error: "Invalid meal-service member" });
     await collections.mealCosts.updateOne(
       { _id: new ObjectId(req.params.id) },
       { $set: { userId, amount: parseFloat(amount), date, description } }
@@ -1603,7 +1642,9 @@ app.put("/api/meal-costs/:id", authMiddleware, async (req, res) => {
 
 app.delete("/api/meal-costs/:id", authMiddleware, async (req, res) => {
   try {
-    await collections.mealCosts.deleteOne({ _id: new ObjectId(req.params.id) });
+    if (!requireManager(req, res)) return;
+    const result = await collections.mealCosts.deleteOne({ _id: new ObjectId(req.params.id), messId: req.user.messId });
+    if (!result.deletedCount) return res.status(404).json({ success: false, error: "Meal cost not found" });
     res.json({ success: true, message: "Meal cost deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to delete meal cost" });
@@ -1626,6 +1667,7 @@ app.get("/api/other-costs", authMiddleware, async (req, res) => {
 
 app.post("/api/other-costs", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
     const { monthId, userId, amount, date, description, isShared } = req.body;
 
     if (!isShared && userId) {
@@ -1661,7 +1703,14 @@ app.post("/api/other-costs", authMiddleware, async (req, res) => {
 
 app.put("/api/other-costs/:id", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
+    const existing = await findOwnedResource(collections.otherCosts, req.params.id, req.user.messId);
+    if (!existing) return res.status(404).json({ success: false, error: "Other cost not found" });
     const { userId, amount, date, description, isShared } = req.body;
+    if (!isShared && userId) {
+      const costUser = await collections.users.findOne({ _id: new ObjectId(userId), messId: req.user.messId });
+      if (!costUser || !memberHasService(costUser, "expense")) return res.status(400).json({ success: false, error: "Invalid expense-service member" });
+    }
     await collections.otherCosts.updateOne(
       { _id: new ObjectId(req.params.id) },
       { $set: { userId, amount: parseFloat(amount), date, description, isShared } }
@@ -1678,9 +1727,9 @@ app.put("/api/other-costs/:id", authMiddleware, async (req, res) => {
 
 app.delete("/api/other-costs/:id", authMiddleware, async (req, res) => {
   try {
-    await collections.otherCosts.deleteOne({
-      _id: new ObjectId(req.params.id),
-    });
+    if (!requireManager(req, res)) return;
+    const result = await collections.otherCosts.deleteOne({ _id: new ObjectId(req.params.id), messId: req.user.messId });
+    if (!result.deletedCount) return res.status(404).json({ success: false, error: "Other cost not found" });
     res.json({ success: true, message: "Other cost deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to delete other cost" });
