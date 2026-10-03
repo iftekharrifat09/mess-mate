@@ -371,6 +371,7 @@ app.post("/api/auth/register-manager", async (req, res) => {
       messId: null,
       isApproved: true,
       isActive: true,
+      serviceStatus: "default",
       emailVerified: false,
       createdAt: new Date(),
     });
@@ -421,6 +422,7 @@ app.post("/api/auth/register-manager", async (req, res) => {
         messId: messResult.insertedId.toString(),
         isApproved: true,
         isActive: true,
+        serviceStatus: "default",
         emailVerified: false,
       },
       mess: {
@@ -529,6 +531,7 @@ app.post("/api/auth/login", async (req, res) => {
         messId: user.messId,
         isApproved: user.isApproved !== false,
         isActive: user.isActive !== false,
+        serviceStatus: user.serviceStatus || "default",
         emailVerified: user.emailVerified || false,
         notificationSoundEnabled: user.notificationSoundEnabled !== false,
         browserNotificationsEnabled: user.browserNotificationsEnabled || false,
@@ -559,6 +562,7 @@ app.get("/api/auth/me", authMiddleware, async (req, res) => {
         messId: user.messId,
         isApproved: user.isApproved !== false,
         isActive: user.isActive !== false,
+        serviceStatus: user.serviceStatus || "default",
         emailVerified: user.emailVerified || false,
         notificationSoundEnabled: user.notificationSoundEnabled !== false,
         browserNotificationsEnabled: user.browserNotificationsEnabled || false,
@@ -1165,8 +1169,18 @@ app.get("/api/months", authMiddleware, async (req, res) => {
 
 app.post("/api/months", authMiddleware, async (req, res) => {
   try {
-    const { name, startDate, year, month, copyCalcData } = req.body;
+    if (!requireManager(req, res)) return;
+    const { name, startDate, year, month, copyCalcData, clearMessExpenses = false } = req.body;
     const messId = req.user.messId;
+    const targetYear = Number(year || new Date().getFullYear());
+    const targetMonth = Number(month || new Date().getMonth() + 1);
+    if (!name || targetMonth < 1 || targetMonth > 12) {
+      return res.status(400).json({ success: false, error: "Valid name, year, and month are required" });
+    }
+    const duplicateMonth = await collections.months.findOne({ messId, year: targetYear, month: targetMonth });
+    if (duplicateMonth) {
+      return res.status(409).json({ success: false, error: "This month already exists" });
+    }
 
     // Get current active month before deactivating
     const currentActive = await collections.months.findOne({ messId, isActive: true });
@@ -1193,8 +1207,8 @@ app.post("/api/months", authMiddleware, async (req, res) => {
       messId,
       name,
       startDate,
-      year: year || new Date().getFullYear(),
-      month: month || new Date().getMonth() + 1,
+      year: targetYear,
+      month: targetMonth,
       endDate: null,
       isActive: true,
       createdAt: new Date(),
@@ -1209,6 +1223,19 @@ app.post("/api/months", authMiddleware, async (req, res) => {
       { $set: { messId, monthId: newMonthId, prevBalanceEnabled: false, adjustedBalances: null, updatedAt: new Date() } },
       { upsert: true }
     );
+
+    // Expense data is preserved by default. Clear only when explicitly asked.
+    if (clearMessExpenses && currentActive) {
+      const oldMonthId = currentActive._id.toString();
+      const oldCategories = await collections.calcCategories.find({ messId, monthId: oldMonthId }).project({ _id: 1 }).toArray();
+      const oldCategoryIds = oldCategories.map((category) => category._id.toString());
+      await Promise.all([
+        collections.calcCategories.deleteMany({ messId, monthId: oldMonthId }),
+        collections.calcExceptions.deleteMany({ categoryId: { $in: oldCategoryIds } }),
+        collections.calcPayments.deleteMany({ messId, monthId: oldMonthId }),
+        collections.calcBillPayments.deleteMany({ messId, monthId: oldMonthId }),
+      ]);
+    }
 
     // Copy calc data from old month to new month if requested
     if (copyCalcData && currentActive) {
@@ -1252,6 +1279,7 @@ app.post("/api/months", authMiddleware, async (req, res) => {
       }
     }
 
+    await writeActivityLog(messId, "month_created", `${name} was started`, { monthId: newMonthId });
     res.json({ success: true, month: { id: newMonthId, ...monthDoc } });
   } catch (error) {
     console.error("Create month error:", error);
@@ -1275,7 +1303,14 @@ app.get("/api/months/active", authMiddleware, async (req, res) => {
 
 app.put("/api/months/:id", authMiddleware, async (req, res) => {
   try {
-    const { isActive, ...updates } = req.body;
+    if (!requireManager(req, res)) return;
+    const ownedMonth = await findOwnedResource(collections.months, req.params.id, req.user.messId);
+    if (!ownedMonth) return res.status(404).json({ success: false, error: "Month not found" });
+    const { isActive, name, startDate, endDate } = req.body;
+    const updates = {};
+    if (name !== undefined) updates.name = name;
+    if (startDate !== undefined) updates.startDate = startDate;
+    if (endDate !== undefined) updates.endDate = endDate;
     
     if (isActive === true) {
       await collections.months.updateMany(
@@ -1285,8 +1320,8 @@ app.put("/api/months/:id", authMiddleware, async (req, res) => {
     }
 
     await collections.months.updateOne(
-      { _id: new ObjectId(req.params.id) },
-      { $set: { ...updates, isActive: isActive !== undefined ? isActive : undefined } }
+      { _id: ownedMonth._id, messId: req.user.messId },
+      { $set: { ...updates, ...(isActive !== undefined ? { isActive } : {}) } }
     );
 
     const month = await collections.months.findOne({ _id: new ObjectId(req.params.id) });
