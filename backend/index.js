@@ -1347,6 +1347,7 @@ app.get("/api/meals", authMiddleware, async (req, res) => {
 
 app.post("/api/meals", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
     const { monthId, userId, date, breakfast, lunch, dinner } = req.body;
 
     const mealUser = await collections.users.findOne({ _id: new ObjectId(userId) });
@@ -2023,12 +2024,21 @@ app.get("/api/bazar-dates", authMiddleware, async (req, res) => {
 
 app.post("/api/bazar-dates", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
     const { userId, userName, dates } = req.body;
+    const uniqueDates = [...new Set(Array.isArray(dates) ? dates : [])];
+    if (!userId || uniqueDates.length === 0 || uniqueDates.some((date) => !/^\d{4}-\d{2}-\d{2}$/.test(date))) {
+      return res.status(400).json({ success: false, error: "Valid member and dates are required" });
+    }
+    const assignedUser = await collections.users.findOne({ _id: new ObjectId(userId), messId: req.user.messId, isActive: { $ne: false } });
+    if (!assignedUser || !memberHasService(assignedUser, "meal")) {
+      return res.status(400).json({ success: false, error: "Bazar dates are available only to members with meal service" });
+    }
 
     const existingDates = await collections.bazarDates
       .find({
         messId: req.user.messId,
-        date: { $in: dates },
+        date: { $in: uniqueDates },
       })
       .toArray();
 
@@ -2040,10 +2050,10 @@ app.post("/api/bazar-dates", authMiddleware, async (req, res) => {
       });
     }
 
-    const newDates = dates.map((date) => ({
+    const newDates = uniqueDates.map((date) => ({
       messId: req.user.messId,
       userId,
-      userName,
+      userName: assignedUser.name || userName,
       date,
       createdAt: new Date(),
     }));
@@ -2053,15 +2063,14 @@ app.post("/api/bazar-dates", authMiddleware, async (req, res) => {
     // Notify all members about bazar date assignment
     await notifyMembers(req.user.messId, req.userId, {
       title: "Bazar Dates Assigned",
-      message: `${userName} has been assigned bazar duty for: ${dates.join(", ")}`,
+      message: `${assignedUser.name} has been assigned bazar duty for: ${uniqueDates.join(", ")}`,
       type: "bazar",
-    });
+    }, "meal");
 
     // Also notify the assigned user specifically
-    const assignedUser = await collections.users.findOne({ _id: new ObjectId(userId) });
     const notification = {
       title: "Bazar Dates Assigned",
-      message: `You have been assigned bazar duty for: ${dates.join(", ")}`,
+      message: `You have been assigned bazar duty for: ${uniqueDates.join(", ")}`,
       type: "bazar",
     };
     await collections.notifications.insertOne({
@@ -2089,12 +2098,36 @@ app.post("/api/bazar-dates", authMiddleware, async (req, res) => {
 
 app.delete("/api/bazar-dates/:id", authMiddleware, async (req, res) => {
   try {
-    await collections.bazarDates.deleteOne({
-      _id: new ObjectId(req.params.id),
-    });
+    if (!requireManager(req, res)) return;
+    const result = await collections.bazarDates.deleteOne({ _id: new ObjectId(req.params.id), messId: req.user.messId });
+    if (!result.deletedCount) return res.status(404).json({ success: false, error: "Bazar date not found" });
     res.json({ success: true, message: "Bazar date deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to delete bazar date" });
+  }
+});
+
+app.put("/api/bazar-dates/:id", authMiddleware, async (req, res) => {
+  try {
+    if (!requireManager(req, res)) return;
+    const existing = await findOwnedResource(collections.bazarDates, req.params.id, req.user.messId);
+    if (!existing) return res.status(404).json({ success: false, error: "Bazar date not found" });
+    const { userId, userName, date } = req.body;
+    const assignedUser = await collections.users.findOne({ _id: new ObjectId(userId), messId: req.user.messId, isActive: { $ne: false } });
+    if (!assignedUser || !memberHasService(assignedUser, "meal") || !/^\d{4}-\d{2}-\d{2}$/.test(date || "")) {
+      return res.status(400).json({ success: false, error: "Invalid meal-service member or date" });
+    }
+    const conflict = await collections.bazarDates.findOne({ messId: req.user.messId, date, _id: { $ne: existing._id } });
+    if (conflict) return res.status(409).json({ success: false, error: "This date is already assigned" });
+    await collections.bazarDates.updateOne(
+      { _id: existing._id, messId: req.user.messId },
+      { $set: { userId, userName: assignedUser.name || userName, date, updatedAt: new Date() } }
+    );
+    const updated = await collections.bazarDates.findOne({ _id: existing._id });
+    res.json({ success: true, date: transformDoc(updated) });
+  } catch (error) {
+    if (error?.code === 11000) return res.status(409).json({ success: false, error: "This date is already assigned" });
+    res.status(500).json({ success: false, error: "Failed to update bazar date" });
   }
 });
 
@@ -2245,6 +2278,7 @@ app.put("/api/members/service-status", authMiddleware, async (req, res) => {
       { _id: { $in: ids }, messId: req.user.messId },
       { $set: { serviceStatus, updatedAt: new Date() } }
     );
+    await writeActivityLog(req.user.messId, "service_status_changed", `${result.modifiedCount} member service setting(s) updated`, { memberIds, serviceStatus });
     res.json({ success: true, updated: result.modifiedCount });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to update service status" });
@@ -2353,10 +2387,15 @@ app.put("/api/members/:id", authMiddleware, async (req, res) => {
 
 app.delete("/api/members/:id", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
+    const target = await collections.users.findOne({ _id: new ObjectId(req.params.id), messId: req.user.messId });
+    if (!target) return res.status(404).json({ success: false, error: "Member not found" });
+    if (target.role === "manager") return res.status(400).json({ success: false, error: "Transfer manager access before removal" });
     await collections.users.updateOne(
-      { _id: new ObjectId(req.params.id) },
-      { $set: { messId: null, isApproved: false } }
+      { _id: target._id, messId: req.user.messId },
+      { $set: { messId: null, isApproved: false, role: "member", serviceStatus: "default", updatedAt: new Date() } }
     );
+    await writeActivityLog(req.user.messId, "member_removed", `${target.name} was removed from the mess`);
     res.json({ success: true, message: "Member removed" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to remove member" });
