@@ -41,6 +41,9 @@ app.use(express.json());
 const MONGO_URI = process.env.MONGO_URI || "mongodb://localhost:27017/messDB";
 const JWT_SECRET = process.env.JWT_SECRET || "your-super-secret-jwt-key-change-this";
 const PORT = process.env.PORT || 5000;
+const AUTO_ADJUSTMENT_NOTE = "Auto Previous Month +/- Adjustment";
+const AUTO_ADJUSTMENT_SOURCE = "previous_month_adjustment";
+const SERVICE_STATUSES = ["default", "meals_only", "expenses_only"];
 
 let db;
 let collections = {};
@@ -105,6 +108,27 @@ async function connectToDatabase() {
       messSettings: db.collection("messSettings"),
     };
 
+    // Idempotent data upgrade for records created before service settings and
+    // explicit automatic-deposit sources were introduced.
+    await collections.users.updateMany(
+      { serviceStatus: { $nin: SERVICE_STATUSES } },
+      { $set: { serviceStatus: "default" } }
+    );
+    await collections.deposits.updateMany(
+      { note: AUTO_ADJUSTMENT_NOTE, source: { $exists: false } },
+      { $set: { source: AUTO_ADJUSTMENT_SOURCE } }
+    );
+
+    // Remove legacy duplicate bazar assignments before installing the
+    // database-level one-date/one-member constraint.
+    const duplicateBazarDates = await collections.bazarDates.aggregate([
+      { $group: { _id: { messId: "$messId", date: "$date" }, ids: { $push: "$_id" }, count: { $sum: 1 } } },
+      { $match: { count: { $gt: 1 } } },
+    ]).toArray();
+    for (const duplicate of duplicateBazarDates) {
+      await collections.bazarDates.deleteMany({ _id: { $in: duplicate.ids.slice(1) } });
+    }
+
     // Create indexes
     await Promise.all([
       collections.users.createIndex({ email: 1 }, { unique: true }),
@@ -122,7 +146,7 @@ async function connectToDatabase() {
       collections.joinRequests.createIndex({ messId: 1 }),
       collections.joinRequests.createIndex({ userId: 1 }),
       collections.notices.createIndex({ messId: 1 }),
-      collections.bazarDates.createIndex({ messId: 1 }),
+      collections.bazarDates.createIndex({ messId: 1, date: 1 }, { unique: true }),
       collections.notifications.createIndex({ userId: 1 }),
       collections.notes.createIndex({ messId: 1 }),
       collections.otps.createIndex({ email: 1 }),
@@ -247,6 +271,29 @@ function memberHasService(member, service) {
   return true;
 }
 
+function requireManager(req, res) {
+  if (req.user.role !== "manager") {
+    res.status(403).json({ success: false, error: "Only the manager can perform this action" });
+    return false;
+  }
+  return true;
+}
+
+async function findOwnedResource(collection, id, messId) {
+  if (!ObjectId.isValid(id)) return null;
+  return collection.findOne({ _id: new ObjectId(id), messId });
+}
+
+async function writeActivityLog(messId, type, description, metadata = undefined) {
+  await collections.activityLogs.insertOne({
+    messId,
+    type,
+    description,
+    ...(metadata ? { metadata } : {}),
+    createdAt: new Date(),
+  });
+}
+
 async function notifyMembers(messId, excludeUserId, notification, service) {
   const allMembers = await collections.users
     .find({
@@ -324,6 +371,7 @@ app.post("/api/auth/register-manager", async (req, res) => {
       messId: null,
       isApproved: true,
       isActive: true,
+      serviceStatus: "default",
       emailVerified: false,
       createdAt: new Date(),
     });
@@ -374,6 +422,7 @@ app.post("/api/auth/register-manager", async (req, res) => {
         messId: messResult.insertedId.toString(),
         isApproved: true,
         isActive: true,
+        serviceStatus: "default",
         emailVerified: false,
       },
       mess: {
@@ -482,6 +531,7 @@ app.post("/api/auth/login", async (req, res) => {
         messId: user.messId,
         isApproved: user.isApproved !== false,
         isActive: user.isActive !== false,
+        serviceStatus: user.serviceStatus || "default",
         emailVerified: user.emailVerified || false,
         notificationSoundEnabled: user.notificationSoundEnabled !== false,
         browserNotificationsEnabled: user.browserNotificationsEnabled || false,
@@ -512,6 +562,7 @@ app.get("/api/auth/me", authMiddleware, async (req, res) => {
         messId: user.messId,
         isApproved: user.isApproved !== false,
         isActive: user.isActive !== false,
+        serviceStatus: user.serviceStatus || "default",
         emailVerified: user.emailVerified || false,
         notificationSoundEnabled: user.notificationSoundEnabled !== false,
         browserNotificationsEnabled: user.browserNotificationsEnabled || false,
@@ -1118,8 +1169,18 @@ app.get("/api/months", authMiddleware, async (req, res) => {
 
 app.post("/api/months", authMiddleware, async (req, res) => {
   try {
-    const { name, startDate, year, month, copyCalcData } = req.body;
+    if (!requireManager(req, res)) return;
+    const { name, startDate, year, month, copyCalcData, clearMessExpenses = false } = req.body;
     const messId = req.user.messId;
+    const targetYear = Number(year || new Date().getFullYear());
+    const targetMonth = Number(month || new Date().getMonth() + 1);
+    if (!name || targetMonth < 1 || targetMonth > 12) {
+      return res.status(400).json({ success: false, error: "Valid name, year, and month are required" });
+    }
+    const duplicateMonth = await collections.months.findOne({ messId, year: targetYear, month: targetMonth });
+    if (duplicateMonth) {
+      return res.status(409).json({ success: false, error: "This month already exists" });
+    }
 
     // Get current active month before deactivating
     const currentActive = await collections.months.findOne({ messId, isActive: true });
@@ -1146,8 +1207,8 @@ app.post("/api/months", authMiddleware, async (req, res) => {
       messId,
       name,
       startDate,
-      year: year || new Date().getFullYear(),
-      month: month || new Date().getMonth() + 1,
+      year: targetYear,
+      month: targetMonth,
       endDate: null,
       isActive: true,
       createdAt: new Date(),
@@ -1162,6 +1223,19 @@ app.post("/api/months", authMiddleware, async (req, res) => {
       { $set: { messId, monthId: newMonthId, prevBalanceEnabled: false, adjustedBalances: null, updatedAt: new Date() } },
       { upsert: true }
     );
+
+    // Expense data is preserved by default. Clear only when explicitly asked.
+    if (clearMessExpenses && currentActive) {
+      const oldMonthId = currentActive._id.toString();
+      const oldCategories = await collections.calcCategories.find({ messId, monthId: oldMonthId }).project({ _id: 1 }).toArray();
+      const oldCategoryIds = oldCategories.map((category) => category._id.toString());
+      await Promise.all([
+        collections.calcCategories.deleteMany({ messId, monthId: oldMonthId }),
+        collections.calcExceptions.deleteMany({ categoryId: { $in: oldCategoryIds } }),
+        collections.calcPayments.deleteMany({ messId, monthId: oldMonthId }),
+        collections.calcBillPayments.deleteMany({ messId, monthId: oldMonthId }),
+      ]);
+    }
 
     // Copy calc data from old month to new month if requested
     if (copyCalcData && currentActive) {
@@ -1205,6 +1279,7 @@ app.post("/api/months", authMiddleware, async (req, res) => {
       }
     }
 
+    await writeActivityLog(messId, "month_created", `${name} was started`, { monthId: newMonthId });
     res.json({ success: true, month: { id: newMonthId, ...monthDoc } });
   } catch (error) {
     console.error("Create month error:", error);
@@ -1228,7 +1303,14 @@ app.get("/api/months/active", authMiddleware, async (req, res) => {
 
 app.put("/api/months/:id", authMiddleware, async (req, res) => {
   try {
-    const { isActive, ...updates } = req.body;
+    if (!requireManager(req, res)) return;
+    const ownedMonth = await findOwnedResource(collections.months, req.params.id, req.user.messId);
+    if (!ownedMonth) return res.status(404).json({ success: false, error: "Month not found" });
+    const { isActive, name, startDate, endDate } = req.body;
+    const updates = {};
+    if (name !== undefined) updates.name = name;
+    if (startDate !== undefined) updates.startDate = startDate;
+    if (endDate !== undefined) updates.endDate = endDate;
     
     if (isActive === true) {
       await collections.months.updateMany(
@@ -1238,8 +1320,8 @@ app.put("/api/months/:id", authMiddleware, async (req, res) => {
     }
 
     await collections.months.updateOne(
-      { _id: new ObjectId(req.params.id) },
-      { $set: { ...updates, isActive: isActive !== undefined ? isActive : undefined } }
+      { _id: ownedMonth._id, messId: req.user.messId },
+      { $set: { ...updates, ...(isActive !== undefined ? { isActive } : {}) } }
     );
 
     const month = await collections.months.findOne({ _id: new ObjectId(req.params.id) });
@@ -1265,6 +1347,7 @@ app.get("/api/meals", authMiddleware, async (req, res) => {
 
 app.post("/api/meals", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
     const { monthId, userId, date, breakfast, lunch, dinner } = req.body;
 
     const mealUser = await collections.users.findOne({ _id: new ObjectId(userId) });
@@ -1302,6 +1385,13 @@ app.post("/api/meals", authMiddleware, async (req, res) => {
 
 app.put("/api/meals/:id", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
+    const existing = await findOwnedResource(collections.meals, req.params.id, req.user.messId);
+    if (!existing) return res.status(404).json({ success: false, error: "Meal not found" });
+    const mealUser = await collections.users.findOne({ _id: new ObjectId(existing.userId), messId: req.user.messId });
+    if (!mealUser || !memberHasService(mealUser, "meal")) {
+      return res.status(400).json({ success: false, error: "This member cannot have meals" });
+    }
     const { breakfast, lunch, dinner } = req.body;
     await collections.meals.updateOne(
       { _id: new ObjectId(req.params.id) },
@@ -1320,7 +1410,9 @@ app.put("/api/meals/:id", authMiddleware, async (req, res) => {
 
 app.delete("/api/meals/:id", authMiddleware, async (req, res) => {
   try {
-    await collections.meals.deleteOne({ _id: new ObjectId(req.params.id) });
+    if (!requireManager(req, res)) return;
+    const result = await collections.meals.deleteOne({ _id: new ObjectId(req.params.id), messId: req.user.messId });
+    if (!result.deletedCount) return res.status(404).json({ success: false, error: "Meal not found" });
     res.json({ success: true, message: "Meal deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to delete meal" });
@@ -1343,22 +1435,31 @@ app.get("/api/deposits", authMiddleware, async (req, res) => {
 
 app.post("/api/deposits", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
     const { monthId, userId, amount, date, note } = req.body;
+    const depositUser = await collections.users.findOne({ _id: new ObjectId(userId), messId: req.user.messId });
+    if (!depositUser || !memberHasService(depositUser, "meal")) {
+      return res.status(400).json({ success: false, error: "Deposits are available only to members with meal service" });
+    }
+    const parsedAmount = Number(amount);
+    if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+      return res.status(400).json({ success: false, error: "Manual deposit amount must be greater than zero" });
+    }
     
     const deposit = {
       monthId,
       userId,
       messId: req.user.messId,
-      amount: parseFloat(amount),
+      amount: parsedAmount,
       date,
       note: note || "",
+      source: "manual",
       createdAt: new Date(),
     };
 
     const result = await collections.deposits.insertOne(deposit);
 
     // Get the member name for notification
-    const depositUser = await collections.users.findOne({ _id: new ObjectId(userId) });
     const memberName = depositUser?.name || "A member";
 
     // Notify all members about the deposit
@@ -1396,7 +1497,17 @@ app.post("/api/deposits", authMiddleware, async (req, res) => {
 
 app.put("/api/deposits/:id", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
+    const existing = await findOwnedResource(collections.deposits, req.params.id, req.user.messId);
+    if (!existing) return res.status(404).json({ success: false, error: "Deposit not found" });
+    if (existing.source === AUTO_ADJUSTMENT_SOURCE) {
+      return res.status(400).json({ success: false, error: "Automatic adjustment deposits cannot be edited manually" });
+    }
     const { userId, amount, date, note } = req.body;
+    const depositUser = await collections.users.findOne({ _id: new ObjectId(userId), messId: req.user.messId });
+    if (!depositUser || !memberHasService(depositUser, "meal") || !Number.isFinite(Number(amount)) || Number(amount) <= 0) {
+      return res.status(400).json({ success: false, error: "Invalid deposit member or amount" });
+    }
     await collections.deposits.updateOne(
       { _id: new ObjectId(req.params.id) },
       { $set: { userId, amount: parseFloat(amount), date, note: note || "" } }
@@ -1414,7 +1525,9 @@ app.put("/api/deposits/:id", authMiddleware, async (req, res) => {
 
 app.delete("/api/deposits/:id", authMiddleware, async (req, res) => {
   try {
-    await collections.deposits.deleteOne({ _id: new ObjectId(req.params.id) });
+    if (!requireManager(req, res)) return;
+    const result = await collections.deposits.deleteOne({ _id: new ObjectId(req.params.id), messId: req.user.messId });
+    if (!result.deletedCount) return res.status(404).json({ success: false, error: "Deposit not found" });
     res.json({ success: true, message: "Deposit deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to delete deposit" });
@@ -1437,7 +1550,12 @@ app.get("/api/meal-costs", authMiddleware, async (req, res) => {
 
 app.post("/api/meal-costs", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
     const { monthId, userId, amount, date, description, addAsDeposit } = req.body;
+    const shopperUser = await collections.users.findOne({ _id: new ObjectId(userId), messId: req.user.messId });
+    if (!shopperUser || !memberHasService(shopperUser, "meal")) {
+      return res.status(400).json({ success: false, error: "Meal costs are available only to members with meal service" });
+    }
 
     const cost = {
       monthId,
@@ -1466,7 +1584,6 @@ app.post("/api/meal-costs", authMiddleware, async (req, res) => {
     }
 
     // Get the shopper name for notification
-    const shopperUser = await collections.users.findOne({ _id: new ObjectId(userId) });
     const shopperName = shopperUser?.name || "Someone";
 
     // Notify all members about the meal cost
@@ -1503,7 +1620,12 @@ app.post("/api/meal-costs", authMiddleware, async (req, res) => {
 
 app.put("/api/meal-costs/:id", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
+    const existing = await findOwnedResource(collections.mealCosts, req.params.id, req.user.messId);
+    if (!existing) return res.status(404).json({ success: false, error: "Meal cost not found" });
     const { userId, amount, date, description } = req.body;
+    const shopper = await collections.users.findOne({ _id: new ObjectId(userId), messId: req.user.messId });
+    if (!shopper || !memberHasService(shopper, "meal")) return res.status(400).json({ success: false, error: "Invalid meal-service member" });
     await collections.mealCosts.updateOne(
       { _id: new ObjectId(req.params.id) },
       { $set: { userId, amount: parseFloat(amount), date, description } }
@@ -1521,7 +1643,9 @@ app.put("/api/meal-costs/:id", authMiddleware, async (req, res) => {
 
 app.delete("/api/meal-costs/:id", authMiddleware, async (req, res) => {
   try {
-    await collections.mealCosts.deleteOne({ _id: new ObjectId(req.params.id) });
+    if (!requireManager(req, res)) return;
+    const result = await collections.mealCosts.deleteOne({ _id: new ObjectId(req.params.id), messId: req.user.messId });
+    if (!result.deletedCount) return res.status(404).json({ success: false, error: "Meal cost not found" });
     res.json({ success: true, message: "Meal cost deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to delete meal cost" });
@@ -1544,6 +1668,7 @@ app.get("/api/other-costs", authMiddleware, async (req, res) => {
 
 app.post("/api/other-costs", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
     const { monthId, userId, amount, date, description, isShared } = req.body;
 
     if (!isShared && userId) {
@@ -1579,7 +1704,14 @@ app.post("/api/other-costs", authMiddleware, async (req, res) => {
 
 app.put("/api/other-costs/:id", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
+    const existing = await findOwnedResource(collections.otherCosts, req.params.id, req.user.messId);
+    if (!existing) return res.status(404).json({ success: false, error: "Other cost not found" });
     const { userId, amount, date, description, isShared } = req.body;
+    if (!isShared && userId) {
+      const costUser = await collections.users.findOne({ _id: new ObjectId(userId), messId: req.user.messId });
+      if (!costUser || !memberHasService(costUser, "expense")) return res.status(400).json({ success: false, error: "Invalid expense-service member" });
+    }
     await collections.otherCosts.updateOne(
       { _id: new ObjectId(req.params.id) },
       { $set: { userId, amount: parseFloat(amount), date, description, isShared } }
@@ -1596,9 +1728,9 @@ app.put("/api/other-costs/:id", authMiddleware, async (req, res) => {
 
 app.delete("/api/other-costs/:id", authMiddleware, async (req, res) => {
   try {
-    await collections.otherCosts.deleteOne({
-      _id: new ObjectId(req.params.id),
-    });
+    if (!requireManager(req, res)) return;
+    const result = await collections.otherCosts.deleteOne({ _id: new ObjectId(req.params.id), messId: req.user.messId });
+    if (!result.deletedCount) return res.status(404).json({ success: false, error: "Other cost not found" });
     res.json({ success: true, message: "Other cost deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to delete other cost" });
@@ -1892,12 +2024,21 @@ app.get("/api/bazar-dates", authMiddleware, async (req, res) => {
 
 app.post("/api/bazar-dates", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
     const { userId, userName, dates } = req.body;
+    const uniqueDates = [...new Set(Array.isArray(dates) ? dates : [])];
+    if (!userId || uniqueDates.length === 0 || uniqueDates.some((date) => !/^\d{4}-\d{2}-\d{2}$/.test(date))) {
+      return res.status(400).json({ success: false, error: "Valid member and dates are required" });
+    }
+    const assignedUser = await collections.users.findOne({ _id: new ObjectId(userId), messId: req.user.messId, isActive: { $ne: false } });
+    if (!assignedUser || !memberHasService(assignedUser, "meal")) {
+      return res.status(400).json({ success: false, error: "Bazar dates are available only to members with meal service" });
+    }
 
     const existingDates = await collections.bazarDates
       .find({
         messId: req.user.messId,
-        date: { $in: dates },
+        date: { $in: uniqueDates },
       })
       .toArray();
 
@@ -1909,10 +2050,10 @@ app.post("/api/bazar-dates", authMiddleware, async (req, res) => {
       });
     }
 
-    const newDates = dates.map((date) => ({
+    const newDates = uniqueDates.map((date) => ({
       messId: req.user.messId,
       userId,
-      userName,
+      userName: assignedUser.name || userName,
       date,
       createdAt: new Date(),
     }));
@@ -1922,15 +2063,14 @@ app.post("/api/bazar-dates", authMiddleware, async (req, res) => {
     // Notify all members about bazar date assignment
     await notifyMembers(req.user.messId, req.userId, {
       title: "Bazar Dates Assigned",
-      message: `${userName} has been assigned bazar duty for: ${dates.join(", ")}`,
+      message: `${assignedUser.name} has been assigned bazar duty for: ${uniqueDates.join(", ")}`,
       type: "bazar",
-    });
+    }, "meal");
 
     // Also notify the assigned user specifically
-    const assignedUser = await collections.users.findOne({ _id: new ObjectId(userId) });
     const notification = {
       title: "Bazar Dates Assigned",
-      message: `You have been assigned bazar duty for: ${dates.join(", ")}`,
+      message: `You have been assigned bazar duty for: ${uniqueDates.join(", ")}`,
       type: "bazar",
     };
     await collections.notifications.insertOne({
@@ -1958,12 +2098,36 @@ app.post("/api/bazar-dates", authMiddleware, async (req, res) => {
 
 app.delete("/api/bazar-dates/:id", authMiddleware, async (req, res) => {
   try {
-    await collections.bazarDates.deleteOne({
-      _id: new ObjectId(req.params.id),
-    });
+    if (!requireManager(req, res)) return;
+    const result = await collections.bazarDates.deleteOne({ _id: new ObjectId(req.params.id), messId: req.user.messId });
+    if (!result.deletedCount) return res.status(404).json({ success: false, error: "Bazar date not found" });
     res.json({ success: true, message: "Bazar date deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to delete bazar date" });
+  }
+});
+
+app.put("/api/bazar-dates/:id", authMiddleware, async (req, res) => {
+  try {
+    if (!requireManager(req, res)) return;
+    const existing = await findOwnedResource(collections.bazarDates, req.params.id, req.user.messId);
+    if (!existing) return res.status(404).json({ success: false, error: "Bazar date not found" });
+    const { userId, userName, date } = req.body;
+    const assignedUser = await collections.users.findOne({ _id: new ObjectId(userId), messId: req.user.messId, isActive: { $ne: false } });
+    if (!assignedUser || !memberHasService(assignedUser, "meal") || !/^\d{4}-\d{2}-\d{2}$/.test(date || "")) {
+      return res.status(400).json({ success: false, error: "Invalid meal-service member or date" });
+    }
+    const conflict = await collections.bazarDates.findOne({ messId: req.user.messId, date, _id: { $ne: existing._id } });
+    if (conflict) return res.status(409).json({ success: false, error: "This date is already assigned" });
+    await collections.bazarDates.updateOne(
+      { _id: existing._id, messId: req.user.messId },
+      { $set: { userId, userName: assignedUser.name || userName, date, updatedAt: new Date() } }
+    );
+    const updated = await collections.bazarDates.findOne({ _id: existing._id });
+    res.json({ success: true, date: transformDoc(updated) });
+  } catch (error) {
+    if (error?.code === 11000) return res.status(409).json({ success: false, error: "This date is already assigned" });
+    res.status(500).json({ success: false, error: "Failed to update bazar date" });
   }
 });
 
@@ -2114,6 +2278,7 @@ app.put("/api/members/service-status", authMiddleware, async (req, res) => {
       { _id: { $in: ids }, messId: req.user.messId },
       { $set: { serviceStatus, updatedAt: new Date() } }
     );
+    await writeActivityLog(req.user.messId, "service_status_changed", `${result.modifiedCount} member service setting(s) updated`, { memberIds, serviceStatus });
     res.json({ success: true, updated: result.modifiedCount });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to update service status" });
@@ -2222,10 +2387,15 @@ app.put("/api/members/:id", authMiddleware, async (req, res) => {
 
 app.delete("/api/members/:id", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
+    const target = await collections.users.findOne({ _id: new ObjectId(req.params.id), messId: req.user.messId });
+    if (!target) return res.status(404).json({ success: false, error: "Member not found" });
+    if (target.role === "manager") return res.status(400).json({ success: false, error: "Transfer manager access before removal" });
     await collections.users.updateOne(
-      { _id: new ObjectId(req.params.id) },
-      { $set: { messId: null, isApproved: false } }
+      { _id: target._id, messId: req.user.messId },
+      { $set: { messId: null, isApproved: false, role: "member", serviceStatus: "default", updatedAt: new Date() } }
     );
+    await writeActivityLog(req.user.messId, "member_removed", `${target.name} was removed from the mess`);
     res.json({ success: true, message: "Member removed" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to remove member" });
@@ -2447,11 +2617,13 @@ app.post("/api/notify-bulk-meals", authMiddleware, async (req, res) => {
 
 app.delete("/api/months/:id", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
     const monthId = req.params.id;
     
     // Protect the most recent previous month from deletion
     const month = await collections.months.findOne({ _id: new ObjectId(monthId) });
     if (!month) return res.status(404).json({ success: false, error: "Month not found" });
+    if (month.messId !== req.user.messId) return res.status(403).json({ success: false, error: "Month is not in your mess" });
     
     if (!month.isActive) {
       // Find all inactive months for this mess, sorted by most recent
@@ -2474,10 +2646,17 @@ app.delete("/api/months/:id", authMiddleware, async (req, res) => {
       collections.deposits.deleteMany({ monthId }),
       collections.mealCosts.deleteMany({ monthId }),
       collections.otherCosts.deleteMany({ monthId }),
+      collections.messSettings.deleteMany({ messId: req.user.messId, monthId }),
+      collections.calcPayments.deleteMany({ messId: req.user.messId, monthId }),
+      collections.calcBillPayments.deleteMany({ messId: req.user.messId, monthId }),
     ]);
+    const categories = await collections.calcCategories.find({ messId: req.user.messId, monthId }).project({ _id: 1 }).toArray();
+    await collections.calcExceptions.deleteMany({ categoryId: { $in: categories.map((category) => category._id.toString()) } });
+    await collections.calcCategories.deleteMany({ messId: req.user.messId, monthId });
     
     // Delete the month itself
     await collections.months.deleteOne({ _id: new ObjectId(monthId) });
+    await writeActivityLog(req.user.messId, "month_deleted", `${month.name} was deleted`, { monthId });
     
     res.json({ success: true, message: "Month and all associated data deleted" });
   } catch (error) {
@@ -2830,8 +3009,9 @@ app.delete("/api/calc-bill-payments/:id", authMiddleware, async (req, res) => {
 // ============================================
 
 // Get activity logs by mess ID
-app.get("/api/activity-logs/:messId", authenticateToken, async (req, res) => {
+app.get("/api/activity-logs/:messId", authMiddleware, async (req, res) => {
   try {
+    if (req.params.messId !== req.user.messId) return res.status(403).json({ success: false, error: "Access denied" });
     const logs = await collections.activityLogs
       .find({ messId: req.params.messId })
       .sort({ createdAt: -1 })
@@ -2843,9 +3023,10 @@ app.get("/api/activity-logs/:messId", authenticateToken, async (req, res) => {
 });
 
 // Create activity log
-app.post("/api/activity-logs", authenticateToken, async (req, res) => {
+app.post("/api/activity-logs", authMiddleware, async (req, res) => {
   try {
     const { messId, type, description } = req.body;
+    if (messId !== req.user.messId) return res.status(403).json({ success: false, error: "Access denied" });
     const result = await collections.activityLogs.insertOne({
       messId,
       type,
@@ -2860,9 +3041,11 @@ app.post("/api/activity-logs", authenticateToken, async (req, res) => {
 });
 
 // Delete activity log
-app.delete("/api/activity-logs/:id", authenticateToken, async (req, res) => {
+app.delete("/api/activity-logs/:id", authMiddleware, async (req, res) => {
   try {
-    await collections.activityLogs.deleteOne({ _id: new ObjectId(req.params.id) });
+    if (!requireManager(req, res)) return;
+    const result = await collections.activityLogs.deleteOne({ _id: new ObjectId(req.params.id), messId: req.user.messId });
+    if (!result.deletedCount) return res.status(404).json({ success: false, error: "Activity log not found" });
     res.json({ success: true, message: "Activity log deleted" });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to delete activity log" });
@@ -3347,6 +3530,7 @@ app.post("/api/chat/messages/:id/react", authMiddleware, async (req, res) => {
 // Bulk delete bazar dates (past or upcoming)
 app.post("/api/bazar-dates/bulk-delete", authMiddleware, async (req, res) => {
   try {
+    if (!requireManager(req, res)) return;
     const { type } = req.body; // 'past' or 'upcoming'
     const today = new Date().toISOString().split('T')[0];
     
@@ -3375,6 +3559,7 @@ app.post("/api/bazar-dates/bulk-delete", authMiddleware, async (req, res) => {
 app.get("/api/mess-settings", authMiddleware, async (req, res) => {
   try {
     const messId = req.query.messId || req.user.messId;
+    if (messId !== req.user.messId) return res.status(403).json({ success: false, error: "Access denied" });
     const monthId = req.query.monthId;
     if (!monthId) return res.status(400).json({ success: false, error: "monthId required" });
     const setting = await collections.messSettings.findOne({ messId, monthId });
@@ -3392,6 +3577,7 @@ app.put("/api/mess-settings", authMiddleware, async (req, res) => {
     }
     const { messId, monthId, prevBalanceEnabled, adjustedBalances } = req.body;
     const mId = messId || req.user.messId;
+    if (mId !== req.user.messId) return res.status(403).json({ success: false, error: "Access denied" });
     if (!monthId) return res.status(400).json({ success: false, error: "monthId required" });
 
     const updateData = { updatedAt: new Date() };
@@ -3406,6 +3592,62 @@ app.put("/api/mess-settings", authMiddleware, async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     res.status(500).json({ success: false, error: "Failed to update settings" });
+  }
+});
+
+// Replace only previous-month auto adjustments and persist the toggle as one request.
+app.put("/api/mess-settings/previous-month-adjustment", authMiddleware, async (req, res) => {
+  try {
+    if (!requireManager(req, res)) return;
+    const { monthId, enabled, adjustments = [] } = req.body;
+    const month = ObjectId.isValid(monthId)
+      ? await collections.months.findOne({ _id: new ObjectId(monthId), messId: req.user.messId })
+      : null;
+    if (!month || typeof enabled !== "boolean" || !Array.isArray(adjustments)) {
+      return res.status(400).json({ success: false, error: "Valid month, enabled state, and adjustments are required" });
+    }
+
+    const unique = new Map();
+    for (const adjustment of adjustments) {
+      const amount = Number(adjustment.amount);
+      if (!ObjectId.isValid(adjustment.userId) || !Number.isFinite(amount)) {
+        return res.status(400).json({ success: false, error: "Invalid adjustment" });
+      }
+      const member = await collections.users.findOne({ _id: new ObjectId(adjustment.userId), messId: req.user.messId, isActive: { $ne: false } });
+      if (!member || !memberHasService(member, "meal")) {
+        return res.status(400).json({ success: false, error: "Adjustment member must have meal service" });
+      }
+      unique.set(adjustment.userId, amount);
+    }
+
+    await collections.deposits.deleteMany({
+      messId: req.user.messId,
+      monthId,
+      $or: [{ source: AUTO_ADJUSTMENT_SOURCE }, { source: { $exists: false }, note: AUTO_ADJUSTMENT_NOTE }],
+    });
+    if (enabled) {
+      const date = new Date().toISOString().split("T")[0];
+      const docs = [...unique.entries()].filter(([, amount]) => amount !== 0).map(([userId, amount]) => ({
+        messId: req.user.messId,
+        monthId,
+        userId,
+        amount,
+        date,
+        note: AUTO_ADJUSTMENT_NOTE,
+        source: AUTO_ADJUSTMENT_SOURCE,
+        createdAt: new Date(),
+      }));
+      if (docs.length) await collections.deposits.insertMany(docs);
+    }
+    await collections.messSettings.updateOne(
+      { messId: req.user.messId, monthId },
+      { $set: { messId: req.user.messId, monthId, prevBalanceEnabled: enabled, updatedAt: new Date() } },
+      { upsert: true }
+    );
+    const deposits = await collections.deposits.find({ messId: req.user.messId, monthId, source: AUTO_ADJUSTMENT_SOURCE }).toArray();
+    res.json({ success: true, deposits: transformDocs(deposits) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to update previous month adjustment" });
   }
 });
 

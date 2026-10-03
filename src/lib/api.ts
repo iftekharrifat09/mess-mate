@@ -428,7 +428,7 @@ export async function getMonthsAPI(messId?: string) {
   return apiRequest('/months', { method: 'GET' });
 }
 
-export async function createMonthAPI(data: { name: string; startDate?: string; messId?: string; copyCalcData?: boolean; year?: number; month?: number }) {
+export async function createMonthAPI(data: { name: string; startDate?: string; messId?: string; copyCalcData?: boolean; clearMessExpenses?: boolean; year?: number; month?: number }) {
   return apiRequest('/months', {
     method: 'POST',
     body: JSON.stringify(data),
@@ -445,6 +445,13 @@ export async function getMessSettingsAPI(messId: string, monthId: string) {
 
 export async function updateMessSettingsAPI(data: { messId: string; monthId: string; prevBalanceEnabled?: boolean; adjustedBalances?: Record<string, number> | null }) {
   return apiRequest('/mess-settings', { method: 'PUT', body: JSON.stringify(data) });
+}
+
+export async function updatePreviousMonthAdjustmentAPI(data: { monthId: string; enabled: boolean; adjustments: Array<{ userId: string; amount: number }> }) {
+  return apiRequest('/mess-settings/previous-month-adjustment', {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
 }
 
 export async function getActiveMonthAPI(messId?: string) {
@@ -653,7 +660,7 @@ export async function createBazarDateAPI(data: { userId: string; userName: strin
   });
 }
 
-export async function updateBazarDateAPI(id: string, data: Partial<{ userId: string; userName: string; dates: string[] }>) {
+export async function updateBazarDateAPI(id: string, data: Partial<{ userId: string; userName: string; date: string }>) {
   return apiRequest(`/bazar-dates/${id}`, {
     method: 'PUT',
     body: JSON.stringify(data),

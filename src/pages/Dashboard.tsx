@@ -44,8 +44,7 @@ import {
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
 import { hasExpenseService } from '@/lib/serviceStatus';
-
-const AUTO_DEPOSIT_NOTE = 'Auto Previous Month +/- Adjustment';
+import { AUTO_DEPOSIT_NOTE, AUTO_DEPOSIT_SOURCE } from '@/lib/constants';
 
 // Default empty states to show UI immediately
 const EMPTY_MONTH_SUMMARY: MonthSummary = {
@@ -285,7 +284,7 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
           // Load auto deposit amounts for carry-over display
           const deposits = await dataService.getDepositsByMonthId(activeMonthId);
           const autoAmounts: Record<string, number> = {};
-          deposits.filter(d => d.note === AUTO_DEPOSIT_NOTE).forEach(d => {
+          deposits.filter(d => d.source === AUTO_DEPOSIT_SOURCE || d.note === AUTO_DEPOSIT_NOTE).forEach(d => {
             autoAmounts[d.userId] = (autoAmounts[d.userId] || 0) + d.amount;
           });
           setAutoDepositAmounts(autoAmounts);
@@ -350,15 +349,7 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
       const monthData = await fetchMD(prevMonth.id, messId);
       const prevSummaries = getAllMS(monthData);
 
-      // First, remove any existing auto deposits to prevent duplicates
-      const currentDeposits = await dataService.getDepositsByMonthId(activeMonthId);
-      const existingAutoDeposits = currentDeposits.filter(d => d.note === AUTO_DEPOSIT_NOTE);
-      for (const dep of existingAutoDeposits) {
-        await dataService.deleteDeposit(dep.id);
-      }
-
-      // Create auto deposit entries for each member
-      const today = format(new Date(), 'yyyy-MM-dd');
+      const adjustments: Array<{ userId: string; amount: number }> = [];
       for (const s of prevSummaries) {
         let balance = 0;
         if (storedAdjusted && storedAdjusted[s.userId] !== undefined) {
@@ -366,25 +357,15 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
         } else {
           balance = s.balance;
         }
-        if (balance === 0) continue;
-
-        await dataService.createDeposit({
-          monthId: activeMonthId,
-          userId: s.userId,
-          amount: balance, // positive or negative
-          date: today,
-          note: AUTO_DEPOSIT_NOTE,
-        });
+        if (balance !== 0) adjustments.push({ userId: s.userId, amount: balance });
       }
-
-      // Save toggle state
+      await dataService.updatePreviousMonthAdjustment(messId, activeMonthId, true, adjustments);
       setIncludePrevBalance(true);
-      await dataService.updateMessSettings({ messId, monthId: activeMonthId, prevBalanceEnabled: true });
 
       // Update auto deposit amounts for carry-over display
       const updatedDeposits = await dataService.getDepositsByMonthId(activeMonthId);
       const autoAmounts: Record<string, number> = {};
-      updatedDeposits.filter(d => d.note === AUTO_DEPOSIT_NOTE).forEach(d => {
+      updatedDeposits.filter(d => d.source === AUTO_DEPOSIT_SOURCE || d.note === AUTO_DEPOSIT_NOTE).forEach(d => {
         autoAmounts[d.userId] = (autoAmounts[d.userId] || 0) + d.amount;
       });
       setAutoDepositAmounts(autoAmounts);
@@ -407,16 +388,9 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
     setShowConfirmOff(false);
 
     try {
-      // Delete only auto-generated deposits
-      const currentDeposits = await dataService.getDepositsByMonthId(activeMonthId);
-      const autoDeposits = currentDeposits.filter(d => d.note === AUTO_DEPOSIT_NOTE);
-      for (const dep of autoDeposits) {
-        await dataService.deleteDeposit(dep.id);
-      }
-
+      await dataService.updatePreviousMonthAdjustment(messId, activeMonthId, false, []);
       setIncludePrevBalance(false);
       setAutoDepositAmounts({});
-      await dataService.updateMessSettings({ messId, monthId: activeMonthId, prevBalanceEnabled: false, adjustedBalances: null });
 
       toast({ title: 'Previous month adjustments removed', variant: 'success' });
       onDataChanged?.();

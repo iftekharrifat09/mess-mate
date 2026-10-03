@@ -127,6 +127,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 isApproved: apiUser.isApproved !== false,
                 isActive: apiUser.isActive !== false,
                 emailVerified: apiUser.emailVerified || false,
+                serviceStatus: apiUser.serviceStatus || 'default',
                 createdAt: new Date().toISOString(),
               };
               syncNotificationPrefsFromApi(localUser.id, apiUser);
@@ -180,6 +181,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             isApproved: apiUser.isApproved !== false,
             isActive: apiUser.isActive !== false,
             emailVerified: apiUser.emailVerified || false,
+            serviceStatus: apiUser.serviceStatus || 'default',
             createdAt: new Date().toISOString(),
           };
           syncNotificationPrefsFromApi(localUser.id, apiUser);
@@ -229,6 +231,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           isApproved: apiUser.isApproved !== false,
           isActive: apiUser.isActive !== false,
           emailVerified: apiUser.emailVerified || false,
+          serviceStatus: apiUser.serviceStatus || 'default',
           createdAt: new Date().toISOString(),
         };
         syncNotificationPrefsFromApi(localUser.id, apiUser);

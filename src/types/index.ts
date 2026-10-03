@@ -20,6 +20,7 @@ export interface Mess {
   name: string;
   managerId: string;
   messCode: string;
+  code?: string;
   createdAt: string;
 }
 
@@ -30,6 +31,8 @@ export interface Month {
   year: number;
   month: number;
   isActive: boolean;
+  startDate?: string;
+  endDate?: string | null;
   createdAt: string;
 }
 
@@ -51,6 +54,7 @@ export interface Deposit {
   amount: number;
   date: string;
   note?: string;
+  source?: 'manual' | 'meal_cost' | 'previous_month_adjustment';
   createdAt: string;
 }
 

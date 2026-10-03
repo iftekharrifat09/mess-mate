@@ -36,8 +36,7 @@ import { hasMealService } from '@/lib/serviceStatus';
 import { Deposit, User } from '@/types';
 import { Wallet, Plus, Trash2, Edit2, Loader2, ArrowLeftRight } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
-
-const AUTO_DEPOSIT_NOTE = 'Auto Previous Month +/- Adjustment';
+import { AUTO_DEPOSIT_NOTE, AUTO_DEPOSIT_SOURCE } from '@/lib/constants';
 import { format } from 'date-fns';
 import { formatCurrency } from '@/lib/calculations';
 import { Navigate } from 'react-router-dom';
