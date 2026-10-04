@@ -97,20 +97,12 @@ export default function Members() {
     if (removingId || !user) return;
     setRemovingId(memberId);
     try {
-      const memberToRemove = members.find(m => m.id === memberId);
-      await dataService.deleteUser(memberId);
-      if (memberToRemove) {
-        await dataService.createActivityLog({
-          messId: user.messId,
-          type: 'member_removed',
-          description: `${memberToRemove.fullName} was removed from the mess`,
-          metadata: { removedDate: new Date().toISOString() },
-        });
-      }
+      await dataService.removeMember(user.messId, memberId);
+      setMembers(prev => prev.filter(m => m.id !== memberId));
       loadMembers();
       toast({ title: 'Member removed', description: 'The member has been removed from the mess.', variant: 'success' });
     } catch (error) {
-      toast({ title: 'Error', description: 'Failed to remove member', variant: 'destructive' });
+      toast({ title: 'Error', description: error instanceof Error ? error.message : 'Failed to remove member', variant: 'destructive' });
     } finally {
       setRemovingId(null);
     }

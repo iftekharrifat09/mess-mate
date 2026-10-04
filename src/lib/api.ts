@@ -913,6 +913,7 @@ export async function deleteActivityLogAPI(id: string) {
   return apiRequest(`/activity-logs/${id}`, { method: 'DELETE' });
 }
 
+
 export async function updateServiceStatusAPI(memberIds: string[], serviceStatus: string) {
   return apiRequest(`/members/service-status`, {
     method: 'PUT',

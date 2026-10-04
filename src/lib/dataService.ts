@@ -1674,6 +1674,12 @@ export async function updatePreviousMonthAdjustment(
 export async function syncPendingOfflineData(): Promise<void> {
   if (!shouldUseBackend()) return;
 
+  try {
+    await syncPendingMemberChanges();
+  } catch (error) {
+    console.error('Error syncing pending member changes:', error);
+  }
+
   const pendingMonths = storage.getPendingMonthCreations();
   for (const pendingMonth of pendingMonths) {
     try {
@@ -1737,5 +1743,44 @@ export async function updateMembersServiceStatus(
     if (!result.usingLocalStorage) throw new Error(result.error || 'Failed to update service status');
     showFallbackAlert();
   }
+  storage.addPendingServiceStatus(messId, memberIds, serviceStatus);
   return true;
+}
+
+// Remove a member from the mess (manager only). Backend detaches the member; offline removals are queued.
+export async function removeMember(messId: string, memberId: string): Promise<boolean> {
+  apiCache.invalidate(cacheKeys.messMembers(messId));
+  invalidateUserData(memberId);
+  if (shouldUseBackend()) {
+    const result = await api.removeMemberAPI(memberId);
+    if (result.success) {
+      storage.removeMemberLocally(memberId);
+      apiCache.invalidate(cacheKeys.messMembers(messId));
+      return true;
+    }
+    if (!result.usingLocalStorage) throw new Error(result.error || 'Failed to remove member');
+    showFallbackAlert();
+  }
+  storage.removeMemberLocally(memberId);
+  storage.addPendingMemberRemoval(messId, memberId);
+  apiCache.invalidate(cacheKeys.messMembers(messId));
+  return true;
+}
+
+async function syncPendingMemberChanges(): Promise<void> {
+  for (const removal of storage.getPendingMemberRemovals()) {
+    const result = await api.removeMemberAPI(removal.memberId);
+    if (result.usingLocalStorage) return;
+    // Success or a permanent error (e.g. already removed) both clear the queue item
+    storage.removePendingMemberRemoval(removal.memberId);
+    apiCache.invalidate(cacheKeys.messMembers(removal.messId));
+  }
+  const pending = storage.getPendingServiceStatus();
+  for (let i = 0; i < pending.length; i++) {
+    const item = pending[0];
+    const result = await api.updateServiceStatusAPI(item.memberIds, item.serviceStatus);
+    if (result.usingLocalStorage) return;
+    storage.clearPendingServiceStatusAt(0);
+    apiCache.invalidate(cacheKeys.messMembers(item.messId));
+  }
 }

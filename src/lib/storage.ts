@@ -630,7 +630,53 @@ export function replaceMonthIdReferences(oldMonthId: string, newMonthId: string)
 
 // Helper to get members of a mess
 export function getMessMembers(messId: string): User[] {
-  return getUsers().filter(u => u.messId === messId && u.isApproved && u.isActive);
+  const removed = getPendingMemberRemovals().map(r => r.memberId);
+  return getUsers().filter(u => u.messId === messId && u.isApproved && u.isActive !== false && !removed.includes(u.id));
+}
+
+// ============ PENDING MEMBER REMOVALS / SERVICE STATUS (offline queue) ============
+const PENDING_REMOVALS_KEY = 'messmate_pending_member_removals';
+const PENDING_SERVICE_KEY = 'messmate_pending_service_status';
+
+export interface PendingMemberRemoval { messId: string; memberId: string; createdAt: string }
+export interface PendingServiceStatus { messId: string; memberIds: string[]; serviceStatus: string; createdAt: string }
+
+function readJson<T>(key: string): T[] {
+  try { return JSON.parse(localStorage.getItem(key) || '[]'); } catch { return []; }
+}
+
+export function getPendingMemberRemovals(): PendingMemberRemoval[] {
+  return readJson<PendingMemberRemoval>(PENDING_REMOVALS_KEY);
+}
+export function addPendingMemberRemoval(messId: string, memberId: string) {
+  const list = getPendingMemberRemovals().filter(r => r.memberId !== memberId);
+  list.push({ messId, memberId, createdAt: new Date().toISOString() });
+  localStorage.setItem(PENDING_REMOVALS_KEY, JSON.stringify(list));
+}
+export function removePendingMemberRemoval(memberId: string) {
+  localStorage.setItem(PENDING_REMOVALS_KEY, JSON.stringify(getPendingMemberRemovals().filter(r => r.memberId !== memberId)));
+}
+
+export function getPendingServiceStatus(): PendingServiceStatus[] {
+  return readJson<PendingServiceStatus>(PENDING_SERVICE_KEY);
+}
+export function addPendingServiceStatus(messId: string, memberIds: string[], serviceStatus: string) {
+  localStorage.setItem(PENDING_SERVICE_KEY, JSON.stringify([...getPendingServiceStatus(), { messId, memberIds, serviceStatus, createdAt: new Date().toISOString() }]));
+}
+export function clearPendingServiceStatusAt(index: number) {
+  const list = getPendingServiceStatus();
+  list.splice(index, 1);
+  localStorage.setItem(PENDING_SERVICE_KEY, JSON.stringify(list));
+}
+
+/** Detach a member from the mess locally (mirrors backend removal semantics). */
+export function removeMemberLocally(memberId: string) {
+  const users = getUsers();
+  const idx = users.findIndex(u => u.id === memberId);
+  if (idx !== -1) {
+    users[idx] = { ...users[idx], messId: null as any, isApproved: false, role: 'member', serviceStatus: 'default' } as User;
+    saveUsers(users);
+  }
 }
 
 // ============ NOTICES ============

@@ -135,6 +135,7 @@ async function connectToDatabase() {
       collections.messes.createIndex({ code: 1 }, { unique: true }),
       collections.messes.createIndex({ managerId: 1 }),
       collections.users.createIndex({ messId: 1 }),
+      collections.users.createIndex({ messId: 1, serviceStatus: 1 }),
       collections.months.createIndex({ messId: 1 }),
       collections.meals.createIndex({ monthId: 1 }),
       collections.meals.createIndex({ date: 1 }),
@@ -2273,7 +2274,10 @@ app.put("/api/members/service-status", authMiddleware, async (req, res) => {
     if (!Array.isArray(memberIds) || memberIds.length === 0 || !allowed.includes(serviceStatus)) {
       return res.status(400).json({ success: false, error: "Invalid memberIds or serviceStatus" });
     }
-    const ids = memberIds.map((id) => new ObjectId(id));
+    if (!memberIds.every((id) => ObjectId.isValid(id))) {
+      return res.status(400).json({ success: false, error: "Invalid member id" });
+    }
+    const ids = [...new Set(memberIds)].map((id) => new ObjectId(id));
     const result = await collections.users.updateMany(
       { _id: { $in: ids }, messId: req.user.messId },
       { $set: { serviceStatus, updatedAt: new Date() } }
@@ -2377,6 +2381,7 @@ app.put("/api/members/:id", authMiddleware, async (req, res) => {
         messId: user.messId,
         isApproved: user.isApproved !== false,
         isActive: user.isActive !== false,
+        serviceStatus: user.serviceStatus || "default",
       },
     });
   } catch (error) {
@@ -2388,6 +2393,8 @@ app.put("/api/members/:id", authMiddleware, async (req, res) => {
 app.delete("/api/members/:id", authMiddleware, async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
+    if (!ObjectId.isValid(req.params.id)) return res.status(400).json({ success: false, error: "Invalid member id" });
+    if (req.params.id === req.userId) return res.status(400).json({ success: false, error: "You cannot remove yourself" });
     const target = await collections.users.findOne({ _id: new ObjectId(req.params.id), messId: req.user.messId });
     if (!target) return res.status(404).json({ success: false, error: "Member not found" });
     if (target.role === "manager") return res.status(400).json({ success: false, error: "Transfer manager access before removal" });
