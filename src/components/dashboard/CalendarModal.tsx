@@ -1,3 +1,4 @@
+import QiblaCompass from './QiblaCompass';
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { ChevronLeft, ChevronRight, CalendarDays, MapPin, Loader2, X, Compass, Navigation } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
