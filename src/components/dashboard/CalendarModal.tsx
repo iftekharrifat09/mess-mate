@@ -750,61 +750,8 @@ export default function CalendarModal() {
     </Dialog>
     {/* Qibla Dialog */}
     <Dialog open={qiblaOpen} onOpenChange={setQiblaOpen}>
-      <DialogContent className="max-w-sm p-0 overflow-hidden bg-card border-border">
-        <DialogHeader className="px-5 pt-5 pb-2">
-          <DialogTitle className="flex items-center gap-2 text-lg">
-            <Compass className="h-5 w-5 text-info" /> Qibla Direction
-          </DialogTitle>
-        </DialogHeader>
-        <div className="px-5 pb-5 flex flex-col items-center gap-4">
-          <div className="text-xs text-muted-foreground text-center">
-            From <span className="font-semibold text-foreground">{location.name}</span>
-          </div>
-          <div className="relative w-56 h-56 rounded-full border-4 border-info/30 bg-gradient-to-br from-secondary/40 to-secondary/10 flex items-center justify-center shadow-[0_0_30px_hsl(var(--info)/0.15)]">
-            {/* Cardinal letters (rotate with the device so N always faces real north) */}
-            <motion.div className="absolute inset-0" animate={{ rotate: deviceHeading == null ? 0 : -deviceHeading }} transition={{ type: 'spring', stiffness: 80, damping: 15 }}>
-            {[
-              { l: 'N', cls: 'top-2 left-1/2 -translate-x-1/2 text-destructive' },
-              { l: 'S', cls: 'bottom-2 left-1/2 -translate-x-1/2' },
-              { l: 'E', cls: 'right-2 top-1/2 -translate-y-1/2' },
-              { l: 'W', cls: 'left-2 top-1/2 -translate-y-1/2' },
-            ].map(c => (
-              <span key={c.l} className={`absolute text-xs font-bold text-muted-foreground ${c.cls}`}>{c.l}</span>
-            ))}
-            </motion.div>
-            <motion.div
-              animate={{ rotate: compassRotation }}
-              transition={{ type: 'spring', stiffness: 80, damping: 15 }}
-              className="absolute inset-0 flex items-start justify-center pt-3"
-            >
-              <div className="flex flex-col items-center">
-                <Navigation className="h-8 w-8 -rotate-45 text-info fill-info drop-shadow-[0_0_6px_hsl(var(--info)/0.6)]" />
-                <div className="w-0.5 h-16 bg-gradient-to-b from-info to-transparent" />
-              </div>
-            </motion.div>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <div className="text-center">
-                <div className="text-3xl">🕋</div>
-                <div className="text-[0.6rem] text-muted-foreground mt-1">Kaaba</div>
-              </div>
-            </div>
-          </div>
-          <div className="text-center space-y-1">
-            <div className="text-2xl font-bold text-info tabular-nums">{qiblaBearing.toFixed(1)}°</div>
-            <div className="text-xs text-muted-foreground">Bearing from True North</div>
-            {deviceHeading != null && (
-              <div className="text-[0.65rem] text-success">✓ Live compass active</div>
-            )}
-            {headingPermission === 'denied' && (
-              <div className="text-[0.65rem] text-warning">Compass permission denied — showing static bearing</div>
-            )}
-            {headingPermission === 'idle' && deviceHeading == null && (
-              <Button size="sm" variant="outline" onClick={requestCompass} className="mt-2 h-7 text-xs">
-                Enable Live Compass
-              </Button>
-            )}
-          </div>
-        </div>
+      <DialogContent className="max-w-[95vw] sm:max-w-sm p-0 overflow-hidden bg-card border-border">
+        {qiblaOpen && <QiblaCompass />}
       </DialogContent>
     </Dialog>
     </>
