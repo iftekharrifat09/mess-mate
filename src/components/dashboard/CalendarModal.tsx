@@ -165,8 +165,9 @@ export default function CalendarModal() {
       const wkHeading = (e as unknown as { webkitCompassHeading?: number }).webkitCompassHeading;
       if (typeof wkHeading === 'number') {
         setDeviceHeading(wkHeading);
-      } else if (e.alpha != null) {
-        setDeviceHeading(360 - e.alpha);
+      } else if (e.alpha != null && (e.absolute || e.type === 'deviceorientationabsolute')) {
+        // Only trust absolute (true-north) readings; relative alpha gives a wrong direction
+        setDeviceHeading((360 - e.alpha) % 360);
       }
     };
     window.addEventListener('deviceorientationabsolute' as keyof WindowEventMap, handler as EventListener);
@@ -760,7 +761,8 @@ export default function CalendarModal() {
             From <span className="font-semibold text-foreground">{location.name}</span>
           </div>
           <div className="relative w-56 h-56 rounded-full border-4 border-info/30 bg-gradient-to-br from-secondary/40 to-secondary/10 flex items-center justify-center shadow-[0_0_30px_hsl(var(--info)/0.15)]">
-            {/* Cardinal letters */}
+            {/* Cardinal letters (rotate with the device so N always faces real north) */}
+            <motion.div className="absolute inset-0" animate={{ rotate: deviceHeading == null ? 0 : -deviceHeading }} transition={{ type: 'spring', stiffness: 80, damping: 15 }}>
             {[
               { l: 'N', cls: 'top-2 left-1/2 -translate-x-1/2 text-destructive' },
               { l: 'S', cls: 'bottom-2 left-1/2 -translate-x-1/2' },
@@ -769,13 +771,14 @@ export default function CalendarModal() {
             ].map(c => (
               <span key={c.l} className={`absolute text-xs font-bold text-muted-foreground ${c.cls}`}>{c.l}</span>
             ))}
+            </motion.div>
             <motion.div
               animate={{ rotate: compassRotation }}
               transition={{ type: 'spring', stiffness: 80, damping: 15 }}
               className="absolute inset-0 flex items-start justify-center pt-3"
             >
               <div className="flex flex-col items-center">
-                <Navigation className="h-8 w-8 text-info fill-info drop-shadow-[0_0_6px_hsl(var(--info)/0.6)]" />
+                <Navigation className="h-8 w-8 -rotate-45 text-info fill-info drop-shadow-[0_0_6px_hsl(var(--info)/0.6)]" />
                 <div className="w-0.5 h-16 bg-gradient-to-b from-info to-transparent" />
               </div>
             </motion.div>
