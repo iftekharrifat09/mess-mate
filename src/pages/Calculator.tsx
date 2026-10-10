@@ -1133,6 +1133,7 @@ export default function CalculatorPage() {
           else if (deleteTarget.type === 'exception') handleDeleteException(deleteTarget.id);
           else if (deleteTarget.type === 'deposit') handleDeleteDeposit(deleteTarget.id);
           else if (deleteTarget.type === 'billPayment') handleDeleteBillPayment(deleteTarget.id);
+          else if (deleteTarget.type === 'extra') handleDeleteExtra(deleteTarget.id);
         }}
         title={`Delete ${deleteTarget?.label}?`}
         description="This will be permanently deleted. This action cannot be undone."
