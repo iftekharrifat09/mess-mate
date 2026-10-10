@@ -103,6 +103,7 @@ async function connectToDatabase() {
       calcExceptions: db.collection("calcExceptions"),
       calcPayments: db.collection("calcPayments"),
       calcBillPayments: db.collection("calcBillPayments"),
+      calcIndividualExtras: db.collection("calcIndividualExtras"),
       activityLogs: db.collection("activityLogs"),
       chatMessages: db.collection("chatMessages"),
       messSettings: db.collection("messSettings"),
@@ -157,6 +158,8 @@ async function connectToDatabase() {
       collections.calcPayments.createIndex({ messId: 1, monthId: 1 }),
       collections.calcBillPayments.createIndex({ messId: 1, monthId: 1 }),
       collections.calcBillPayments.createIndex({ categoryId: 1 }),
+      collections.calcIndividualExtras.createIndex({ messId: 1, monthId: 1 }),
+      collections.calcIndividualExtras.createIndex({ userId: 1 }),
       collections.activityLogs.createIndex({ messId: 1 }),
       collections.chatMessages.createIndex({ messId: 1, createdAt: -1 }),
       collections.chatMessages.createIndex({ messId: 1, createdAt: 1 }),
@@ -1116,6 +1119,7 @@ app.delete("/api/mess", authMiddleware, async (req, res) => {
       collections.calcExceptions.deleteMany({ messId }),
       collections.calcPayments.deleteMany({ messId }),
       collections.calcBillPayments.deleteMany({ messId }),
+      collections.calcIndividualExtras.deleteMany({ messId }),
       collections.messes.deleteOne({ _id: messObjectId }),
     ]);
 
@@ -1235,6 +1239,7 @@ app.post("/api/months", authMiddleware, async (req, res) => {
         collections.calcExceptions.deleteMany({ categoryId: { $in: oldCategoryIds } }),
         collections.calcPayments.deleteMany({ messId, monthId: oldMonthId }),
         collections.calcBillPayments.deleteMany({ messId, monthId: oldMonthId }),
+        collections.calcIndividualExtras.deleteMany({ messId, monthId: oldMonthId }),
       ]);
     }
 
@@ -2656,6 +2661,7 @@ app.delete("/api/months/:id", authMiddleware, async (req, res) => {
       collections.messSettings.deleteMany({ messId: req.user.messId, monthId }),
       collections.calcPayments.deleteMany({ messId: req.user.messId, monthId }),
       collections.calcBillPayments.deleteMany({ messId: req.user.messId, monthId }),
+      collections.calcIndividualExtras.deleteMany({ messId: req.user.messId, monthId }),
     ]);
     const categories = await collections.calcCategories.find({ messId: req.user.messId, monthId }).project({ _id: 1 }).toArray();
     await collections.calcExceptions.deleteMany({ categoryId: { $in: categories.map((category) => category._id.toString()) } });
@@ -2690,12 +2696,14 @@ app.post("/api/calc-clear", authMiddleware, async (req, res) => {
         collections.calcExceptions.deleteMany({ messId, monthId }),
         collections.calcPayments.deleteMany({ messId, monthId }),
         collections.calcBillPayments.deleteMany({ messId, monthId }),
+        collections.calcIndividualExtras.deleteMany({ messId, monthId }),
       ]);
     } else if (mode === 'deposits') {
       // Clear deposits and bill payments only
       await Promise.all([
         collections.calcPayments.deleteMany({ messId, monthId }),
         collections.calcBillPayments.deleteMany({ messId, monthId }),
+        collections.calcIndividualExtras.deleteMany({ messId, monthId }),
       ]);
     }
     
@@ -2937,6 +2945,60 @@ app.delete("/api/calc-payments/:id", authMiddleware, async (req, res) => {
 });
 
 // --- Bill Payments ---
+// ============================================
+// INDIVIDUAL EXTRA (Mess Expense - per-member extra charge)
+// ============================================
+app.get("/api/calc-individual-extras", authMiddleware, async (req, res) => {
+  try {
+    const monthId = req.query.monthId;
+    if (!monthId) return res.status(400).json({ success: false, error: "monthId required" });
+    const extras = await collections.calcIndividualExtras.find({ messId: req.user.messId, monthId }).sort({ createdAt: -1 }).toArray();
+    res.json({ success: true, extras: transformDocs(extras) });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to get individual extras" });
+  }
+});
+
+app.post("/api/calc-individual-extras", authMiddleware, async (req, res) => {
+  try {
+    if (!requireManager(req, res)) return;
+    const { userId, amount, description, monthId } = req.body;
+    const amt = Number(amount);
+    if (!monthId || !userId || !ObjectId.isValid(userId)) return res.status(400).json({ success: false, error: "Member and month are required" });
+    if (!Number.isFinite(amt) || amt <= 0) return res.status(400).json({ success: false, error: "Amount must be greater than 0" });
+    const desc = typeof description === "string" ? description.trim().slice(0, 300) : "";
+    const month = ObjectId.isValid(monthId) ? await collections.months.findOne({ _id: new ObjectId(monthId), messId: req.user.messId }) : null;
+    if (!month) return res.status(404).json({ success: false, error: "Month not found" });
+    const member = await collections.users.findOne({ _id: new ObjectId(userId), messId: req.user.messId });
+    if (!member) return res.status(404).json({ success: false, error: "Member not found in your mess" });
+    if ((member.serviceStatus || "default") === "meals_only") return res.status(400).json({ success: false, error: "This member is Meals Only and has no expenses" });
+    const doc = { messId: req.user.messId, monthId, userId, userName: member.name, amount: amt, description: desc, createdBy: req.userId, createdAt: new Date() };
+    const result = await collections.calcIndividualExtras.insertOne(doc);
+    await collections.notifications.insertOne({
+      userId, messId: req.user.messId, type: "cost", title: "Individual Extra Added",
+      message: `৳${amt} individual extra added to your expenses${desc ? ` - ${desc}` : ""}`, seen: false, createdAt: new Date(),
+    });
+    await writeActivityLog(req.user.messId, "individual_extra_added", `৳${amt} individual extra added for ${member.name}`, { userId, monthId });
+    res.json({ success: true, extra: { id: result.insertedId.toString(), ...doc } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to save individual extra" });
+  }
+});
+
+app.delete("/api/calc-individual-extras/:id", authMiddleware, async (req, res) => {
+  try {
+    if (!requireManager(req, res)) return;
+    if (!ObjectId.isValid(req.params.id)) return res.status(400).json({ success: false, error: "Invalid id" });
+    const doc = await collections.calcIndividualExtras.findOne({ _id: new ObjectId(req.params.id), messId: req.user.messId });
+    if (!doc) return res.status(404).json({ success: false, error: "Entry not found" });
+    await collections.calcIndividualExtras.deleteOne({ _id: doc._id });
+    await writeActivityLog(req.user.messId, "individual_extra_deleted", `৳${doc.amount} individual extra removed for ${doc.userName}`, { userId: doc.userId });
+    res.json({ success: true, message: "Individual extra deleted" });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to delete individual extra" });
+  }
+});
+
 app.get("/api/calc-bill-payments", authMiddleware, async (req, res) => {
   try {
     const messId = req.query.messId || req.user.messId;

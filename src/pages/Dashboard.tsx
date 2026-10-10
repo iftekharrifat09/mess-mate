@@ -70,6 +70,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [calcCategories, setCalcCategories] = useState<CalcCategory[]>([]);
   const [calcExceptions, setCalcExceptions] = useState<CalcException[]>([]);
+  const [calcExtras, setCalcExtras] = useState<calcStore.CalcIndividualExtra[]>([]);
   const [calcPayments, setCalcPayments] = useState<CalcPayment[]>([]);
   const [isPending, startTransition] = useTransition();
   const headerRef = useRef<HTMLDivElement>(null);
@@ -105,11 +106,13 @@ export default function Dashboard() {
         });
 
         if (user.messId && activeMonth.id) {
-          const [cats, excs, pays] = await Promise.all([
+          const [cats, excs, pays, xtras] = await Promise.all([
             calcStore.getCategories(user.messId, activeMonth.id),
             calcStore.getAllExceptions(user.messId, activeMonth.id),
             calcStore.getPayments(user.messId, activeMonth.id),
+            calcStore.getIndividualExtras(user.messId, activeMonth.id),
           ]);
+          setCalcExtras(xtras);
           setCalcCategories(cats);
           setCalcExceptions(excs);
           setCalcPayments(pays);
@@ -205,7 +208,7 @@ export default function Dashboard() {
                 summary={personalSummary}
                 utilityExpenses={(() => {
                   if (!user?.messId || !monthSummary?.monthId || !hasExpenseService(members.find(member => member.id === user.id) || user)) return undefined;
-                  return calcStore.calculateMemberDues(calcCategories, calcExceptions, expenseMembers.length, user.id);
+                  return calcStore.calculateMemberDues(calcCategories, calcExceptions, expenseMembers.length, user.id) + calcStore.getMemberExtraTotal(calcExtras, user.id);
                 })()}
                 utilityPaid={(() => {
                   if (!user?.messId || !monthSummary?.monthId) return undefined;
@@ -246,6 +249,7 @@ export default function Dashboard() {
           calcCategories={calcCategories}
           calcExceptions={calcExceptions}
           calcPayments={calcPayments}
+          calcExtras={calcExtras}
           onDataChanged={reloadDashboardData}
         />
       </motion.div>
@@ -253,7 +257,7 @@ export default function Dashboard() {
   );
 }
 
-function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId, userId, isManager, calcCategories, calcExceptions, calcPayments, onDataChanged }: {
+function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId, userId, isManager, calcCategories, calcExceptions, calcPayments, calcExtras = [], onDataChanged }: {
   membersSummary: MemberSummary[];
   members: User[];
   messId: string;
@@ -263,6 +267,7 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
   calcCategories: CalcCategory[];
   calcExceptions: CalcException[];
   calcPayments: CalcPayment[];
+  calcExtras?: calcStore.CalcIndividualExtra[];
   onDataChanged?: () => void;
 }) {
   const { toast } = useToast();
@@ -301,12 +306,12 @@ function MembersSectionWithDues({ membersSummary, members, messId, activeMonthId
     const totalMembers = expenseMembers.length;
     const dues: Record<string, { shouldPay: number; totalPaid: number }> = {};
     for (const m of expenseMembers) {
-      const shouldPay = calcStore.calculateMemberDues(calcCategories, calcExceptions, totalMembers, m.id);
+      const shouldPay = calcStore.calculateMemberDues(calcCategories, calcExceptions, totalMembers, m.id) + calcStore.getMemberExtraTotal(calcExtras, m.id);
       const totalPaid = calcPayments.filter(p => p.userId === m.id).reduce((s, p) => s + p.amount, 0);
       dues[m.id] = { shouldPay, totalPaid };
     }
     return dues;
-  }, [messId, activeMonthId, members, calcCategories, calcExceptions, calcPayments]);
+  }, [messId, activeMonthId, members, calcCategories, calcExceptions, calcPayments, calcExtras]);
 
   const handleToggleChange = async (checked: boolean) => {
     if (!isManager) return;

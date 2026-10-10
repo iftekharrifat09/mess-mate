@@ -828,6 +828,18 @@ export async function deleteCalcPaymentAPI(id: string) {
 }
 
 // Bill Payments
+export async function getCalcIndividualExtrasAPI(monthId: string) {
+  return apiRequest(`/calc-individual-extras?monthId=${monthId}`, { method: 'GET' });
+}
+
+export async function createCalcIndividualExtraAPI(data: { userId: string; amount: number; description: string; monthId: string; messId: string }) {
+  return apiRequest(`/calc-individual-extras`, { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function deleteCalcIndividualExtraAPI(id: string) {
+  return apiRequest(`/calc-individual-extras/${id}`, { method: 'DELETE' });
+}
+
 export async function getCalcBillPaymentsAPI(messId: string, monthId: string) {
   return apiRequest(`/calc-bill-payments?messId=${messId}&monthId=${monthId}`, { method: 'GET' });
 }
