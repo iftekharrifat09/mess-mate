@@ -19,7 +19,7 @@ import { hasExpenseService } from '@/lib/serviceStatus';
 import { shouldUseBackend } from '@/lib/config';
 import * as api from '@/lib/api';
 import * as calcStore from '@/lib/calculatorStorage';
-import { CalcCategory, CalcException, CalcPayment, CalcBillPayment } from '@/lib/calculatorStorage';
+import { CalcCategory, CalcException, CalcPayment, CalcBillPayment, CalcIndividualExtra } from '@/lib/calculatorStorage';
 import { formatCurrency } from '@/lib/calculations';
 import {
   Plus, Edit2, Trash2, UserPlus, Calculator as CalcIcon,
@@ -42,6 +42,12 @@ export default function CalculatorPage() {
   const [allExceptions, setAllExceptions] = useState<CalcException[]>([]);
   const [payments, setPayments] = useState<CalcPayment[]>([]);
   const [billPayments, setBillPayments] = useState<CalcBillPayment[]>([]);
+  const [extras, setExtras] = useState<CalcIndividualExtra[]>([]);
+  const [extraModal, setExtraModal] = useState(false);
+  const [extraUserId, setExtraUserId] = useState('');
+  const [extraAmount, setExtraAmount] = useState('');
+  const [extraDesc, setExtraDesc] = useState('');
+  const [extraSaving, setExtraSaving] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -88,12 +94,14 @@ export default function CalculatorPage() {
 
   const reload = useCallback(async () => {
     if (!messId || !activeMonthId) return;
-    const [cats, excs, pays, bills] = await Promise.all([
+    const [cats, excs, pays, bills, xtras] = await Promise.all([
       calcStore.getCategories(messId, activeMonthId),
       calcStore.getAllExceptions(messId, activeMonthId),
       calcStore.getPayments(messId, activeMonthId),
       calcStore.getBillPayments(messId, activeMonthId),
+      calcStore.getIndividualExtras(messId, activeMonthId),
     ]);
+    setExtras(xtras.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
     setCategories(cats);
     setAllExceptions(excs);
     setPayments(pays.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
@@ -121,10 +129,43 @@ export default function CalculatorPage() {
   const memberDues = useMemo(() => {
     const map: Record<string, number> = {};
     for (const m of members) {
-      map[m.id] = calcStore.calculateMemberDues(categories, allExceptions, totalMembers, m.id);
+      map[m.id] = calcStore.calculateMemberDues(categories, allExceptions, totalMembers, m.id) + calcStore.getMemberExtraTotal(extras, m.id);
     }
     return map;
-  }, [categories, allExceptions, members, totalMembers]);
+  }, [categories, allExceptions, members, totalMembers, extras]);
+
+  const handleSaveExtra = async () => {
+    const amt = Number(extraAmount);
+    const member = members.find(m => m.id === extraUserId);
+    if (!member || !(amt > 0) || extraSaving) return;
+    setExtraSaving(true);
+    try {
+      await calcStore.createIndividualExtra({ messId, monthId: activeMonthId, userId: member.id, userName: member.fullName, amount: amt, description: extraDesc.trim() });
+      await reload();
+      setExtraModal(false);
+      setExtraUserId(''); setExtraAmount(''); setExtraDesc('');
+      toast({ title: 'Individual extra saved' });
+    } catch (e) {
+      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to save', variant: 'destructive' });
+    } finally { setExtraSaving(false); }
+  };
+
+  const handleDeleteExtra = async (id: string) => {
+    setIsDeleting(true);
+    try {
+      await calcStore.deleteIndividualExtra(id);
+      setDeleteTarget(null);
+      await reload();
+      toast({ title: 'Individual extra deleted', variant: 'destructive' });
+    } catch (e) {
+      toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to delete', variant: 'destructive' });
+    } finally { setIsDeleting(false); }
+  };
+
+  const recordRows = useMemo(() => [
+    ...billPayments.map(bp => ({ kind: 'bill' as const, id: bp.id, createdAt: bp.createdAt, bp })),
+    ...extras.map(x => ({ kind: 'extra' as const, id: x.id, createdAt: x.createdAt, x })),
+  ].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()), [billPayments, extras]);
 
   const memberPayments = useMemo(() => {
     const map: Record<string, number> = {};
@@ -509,10 +550,15 @@ export default function CalculatorPage() {
 
         {/* Member Dues Overview */}
         <Card className="shadow-card">
-          <CardHeader>
+          <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0">
             <CardTitle className="flex items-center gap-2 text-lg">
               <Users className="h-5 w-5 text-primary" /> Member Dues
             </CardTitle>
+            {isManager && members.length > 0 && activeMonthId && (
+              <Button size="sm" variant="outline" onClick={() => setExtraModal(true)}>
+                <Plus className="h-3.5 w-3.5 mr-1" /> Individual Extra
+              </Button>
+            )}
           </CardHeader>
           <CardContent>
             {members.length === 0 ? (
@@ -664,7 +710,7 @@ export default function CalculatorPage() {
                   <Wallet className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1 md:mr-2" /> Deposits ({payments.length})
                 </TabsTrigger>
                 <TabsTrigger value="records" className="text-xs md:text-sm">
-                  <Receipt className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1 md:mr-2" /> Records ({billPayments.length})
+                  <Receipt className="h-3.5 w-3.5 md:h-4 md:w-4 mr-1 md:mr-2" /> Records ({recordRows.length})
                 </TabsTrigger>
               </TabsList>
 
@@ -715,7 +761,7 @@ export default function CalculatorPage() {
               </TabsContent>
 
               <TabsContent value="records">
-                {billPayments.length === 0 ? (
+                {recordRows.length === 0 ? (
                   <p className="text-muted-foreground text-center py-8">No bill payments recorded yet.</p>
                 ) : (
                   <div className="overflow-x-auto">
@@ -730,6 +776,23 @@ export default function CalculatorPage() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
+                        {recordRows.filter(r => r.kind === 'extra').map(({ x }) => x && (
+                          <TableRow key={`x-${x.id}`}>
+                            <TableCell className="text-muted-foreground whitespace-nowrap">
+                              {format(new Date(x.createdAt), 'MMM dd, yyyy hh:mm a')}
+                            </TableCell>
+                            <TableCell className="font-medium">{x.userName} - Individual Extra</TableCell>
+                            <TableCell className="font-bold text-warning">{formatCurrency(x.amount)}</TableCell>
+                            <TableCell className="text-muted-foreground">{x.description || '-'}</TableCell>
+                            {isManager && (
+                              <TableCell className="text-right">
+                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteTarget({ type: 'extra', id: x.id, label: `individual extra for "${x.userName}"` })}>
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </TableCell>
+                            )}
+                          </TableRow>
+                        ))}
                         {billPayments.map(bp => (
                           <TableRow key={bp.id}>
                             <TableCell className="text-muted-foreground whitespace-nowrap">
@@ -763,6 +826,40 @@ export default function CalculatorPage() {
           </CardContent>
         </Card>
       </motion.div>
+
+      {/* Individual Extra Modal */}
+      <Dialog open={extraModal} onOpenChange={o => !extraSaving && setExtraModal(o)}>
+        <DialogContent className="max-w-[95vw] sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Individual Extra</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Member</Label>
+              <Select value={extraUserId} onValueChange={setExtraUserId}>
+                <SelectTrigger><SelectValue placeholder="Select member" /></SelectTrigger>
+                <SelectContent>
+                  {members.map(m => <SelectItem key={m.id} value={m.id}>{m.fullName}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Amount</Label>
+              <Input type="number" min="0" value={extraAmount} onChange={e => setExtraAmount(e.target.value)} placeholder="200" />
+            </div>
+            <div>
+              <Label>Description</Label>
+              <Input value={extraDesc} maxLength={300} onChange={e => setExtraDesc(e.target.value)} placeholder="e.g. Extra electricity usage" />
+            </div>
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setExtraModal(false)} disabled={extraSaving}>Cancel</Button>
+            <Button onClick={handleSaveExtra} disabled={!extraUserId || !(Number(extraAmount) > 0) || extraSaving}>
+              {extraSaving && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Add/Edit Category Modal */}
       <Dialog open={catModal} onOpenChange={setCatModal}>

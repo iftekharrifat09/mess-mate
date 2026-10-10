@@ -42,7 +42,19 @@ export interface CalcBillPayment {
   createdAt: string;
 }
 
+export interface CalcIndividualExtra {
+  id: string;
+  messId: string;
+  monthId: string;
+  userId: string;
+  userName: string;
+  amount: number;
+  description: string;
+  createdAt: string;
+}
+
 const KEYS = {
+  INDIVIDUAL_EXTRAS: 'mess_calc_individual_extras',
   CATEGORIES: 'mess_calc_categories',
   EXCEPTIONS: 'mess_calc_exceptions',
   PAYMENTS: 'mess_calc_payments',
@@ -398,6 +410,49 @@ export async function deleteBillPayment(id: string): Promise<void> {
     } catch (e) { console.error('Error deleting bill payment:', e); }
   }
   saveLocal(KEYS.BILL_PAYMENTS, getLocal<CalcBillPayment>(KEYS.BILL_PAYMENTS).filter(p => p.id !== id));
+}
+
+// ============= Individual Extras =============
+
+export async function getIndividualExtras(messId: string, monthId: string): Promise<CalcIndividualExtra[]> {
+  if (shouldUseBackend()) {
+    try {
+      const result = await api.getCalcIndividualExtrasAPI(monthId);
+      if (result.success && result.data) return (result.data as any).extras || [];
+      if (result.usingLocalStorage) showFallbackAlert();
+    } catch (e) { console.error('Error fetching individual extras:', e); }
+  }
+  return getLocal<CalcIndividualExtra>(KEYS.INDIVIDUAL_EXTRAS).filter(x => x.messId === messId && x.monthId === monthId);
+}
+
+export async function createIndividualExtra(data: Omit<CalcIndividualExtra, 'id' | 'createdAt'>): Promise<CalcIndividualExtra> {
+  if (!(data.amount > 0)) throw new Error('Amount must be greater than 0');
+  if (shouldUseBackend()) {
+    const result = await api.createCalcIndividualExtraAPI(data);
+    if (result.success && result.data) return (result.data as any).extra || result.data;
+    if (!result.usingLocalStorage) throw new Error(result.error || 'Failed to save individual extra');
+    showFallbackAlert();
+  }
+  const all = getLocal<CalcIndividualExtra>(KEYS.INDIVIDUAL_EXTRAS);
+  const item: CalcIndividualExtra = { ...data, id: genId(), createdAt: new Date().toISOString() };
+  all.push(item);
+  saveLocal(KEYS.INDIVIDUAL_EXTRAS, all);
+  return item;
+}
+
+export async function deleteIndividualExtra(id: string): Promise<void> {
+  if (shouldUseBackend()) {
+    const result = await api.deleteCalcIndividualExtraAPI(id);
+    if (result.success) return;
+    if (!result.usingLocalStorage) throw new Error(result.error || 'Failed to delete individual extra');
+    showFallbackAlert();
+  }
+  saveLocal(KEYS.INDIVIDUAL_EXTRAS, getLocal<CalcIndividualExtra>(KEYS.INDIVIDUAL_EXTRAS).filter(x => x.id !== id));
+}
+
+/** Sum of individual extras charged to one member. */
+export function getMemberExtraTotal(extras: CalcIndividualExtra[], userId: string): number {
+  return extras.filter(x => x.userId === userId).reduce((s, x) => s + x.amount, 0);
 }
 
 // ============= Calculation helpers =============
