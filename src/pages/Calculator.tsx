@@ -44,6 +44,7 @@ export default function CalculatorPage() {
   const [billPayments, setBillPayments] = useState<CalcBillPayment[]>([]);
   const [extras, setExtras] = useState<CalcIndividualExtra[]>([]);
   const [extraModal, setExtraModal] = useState(false);
+  const [editingExtra, setEditingExtra] = useState<CalcIndividualExtra | null>(null);
   const [extraUserId, setExtraUserId] = useState('');
   const [extraAmount, setExtraAmount] = useState('');
   const [extraDesc, setExtraDesc] = useState('');
@@ -134,17 +135,35 @@ export default function CalculatorPage() {
     return map;
   }, [categories, allExceptions, members, totalMembers, extras]);
 
+  const openExtraModal = () => {
+    setEditingExtra(null);
+    setExtraUserId(''); setExtraAmount(''); setExtraDesc('');
+    setExtraModal(true);
+  };
+
+  const handleEditExtra = (x: CalcIndividualExtra) => {
+    setEditingExtra(x);
+    setExtraUserId(x.userId); setExtraAmount(String(x.amount)); setExtraDesc(x.description || '');
+    setExtraModal(true);
+  };
+
   const handleSaveExtra = async () => {
     const amt = Number(extraAmount);
     const member = members.find(m => m.id === extraUserId);
     if (!member || !(amt > 0) || extraSaving) return;
     setExtraSaving(true);
     try {
-      await calcStore.createIndividualExtra({ messId, monthId: activeMonthId, userId: member.id, userName: member.fullName, amount: amt, description: extraDesc.trim() });
+      if (editingExtra) {
+        await calcStore.updateIndividualExtra(editingExtra.id, { userId: member.id, userName: member.fullName, amount: amt, description: extraDesc.trim() });
+        toast({ title: 'Individual extra updated' });
+      } else {
+        await calcStore.createIndividualExtra({ messId, monthId: activeMonthId, userId: member.id, userName: member.fullName, amount: amt, description: extraDesc.trim() });
+        toast({ title: 'Individual extra saved' });
+      }
       await reload();
       setExtraModal(false);
+      setEditingExtra(null);
       setExtraUserId(''); setExtraAmount(''); setExtraDesc('');
-      toast({ title: 'Individual extra saved' });
     } catch (e) {
       toast({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to save', variant: 'destructive' });
     } finally { setExtraSaving(false); }
@@ -555,7 +574,7 @@ export default function CalculatorPage() {
               <Users className="h-5 w-5 text-primary" /> Member Dues
             </CardTitle>
             {isManager && members.length > 0 && activeMonthId && (
-              <Button size="sm" variant="outline" onClick={() => setExtraModal(true)}>
+              <Button size="sm" variant="outline" onClick={openExtraModal}>
                 <Plus className="h-3.5 w-3.5 mr-1" /> Individual Extra
               </Button>
             )}
@@ -786,9 +805,14 @@ export default function CalculatorPage() {
                             <TableCell className="text-muted-foreground">{x.description || '-'}</TableCell>
                             {isManager && (
                               <TableCell className="text-right">
-                                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteTarget({ type: 'extra', id: x.id, label: `individual extra for "${x.userName}"` })}>
-                                  <Trash2 className="h-4 w-4" />
-                                </Button>
+                                <div className="flex justify-end gap-1">
+                                  <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEditExtra(x)}>
+                                    <Edit2 className="h-4 w-4" />
+                                  </Button>
+                                  <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive" onClick={() => setDeleteTarget({ type: 'extra', id: x.id, label: `individual extra for "${x.userName}"` })}>
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
+                                </div>
                               </TableCell>
                             )}
                           </TableRow>
@@ -831,7 +855,7 @@ export default function CalculatorPage() {
       <Dialog open={extraModal} onOpenChange={o => !extraSaving && setExtraModal(o)}>
         <DialogContent className="max-w-[95vw] sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Individual Extra</DialogTitle>
+            <DialogTitle>{editingExtra ? 'Edit Individual Extra' : 'Individual Extra'}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
@@ -855,7 +879,7 @@ export default function CalculatorPage() {
           <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setExtraModal(false)} disabled={extraSaving}>Cancel</Button>
             <Button onClick={handleSaveExtra} disabled={!extraUserId || !(Number(extraAmount) > 0) || extraSaving}>
-              {extraSaving && <Loader2 className="h-4 w-4 animate-spin mr-1" />} Save
+              {extraSaving && <Loader2 className="h-4 w-4 animate-spin mr-1" />} {editingExtra ? 'Update' : 'Save'}
             </Button>
           </DialogFooter>
         </DialogContent>

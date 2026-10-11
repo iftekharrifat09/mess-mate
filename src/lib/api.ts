@@ -836,6 +836,10 @@ export async function createCalcIndividualExtraAPI(data: { userId: string; amoun
   return apiRequest(`/calc-individual-extras`, { method: 'POST', body: JSON.stringify(data) });
 }
 
+export async function updateCalcIndividualExtraAPI(id: string, data: { userId: string; amount: number; description: string }) {
+  return apiRequest(`/calc-individual-extras/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
 export async function deleteCalcIndividualExtraAPI(id: string) {
   return apiRequest(`/calc-individual-extras/${id}`, { method: 'DELETE' });
 }
