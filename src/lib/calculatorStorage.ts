@@ -440,6 +440,21 @@ export async function createIndividualExtra(data: Omit<CalcIndividualExtra, 'id'
   return item;
 }
 
+export async function updateIndividualExtra(id: string, data: { userId: string; userName: string; amount: number; description: string }): Promise<void> {
+  if (!(data.amount > 0)) throw new Error('Amount must be greater than 0');
+  if (shouldUseBackend()) {
+    const result = await api.updateCalcIndividualExtraAPI(id, data);
+    if (result.success) return;
+    if (!result.usingLocalStorage) throw new Error(result.error || 'Failed to update individual extra');
+    showFallbackAlert();
+  }
+  const all = getLocal<CalcIndividualExtra>(KEYS.INDIVIDUAL_EXTRAS);
+  const idx = all.findIndex(x => x.id === id);
+  if (idx === -1) throw new Error('Entry not found');
+  all[idx] = { ...all[idx], ...data };
+  saveLocal(KEYS.INDIVIDUAL_EXTRAS, all);
+}
+
 export async function deleteIndividualExtra(id: string): Promise<void> {
   if (shouldUseBackend()) {
     const result = await api.deleteCalcIndividualExtraAPI(id);

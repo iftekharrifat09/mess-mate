@@ -2985,6 +2985,32 @@ app.post("/api/calc-individual-extras", authMiddleware, async (req, res) => {
   }
 });
 
+app.put("/api/calc-individual-extras/:id", authMiddleware, async (req, res) => {
+  try {
+    if (!requireManager(req, res)) return;
+    if (!ObjectId.isValid(req.params.id)) return res.status(400).json({ success: false, error: "Invalid id" });
+    const { userId, amount, description } = req.body;
+    const amt = Number(amount);
+    if (!userId || !ObjectId.isValid(userId)) return res.status(400).json({ success: false, error: "Member is required" });
+    if (!Number.isFinite(amt) || amt <= 0) return res.status(400).json({ success: false, error: "Amount must be greater than 0" });
+    const desc = typeof description === "string" ? description.trim().slice(0, 300) : "";
+    const doc = await collections.calcIndividualExtras.findOne({ _id: new ObjectId(req.params.id), messId: req.user.messId });
+    if (!doc) return res.status(404).json({ success: false, error: "Entry not found" });
+    const member = await collections.users.findOne({ _id: new ObjectId(userId), messId: req.user.messId });
+    if (!member) return res.status(404).json({ success: false, error: "Member not found in your mess" });
+    if ((member.serviceStatus || "default") === "meals_only") return res.status(400).json({ success: false, error: "This member is Meals Only and has no expenses" });
+    await collections.calcIndividualExtras.updateOne({ _id: doc._id }, { $set: { userId, userName: member.name, amount: amt, description: desc } });
+    await collections.notifications.insertOne({
+      userId, messId: req.user.messId, type: "cost", title: "Individual Extra Updated",
+      message: `৳${amt} individual extra was updated on your expenses${desc ? ` - ${desc}` : ""}`, seen: false, createdAt: new Date(),
+    });
+    await writeActivityLog(req.user.messId, "individual_extra_updated", `৳${amt} individual extra updated for ${member.name}`, { userId, monthId: doc.monthId });
+    res.json({ success: true, extra: { id: doc._id.toString(), messId: doc.messId, monthId: doc.monthId, userId, userName: member.name, amount: amt, description: desc, createdAt: doc.createdAt } });
+  } catch (error) {
+    res.status(500).json({ success: false, error: "Failed to update individual extra" });
+  }
+});
+
 app.delete("/api/calc-individual-extras/:id", authMiddleware, async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
