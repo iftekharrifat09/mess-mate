@@ -29,6 +29,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 const fetch = require("node-fetch");
+const crypto = require("crypto");
 require("dotenv").config();
 
 const app = express();
@@ -59,7 +60,9 @@ function transformDoc(doc) {
 // Helper to transform Mess document with messCode field for frontend compatibility
 function transformMessDoc(doc) {
   if (!doc) return null;
-  const { _id, code, ...rest } = doc;
+  const safeDoc = { ...doc };
+  delete safeDoc.descoCredentialsEncrypted;
+  const { _id, code, ...rest } = safeDoc;
   return { 
     id: _id.toString(), 
     messCode: code,  // Frontend expects messCode instead of code
@@ -3155,24 +3158,358 @@ app.delete("/api/activity-logs/:id", authMiddleware, async (req, res) => {
 const descoAlertLastSent = new Map();
 const DESCO_ALERT_INTERVAL = 12 * 60 * 60 * 1000; // 12 hours in milliseconds
 const LOW_BALANCE_THRESHOLD = 100;
+const DESCO_BASE_URL = "https://prepaid.desco.org.bd";
 
-// DESCO API helper
-async function fetchDescoBalance(accountNo, apiType = 'tkdes') {
+function getDescoEncryptionKey() {
+  const configuredKey = process.env.DESCO_ENCRYPTION_KEY || "";
+  const key = /^[a-f0-9]{64}$/i.test(configuredKey)
+    ? Buffer.from(configuredKey, "hex")
+    : Buffer.from(configuredKey, "base64");
+  if (key.length !== 32) throw new Error("DESCO_ENCRYPTION_KEY_NOT_CONFIGURED");
+  return key;
+}
+
+function encryptDescoCredentials(credentials) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", getDescoEncryptionKey(), iv);
+  const encrypted = Buffer.concat([
+    cipher.update(JSON.stringify(credentials), "utf8"),
+    cipher.final(),
+  ]);
+  return {
+    version: 1,
+    iv: iv.toString("base64"),
+    authTag: cipher.getAuthTag().toString("base64"),
+    ciphertext: encrypted.toString("base64"),
+  };
+}
+
+function decryptDescoCredentials(encrypted) {
+  if (!encrypted || encrypted.version !== 1) throw new Error("DESCO_CREDENTIALS_UNAVAILABLE");
+  const decipher = crypto.createDecipheriv(
+    "aes-256-gcm",
+    getDescoEncryptionKey(),
+    Buffer.from(encrypted.iv, "base64")
+  );
+  decipher.setAuthTag(Buffer.from(encrypted.authTag, "base64"));
+  const decrypted = Buffer.concat([
+    decipher.update(Buffer.from(encrypted.ciphertext, "base64")),
+    decipher.final(),
+  ]).toString("utf8");
+  return JSON.parse(decrypted);
+}
+
+function updateDescoCookies(session, response) {
+  let setCookies = [];
+  if (typeof response.headers.getSetCookie === "function") {
+    setCookies = response.headers.getSetCookie();
+  } else if (typeof response.headers.raw === "function") {
+    setCookies = response.headers.raw()["set-cookie"] || [];
+  } else {
+    const combined = response.headers.get("set-cookie");
+    if (combined) setCookies = combined.split(/,(?=\s*[^;,=\s]+=)/);
+  }
+
+  for (const cookie of setCookies) {
+    const pair = cookie.split(";")[0];
+    const separator = pair.indexOf("=");
+    if (separator <= 0) continue;
+    const name = pair.slice(0, separator).trim();
+    const value = pair.slice(separator + 1).trim();
+    if (/max-age=0/i.test(cookie) || /expires=Thu, 01 Jan 1970/i.test(cookie)) {
+      session.cookies.delete(name);
+    } else {
+      session.cookies.set(name, value);
+    }
+  }
+  const xsrf = session.cookies.get("XSRF-TOKEN");
+  if (xsrf) {
+    try { session.xsrf = decodeURIComponent(xsrf); } catch { session.xsrf = xsrf; }
+  }
+}
+
+async function descoRequest(session, url, options = {}) {
+  const headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/157.0.0.0 Safari/537.36",
+    "Referer": `${DESCO_BASE_URL}/dashboard`,
+    "Origin": DESCO_BASE_URL,
+    "Accept": "application/json",
+    ...(options.headers || {}),
+  };
+  if (session.cookies.size) {
+    headers.Cookie = [...session.cookies.entries()].map(([name, value]) => `${name}=${value}`).join("; ");
+  }
+  if (session.xsrf) headers["X-XSRF-TOKEN"] = session.xsrf;
+
+  const response = await fetch(url, { ...options, headers, timeout: 15000 });
+  updateDescoCookies(session, response);
+  if (!response.ok) throw new Error("DESCO_REQUEST_FAILED");
+  return response;
+}
+
+async function descoJson(session, url, options = {}) {
+  const response = await descoRequest(session, url, options);
+  let payload;
+  try { payload = await response.json(); } catch { throw new Error("DESCO_INVALID_RESPONSE"); }
+  if (payload?.success === false || (payload?.code !== undefined && String(payload.code) !== "200")) {
+    throw new Error("DESCO_REQUEST_FAILED");
+  }
+  return payload;
+}
+
+function descoData(payload) {
+  return payload && typeof payload === "object" && !Array.isArray(payload) && payload.data !== undefined
+    ? payload.data
+    : payload;
+}
+
+async function createDescoSession(credentials, accountNo) {
+  const session = { cookies: new Map(), xsrf: "" };
+  const csrfResponse = await descoRequest(session, `${DESCO_BASE_URL}/api/auth/csrf`);
+  await csrfResponse.text();
+  const sessionResponse = await descoRequest(session, `${DESCO_BASE_URL}/api/auth/session`);
+  await sessionResponse.text();
+  const login = await descoJson(session, `${DESCO_BASE_URL}/api/auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username: credentials.loginId, password: credentials.password }),
+  });
+  if (login?.success === false || login?.authenticated === false) throw new Error("DESCO_LOGIN_FAILED");
+
+  const accountsResponse = await descoJson(session, `${DESCO_BASE_URL}/api/accounts`);
+  const accounts = Array.isArray(accountsResponse?.accounts) ? accountsResponse.accounts : [];
+  const account = accounts.find((item) => String(item.accountNo) === String(accountNo));
+  if (!account?.accountId) throw new Error("DESCO_ACCOUNT_NOT_FOUND");
+  return { session, accountId: account.accountId };
+}
+
+function descoArray(payload, candidateKeys = []) {
+  const value = descoData(payload);
+  if (Array.isArray(value)) return value;
+  if (!value || typeof value !== "object") return [];
+  for (const key of [...candidateKeys, "records", "items", "results", "usage", "transactions", "list"]) {
+    if (Array.isArray(value[key])) return value[key];
+  }
+  return [];
+}
+
+function descoNumber(value, keys) {
+  if (value === null || value === undefined) return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) return Number(value);
+  if (typeof value === "object") {
+    for (const key of keys) {
+      const result = descoNumber(value[key], keys);
+      if (result !== null) return result;
+    }
+  }
+  return null;
+}
+
+function descoDate(value, keys) {
+  if (!value || typeof value !== "object") return "";
+  for (const key of keys) {
+    if (value[key] !== undefined && value[key] !== null) return String(value[key]);
+  }
+  return "";
+}
+
+function dateString(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function unwrapDescoList(payload) {
+  return descoArray(payload, ["data", "usage", "transactions", "dailyUsage", "monthlyUsage"]);
+}
+
+function normalizeDescoBalance(payload, accountNo, summary, monthlyUsage) {
+  const raw = descoData(payload);
+  const realtime = raw && typeof raw === "object" ? raw : {};
+  const balanceValue = descoNumber(realtime, ["balance", "currentBalance", "availableBalance", "amount"])
+    ?? descoNumber(summary, ["balance", "currentBalance", "availableBalance"])
+    ?? 0;
+  const now = new Date();
+  const currentMonth = monthlyUsage.find((row) => {
+    const month = descoDate(row, ["month", "monthFrom", "date", "usageMonth"]);
+    return month.startsWith(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`);
+  });
+  const consumption = descoNumber(realtime, ["currentMonthConsumption", "monthlyConsumption", "consumedTaka", "totalCost"])
+    ?? descoNumber(summary, ["currentMonthConsumption", "monthlyConsumption", "consumedTaka", "totalCost"])
+    ?? descoNumber(currentMonth, ["currentMonthConsumption", "consumedTaka", "totalCost", "amount"])
+    ?? 0;
+  return {
+    accountNo,
+    balance: balanceValue,
+    currentMonthConsumption: consumption,
+    readingTime: descoDate(realtime, ["readingTime", "updatedAt", "readingDate", "date"]) || new Date().toISOString(),
+  };
+}
+
+function normalizeDailyConsumption(rows) {
+  return rows.map((row) => ({
+    ...row,
+    date: descoDate(row, ["date", "usageDate", "readingDate", "consumptionDate", "dateTime"]),
+    consumedUnit: descoNumber(row, ["consumedUnit", "consumedUnits", "unit", "units", "consumption", "kwh", "consumedKwh"]) ?? 0,
+    consumedTaka: descoNumber(row, ["consumedTaka", "cost", "amount", "totalAmount", "consumptionCost"]) ?? 0,
+  }));
+}
+
+function normalizeTransactions(rows) {
+  return rows.map((row) => ({
+    ...row,
+    rechargeDate: descoDate(row, ["rechargeDate", "transactionDate", "date", "createdAt"]),
+    totalAmount: descoNumber(row, ["totalAmount", "amount", "rechargeAmount", "paidAmount"]) ?? 0,
+    VAT: descoNumber(row, ["VAT", "vat", "vatAmount", "taxAmount"]) ?? 0,
+    energyAmount: descoNumber(row, ["energyAmount", "energyCharge", "netAmount"]) ?? 0,
+  }));
+}
+
+async function fetchDescoBalance(accountNo, encryptedCredentials) {
   try {
-    const baseUrl = apiType === 'web' 
-      ? 'https://prepaid.desco.org.bd' 
-      : 'https://tkdes.desco.org.bd';
-    
-    const response = await fetch(`${baseUrl}/api/tkdes/customer/getBalance?accountNo=${accountNo}`);
-    if (!response.ok) return null;
-    
-    const data = await response.json();
-    return data?.balance ?? null;
+    const credentials = decryptDescoCredentials(encryptedCredentials);
+    const { session, accountId } = await createDescoSession(credentials, accountNo);
+    const payload = await descoJson(session, `${DESCO_BASE_URL}/api/accounts/${encodeURIComponent(accountId)}/balance`);
+    return descoNumber(descoData(payload), ["balance", "currentBalance", "availableBalance", "amount"]);
   } catch (error) {
-    console.error(`❌ DESCO API Error for ${accountNo}:`, error.message);
+    if (error.message !== "DESCO_ENCRYPTION_KEY_NOT_CONFIGURED") {
+      console.error("DESCO balance request failed");
+    }
     return null;
   }
 }
+
+async function fetchDescoData(mess) {
+  const credentials = decryptDescoCredentials(mess.descoCredentialsEncrypted);
+  const accountNo = String(mess.descoAccountNo || "");
+  const { session, accountId } = await createDescoSession(credentials, accountNo);
+  const now = new Date();
+  const monthFrom = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1));
+  const dateFrom = new Date(now);
+  dateFrom.setUTCDate(dateFrom.getUTCDate() - 30);
+  const transactionsFrom = new Date(now);
+  transactionsFrom.setUTCDate(transactionsFrom.getUTCDate() - 180);
+  const accountPath = `${DESCO_BASE_URL}/api/accounts/${encodeURIComponent(accountId)}`;
+  const query = (values) => new URLSearchParams(values).toString();
+  const requests = await Promise.allSettled([
+    descoJson(session, `${accountPath}/balance`),
+    descoJson(session, `${DESCO_BASE_URL}/api/accounts/realtime-balance`),
+    descoJson(session, `${accountPath}/summary`),
+    descoJson(session, `${accountPath}/usage/monthly?${query({ monthFrom: dateString(monthFrom).slice(0, 7), monthTo: dateString(now).slice(0, 7) })}`),
+    descoJson(session, `${accountPath}/usage/daily?${query({ dateFrom: dateString(dateFrom), dateTo: dateString(now) })}`),
+    descoJson(session, `${accountPath}/transactions?${query({ dateFrom: dateString(transactionsFrom), dateTo: dateString(now) })}`),
+  ]);
+  const valueAt = (index) => requests[index].status === "fulfilled" ? requests[index].value : null;
+  if (!valueAt(0)) throw new Error("DESCO_BALANCE_UNAVAILABLE");
+
+  const summary = descoData(valueAt(2)) || {};
+  const monthlyUsage = unwrapDescoList(valueAt(3));
+  const dailyUsage = unwrapDescoList(valueAt(4));
+  const transactions = unwrapDescoList(valueAt(5));
+  const dailyConsumption = normalizeDailyConsumption(dailyUsage);
+  const rechargeHistory = normalizeTransactions(transactions);
+  return {
+    balance: normalizeDescoBalance(valueAt(0), accountNo, summary, monthlyUsage),
+    realtimeBalance: descoData(valueAt(1)),
+    summary,
+    monthlyUsage,
+    dailyUsage,
+    transactions,
+    dailyConsumption,
+    rechargeHistory,
+    lastUpdated: new Date().toISOString(),
+  };
+}
+
+app.get("/api/desco/settings", authMiddleware, async (req, res) => {
+  try {
+    const mess = await collections.messes.findOne({ _id: new ObjectId(req.user.messId) });
+    if (!mess) return res.status(404).json({ success: false, error: "Mess not found" });
+    res.json({
+      success: true,
+      accountNo: mess.descoAccountNo || "",
+      hasCredentials: Boolean(mess.descoCredentialsEncrypted),
+    });
+  } catch {
+    res.status(500).json({ success: false, error: "Failed to load DESCO settings" });
+  }
+});
+
+app.post("/api/desco/settings", authMiddleware, async (req, res) => {
+  try {
+    if (!requireManager(req, res)) return;
+    const accountNo = String(req.body.accountNo || "").trim();
+    const loginId = String(req.body.loginId || "").trim();
+    const password = typeof req.body.password === "string" ? req.body.password : "";
+    if (!/^\d{1,20}$/.test(accountNo)) {
+      return res.status(400).json({ success: false, error: "Enter a valid DESCO account number" });
+    }
+
+    const mess = await collections.messes.findOne({ _id: new ObjectId(req.user.messId) });
+    if (!mess) return res.status(404).json({ success: false, error: "Mess not found" });
+    let credentials;
+    if (loginId || password) {
+      if (!loginId || !password) {
+        return res.status(400).json({ success: false, error: "Enter both DESCO login and password" });
+      }
+      credentials = { loginId, password };
+    } else if (mess.descoCredentialsEncrypted) {
+      credentials = decryptDescoCredentials(mess.descoCredentialsEncrypted);
+    } else {
+      return res.status(400).json({ success: false, error: "Enter your DESCO login and password" });
+    }
+
+    // Verify the login and account number before storing encrypted credentials.
+    await createDescoSession(credentials, accountNo);
+    const descoCredentialsEncrypted = encryptDescoCredentials(credentials);
+    await collections.messes.updateOne(
+      { _id: new ObjectId(req.user.messId) },
+      { $set: { descoAccountNo: accountNo, descoCredentialsEncrypted }, $unset: { descoApiType: "" } }
+    );
+    res.json({ success: true, accountNo, hasCredentials: true });
+  } catch (error) {
+    const status = error.message === "DESCO_ENCRYPTION_KEY_NOT_CONFIGURED" ? 503 : 400;
+    const messages = {
+      DESCO_ENCRYPTION_KEY_NOT_CONFIGURED: "DESCO secure storage is not configured on the server",
+      DESCO_LOGIN_FAILED: "DESCO login was not accepted. Check the login and password.",
+      DESCO_ACCOUNT_NOT_FOUND: "That DESCO account number was not found for this login.",
+      DESCO_REQUEST_FAILED: "DESCO could not verify the account. Try again later.",
+      DESCO_INVALID_RESPONSE: "DESCO returned an unreadable response. Try again later.",
+    };
+    res.status(status).json({ success: false, error: messages[error.message] || "Could not save DESCO settings" });
+  }
+});
+
+app.delete("/api/desco/settings", authMiddleware, async (req, res) => {
+  try {
+    if (!requireManager(req, res)) return;
+    await collections.messes.updateOne(
+      { _id: new ObjectId(req.user.messId) },
+      { $unset: { descoAccountNo: "", descoApiType: "", descoCredentialsEncrypted: "" } }
+    );
+    res.json({ success: true });
+  } catch {
+    res.status(500).json({ success: false, error: "Failed to remove DESCO settings" });
+  }
+});
+
+app.get("/api/desco/data", authMiddleware, async (req, res) => {
+  try {
+    const mess = await collections.messes.findOne({ _id: new ObjectId(req.user.messId) });
+    if (!mess?.descoCredentialsEncrypted || !mess.descoAccountNo) {
+      return res.status(404).json({ success: false, error: "DESCO login is not configured" });
+    }
+    const data = await fetchDescoData(mess);
+    res.json({ success: true, data });
+  } catch (error) {
+    const status = error.message === "DESCO_ENCRYPTION_KEY_NOT_CONFIGURED" ? 503 : 502;
+    res.status(status).json({
+      success: false,
+      error: error.message === "DESCO_ENCRYPTION_KEY_NOT_CONFIGURED"
+        ? "DESCO secure storage is not configured on the server"
+        : "Could not retrieve DESCO account data. Please refresh and try again.",
+    });
+  }
+});
 
 // Send low balance warning email to all mess members
 async function sendDescoLowBalanceEmail(mess, balance, members) {
@@ -3235,8 +3572,9 @@ async function checkDescoBalancesAndAlert() {
   
   try {
     // Get all messes with DESCO account configured
-    const messes = await collections.messes.find({ 
-      descoAccountNo: { $exists: true, $ne: '' } 
+    const messes = await collections.messes.find({
+      descoAccountNo: { $exists: true, $ne: "" },
+      descoCredentialsEncrypted: { $exists: true },
     }).toArray();
 
     for (const mess of messes) {
@@ -3250,7 +3588,7 @@ async function checkDescoBalancesAndAlert() {
       }
 
       // Fetch current balance
-      const balance = await fetchDescoBalance(mess.descoAccountNo, mess.descoApiType);
+      const balance = await fetchDescoBalance(mess.descoAccountNo, mess.descoCredentialsEncrypted);
       
       if (balance === null) {
         console.log(`⚠️ Could not fetch balance for mess ${mess.name} (${mess.descoAccountNo})`);
@@ -3326,7 +3664,10 @@ app.post("/api/desco/check-balance-alerts", authMiddleware, async (req, res) => 
       return res.status(400).json({ success: false, error: "No DESCO account configured" });
     }
 
-    const balance = await fetchDescoBalance(mess.descoAccountNo, mess.descoApiType);
+    if (!mess.descoCredentialsEncrypted) {
+      return res.status(400).json({ success: false, error: "DESCO login is not configured" });
+    }
+    const balance = await fetchDescoBalance(mess.descoAccountNo, mess.descoCredentialsEncrypted);
     if (balance === null) {
       return res.status(500).json({ success: false, error: "Failed to fetch DESCO balance" });
     }
