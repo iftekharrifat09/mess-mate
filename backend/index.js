@@ -62,13 +62,14 @@ function transformMessDoc(doc) {
   if (!doc) return null;
   const safeDoc = { ...doc };
   delete safeDoc.descoCredentialsEncrypted;
+  delete safeDoc.descoAccountNo;
+  delete safeDoc.descoApiType;
   const { _id, code, ...rest } = safeDoc;
   return { 
     id: _id.toString(), 
     messCode: code,  // Frontend expects messCode instead of code
     code,  // Keep original code for backward compatibility
-    descoAccountNo: doc.descoAccountNo || '',
-    descoApiType: doc.descoApiType || 'tkdes',
+    descoConfigured: Boolean(doc.descoCredentialsEncrypted),
     ...rest 
   };
 }
@@ -1070,12 +1071,10 @@ app.get("/api/mess/search/:query", async (req, res) => {
 
 app.put("/api/mess", authMiddleware, async (req, res) => {
   try {
-    const { name, code, descoAccountNo, descoApiType } = req.body;
+    const { name, code } = req.body;
     const updateData = {};
     if (name) updateData.name = name;
     if (code) updateData.code = code.toUpperCase();
-    if (descoAccountNo !== undefined) updateData.descoAccountNo = descoAccountNo;
-    if (descoApiType !== undefined) updateData.descoApiType = descoApiType;
 
     await collections.messes.updateOne(
       { _id: new ObjectId(req.user.messId) },
@@ -3279,7 +3278,9 @@ async function createDescoSession(credentials, accountNo) {
   const accountsResponse = await descoJson(session, `${DESCO_BASE_URL}/api/accounts`);
   const accounts = Array.isArray(accountsResponse?.accounts) ? accountsResponse.accounts : [];
   const account = accounts.find((item) => String(item.accountNo) === String(accountNo));
-  if (!account?.accountId) throw new Error("DESCO_ACCOUNT_NOT_FOUND");
+  if (account?.accountId === undefined || account?.accountId === null || account.accountId === "") {
+    throw new Error("DESCO_ACCOUNT_NOT_FOUND");
+  }
   return { session, accountId: account.accountId };
 }
 
@@ -3322,10 +3323,11 @@ function unwrapDescoList(payload) {
   return descoArray(payload, ["data", "usage", "transactions", "dailyUsage", "monthlyUsage"]);
 }
 
-function normalizeDescoBalance(payload, accountNo, summary, monthlyUsage) {
+function normalizeDescoBalance(payload, realtimePayload, accountNo, summary, monthlyUsage) {
   const raw = descoData(payload);
-  const realtime = raw && typeof raw === "object" ? raw : {};
-  const balanceValue = descoNumber(realtime, ["balance", "currentBalance", "availableBalance", "amount"])
+  const realtime = descoData(realtimePayload) || {};
+  const balanceValue = descoNumber(raw, ["balance", "currentBalance", "availableBalance", "amount"])
+    ?? descoNumber(realtime, ["balance", "currentBalance", "availableBalance", "amount"])
     ?? descoNumber(summary, ["balance", "currentBalance", "availableBalance"])
     ?? 0;
   const now = new Date();
@@ -3408,7 +3410,7 @@ async function fetchDescoData(mess) {
   const dailyConsumption = normalizeDailyConsumption(dailyUsage);
   const rechargeHistory = normalizeTransactions(transactions);
   return {
-    balance: normalizeDescoBalance(valueAt(0), accountNo, summary, monthlyUsage),
+    balance: normalizeDescoBalance(valueAt(0), valueAt(1), accountNo, summary, monthlyUsage),
     realtimeBalance: descoData(valueAt(1)),
     summary,
     monthlyUsage,
@@ -3443,6 +3445,8 @@ app.post("/api/desco/settings", authMiddleware, async (req, res) => {
     if (!/^\d{1,20}$/.test(accountNo)) {
       return res.status(400).json({ success: false, error: "Enter a valid DESCO account number" });
     }
+    // Fail before sending credentials to DESCO if secure credential storage is unavailable.
+    getDescoEncryptionKey();
 
     const mess = await collections.messes.findOne({ _id: new ObjectId(req.user.messId) });
     if (!mess) return res.status(404).json({ success: false, error: "Mess not found" });

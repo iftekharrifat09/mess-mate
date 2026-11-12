@@ -1,15 +1,13 @@
-/**
- * DESCO Electricity Service
- * Handles API calls to DESCO prepaid meter system
- * Settings stored in MongoDB (via mess document) with localStorage fallback
- */
+/** DESCO requests are proxied through the authenticated app server. */
 
-import { shouldUseBackend } from './config';
 import * as api from './api';
+
+const DATA_CACHE_KEY = 'desco_data_cache_';
 
 export interface DescoSettings {
   accountNo: string;
-  apiType: 'tkdes' | 'unified';
+  hasCredentials?: boolean;
+  loginId?: string;
 }
 
 export interface DescoBalance {
@@ -34,179 +32,109 @@ export interface DescoRechargeHistory {
 
 export interface DescoData {
   balance: DescoBalance | null;
+  realtimeBalance?: unknown;
+  summary?: Record<string, unknown>;
+  monthlyUsage?: unknown[];
+  dailyUsage?: unknown[];
+  transactions?: unknown[];
   dailyConsumption: DescoDailyConsumption[];
   rechargeHistory: DescoRechargeHistory[];
   lastUpdated: string;
 }
 
-const DESCO_BASE = 'https://prepaid.desco.org.bd/api';
-const SETTINGS_KEY = 'desco_settings_';
-const DATA_CACHE_KEY = 'desco_data_cache_';
-
-// ============= Settings Storage (MongoDB-backed with localStorage fallback) =============
-
-export async function getDescoSettings(messId: string): Promise<DescoSettings | null> {
-  // Try backend first - settings are stored on the mess document
-  if (shouldUseBackend()) {
-    try {
-      const result = await api.getMessAPI(messId);
-      if (result.success && result.data) {
-        const mess = (result.data as any).mess || result.data;
-        if (mess?.descoAccountNo) {
-          return {
-            accountNo: mess.descoAccountNo,
-            apiType: mess.descoApiType || 'tkdes',
-          };
-        }
-        return null;
-      }
-    } catch (e) {
-      console.error('Error fetching DESCO settings from backend:', e);
-    }
-  }
-  // Fallback to localStorage
+export async function getDescoSettings(_messId: string): Promise<DescoSettings | null> {
+  // Remove pre-upgrade browser-held account settings; DESCO credentials now stay on the server.
   try {
-    const stored = localStorage.getItem(SETTINGS_KEY + messId);
-    return stored ? JSON.parse(stored) : null;
+    localStorage.removeItem(`desco_settings_${_messId}`);
   } catch {
-    return null;
+    // Storage may be unavailable in restricted browser contexts.
   }
+  const result = await api.getDescoSettingsAPI();
+  if (!result.success || !result.data) return null;
+  const data = result.data as { accountNo?: string; hasCredentials?: boolean };
+  if (!data.accountNo || !data.hasCredentials) return null;
+  return { accountNo: data.accountNo, hasCredentials: data.hasCredentials };
 }
 
-export async function saveDescoSettings(messId: string, settings: DescoSettings): Promise<void> {
-  // Save to backend
-  if (shouldUseBackend()) {
-    try {
-      await api.updateMessAPI({
-        descoAccountNo: settings.accountNo,
-        descoApiType: settings.apiType,
-      } as any);
-    } catch (e) {
-      console.error('Error saving DESCO settings to backend:', e);
-    }
-  }
-  // Always save to localStorage as cache/fallback
-  localStorage.setItem(SETTINGS_KEY + messId, JSON.stringify(settings));
-}
-
-export async function removeDescoSettings(messId: string): Promise<void> {
-  // Remove from backend
-  if (shouldUseBackend()) {
-    try {
-      await api.updateMessAPI({
-        descoAccountNo: '',
-        descoApiType: 'tkdes',
-      } as any);
-    } catch (e) {
-      console.error('Error removing DESCO settings from backend:', e);
-    }
-  }
-  localStorage.removeItem(SETTINGS_KEY + messId);
-  localStorage.removeItem(DATA_CACHE_KEY + messId);
-}
-
-// ============= Data Cache =============
-
-export function getCachedDescoData(messId: string): DescoData | null {
+export async function saveDescoSettings(
+  _messId: string,
+  settings: DescoSettings & { loginId?: string; password?: string },
+): Promise<{ success: boolean; error?: string }> {
   try {
-    const stored = localStorage.getItem(DATA_CACHE_KEY + messId);
+    localStorage.removeItem(DATA_CACHE_KEY + _messId);
+  } catch {
+    // Cache invalidation is best-effort.
+  }
+  const result = await api.saveDescoSettingsAPI({
+    accountNo: settings.accountNo,
+    ...(settings.loginId ? { loginId: settings.loginId } : {}),
+    ...(settings.password ? { password: settings.password } : {}),
+  });
+  return { success: result.success, error: result.error };
+}
+
+export async function removeDescoSettings(_messId: string): Promise<boolean> {
+  const result = await api.removeDescoSettingsAPI();
+  if (result.success) {
+    try {
+      localStorage.removeItem(DATA_CACHE_KEY + _messId);
+      localStorage.removeItem(`desco_settings_${_messId}`);
+    } catch {
+      // Browser cache is optional.
+    }
+  }
+  return result.success;
+}
+
+export function getCachedDescoData(_messId: string): DescoData | null {
+  try {
+    const stored = localStorage.getItem(DATA_CACHE_KEY + _messId);
     if (!stored) return null;
-    const data: DescoData = JSON.parse(stored);
-    const lastUpdated = new Date(data.lastUpdated);
-    const today = new Date();
-    if (lastUpdated.toDateString() === today.toDateString()) {
-      return data;
-    }
-    return null;
+    const cached = JSON.parse(stored) as DescoData;
+    const updatedAt = new Date(cached.lastUpdated);
+    if (!Number.isFinite(updatedAt.getTime())) return null;
+    return updatedAt.toDateString() === new Date().toDateString() ? cached : null;
   } catch {
     return null;
   }
 }
 
-function cacheDescoData(messId: string, data: DescoData): void {
-  localStorage.setItem(DATA_CACHE_KEY + messId, JSON.stringify(data));
+export async function fetchDescoBalance(_settings: DescoSettings): Promise<DescoBalance | null> {
+  const result = await api.getDescoDataAPI();
+  if (!result.success || !result.data) return null;
+  return (result.data as { data: DescoData }).data.balance;
 }
 
-// ============= API Calls =============
-
-async function fetchDescoAPI(url: string): Promise<any> {
-  const response = await fetch(url);
-  if (!response.ok) throw new Error(`HTTP ${response.status}`);
-  const json = await response.json();
-  if (json.code !== 200) throw new Error(json.message || 'API Error');
-  return json.data;
+export async function fetchDailyConsumption(_settings: DescoSettings): Promise<DescoDailyConsumption[]> {
+  const result = await api.getDescoDataAPI();
+  if (!result.success || !result.data) return [];
+  return (result.data as { data: DescoData }).data.dailyConsumption || [];
 }
 
-export async function fetchDescoBalance(settings: DescoSettings): Promise<DescoBalance | null> {
-  try {
-    return await fetchDescoAPI(
-      `${DESCO_BASE}/${settings.apiType}/customer/getBalance?accountNo=${settings.accountNo}`
-    );
-  } catch (error) {
-    console.error('DESCO Balance fetch error:', error);
-    return null;
-  }
+export async function fetchRechargeHistory(_settings: DescoSettings): Promise<DescoRechargeHistory[]> {
+  const result = await api.getDescoDataAPI();
+  if (!result.success || !result.data) return [];
+  return (result.data as { data: DescoData }).data.rechargeHistory || [];
 }
 
-export async function fetchDailyConsumption(settings: DescoSettings): Promise<DescoDailyConsumption[]> {
-  try {
-    const today = new Date();
-    const dateFrom = new Date(today.getFullYear(), today.getMonth(), 0);
-    return await fetchDescoAPI(
-      `${DESCO_BASE}/${settings.apiType}/customer/getCustomerDailyConsumption?accountNo=${settings.accountNo}&dateFrom=${formatDate(dateFrom)}&dateTo=${formatDate(today)}`
-    ) || [];
-  } catch (error) {
-    console.error('DESCO Daily consumption fetch error:', error);
-    return [];
-  }
-}
-
-export async function fetchRechargeHistory(settings: DescoSettings): Promise<DescoRechargeHistory[]> {
-  try {
-    const today = new Date();
-    const dateFrom = new Date(today);
-    dateFrom.setMonth(dateFrom.getMonth() - 3);
-    return await fetchDescoAPI(
-      `${DESCO_BASE}/${settings.apiType}/customer/getRechargeHistory?accountNo=${settings.accountNo}&dateFrom=${formatDate(dateFrom)}&dateTo=${formatDate(today)}`
-    ) || [];
-  } catch (error) {
-    console.error('DESCO Recharge history fetch error:', error);
-    return [];
-  }
-}
-
-export async function fetchAllDescoData(messId: string, settings: DescoSettings, forceRefresh = false): Promise<DescoData | null> {
+export async function fetchAllDescoData(
+  messId: string,
+  _settings: DescoSettings,
+  forceRefresh = false,
+): Promise<DescoData | null> {
   if (!forceRefresh) {
     const cached = getCachedDescoData(messId);
     if (cached) return cached;
   }
-
-  try {
-    const [balance, daily, recharge] = await Promise.all([
-      fetchDescoBalance(settings),
-      fetchDailyConsumption(settings),
-      fetchRechargeHistory(settings),
-    ]);
-
-    if (!balance) return null;
-
-    const data: DescoData = {
-      balance,
-      dailyConsumption: Array.isArray(daily) ? daily : [],
-      rechargeHistory: Array.isArray(recharge) ? recharge : [],
-      lastUpdated: new Date().toISOString(),
-    };
-
-    cacheDescoData(messId, data);
-    return data;
-  } catch (error) {
-    console.error('DESCO fetch all error:', error);
-    return null;
+  const result = await api.getDescoDataAPI();
+  if (!result.success || !result.data) return null;
+  const data = (result.data as { data: DescoData }).data;
+  if (data) {
+    try {
+      localStorage.setItem(DATA_CACHE_KEY + messId, JSON.stringify(data));
+    } catch {
+      // Cached readings are optional; DESCO credentials are never cached here.
+    }
   }
-}
-
-// ============= Helpers =============
-
-function formatDate(date: Date): string {
-  return date.toISOString().split('T')[0];
+  return data;
 }

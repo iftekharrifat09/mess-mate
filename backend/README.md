@@ -147,6 +147,11 @@ For production, update `VITE_API_BASE_URL` to your deployed backend URL.
 
 The backend automatically monitors DESCO prepaid electricity balances and sends email alerts when the balance falls below ৳100.
 
+### DESCO account setup
+- Set `DESCO_ENCRYPTION_KEY` on the backend host. Generate a stable key with `openssl rand -hex 32`; keep the same key for as long as encrypted DESCO credentials are stored.
+- Configure the DESCO login and account number in Manage Mess. The backend verifies the account before saving the credentials with AES-256-GCM encryption.
+- DESCO passwords and login names are never sent back to the browser or saved to browser storage. If the encryption key is lost or changed, remove the old DESCO connection and configure it again.
+
 ### How it works:
 1. **Balance Check:** Every 30 minutes, the server checks DESCO balance for all messes with configured accounts
 2. **Threshold:** Alerts trigger when balance ≤ ৳100
@@ -155,7 +160,9 @@ The backend automatically monitors DESCO prepaid electricity balances and sends 
 5. **In-App Notifications:** Also creates in-app notifications for all members
 
 ### Requirements:
-- DESCO account number must be configured in Manage Mess settings
+- DESCO account number and login must be configured in Manage Mess settings
+- `DESCO_ENCRYPTION_KEY` must be set on the backend host as a stable 32-byte key encoded in hex
+- DESCO passwords are encrypted on the backend and never returned to the browser
 - Members must have verified email addresses
 - Email notifications must be enabled in user preferences
 

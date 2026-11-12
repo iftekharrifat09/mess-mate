@@ -48,7 +48,8 @@ export default function ManageMess() {
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [loading, setLoading] = useState(true);
   const [descoAccountNo, setDescoAccountNo] = useState('');
-  const [descoApiType, setDescoApiType] = useState<'tkdes' | 'unified'>('tkdes');
+  const [descoLoginId, setDescoLoginId] = useState('');
+  const [descoPassword, setDescoPassword] = useState('');
   const [isSavingDesco, setIsSavingDesco] = useState(false);
   const [descoSaved, setDescoSaved] = useState(false);
   const [activityLogs, setActivityLogs] = useState<MessActivityLog[]>([]);
@@ -77,7 +78,6 @@ export default function ManageMess() {
         const desco = await getDescoSettings(messData.id);
         if (desco) {
           setDescoAccountNo(desco.accountNo);
-          setDescoApiType(desco.apiType);
           setDescoSaved(true);
         }
         // Load activity logs (last 1 year)
@@ -418,7 +418,7 @@ export default function ManageMess() {
               DESCO Electricity
             </CardTitle>
             <CardDescription>
-              Set your DESCO prepaid meter details to track electricity usage on the dashboard
+              Connect your DESCO login to show live balance, usage, and recharge history on the dashboard
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -432,64 +432,72 @@ export default function ManageMess() {
                   maxLength={20}
                 />
               </div>
-            </div>
-            <div className="space-y-2">
-              <Label>API Type</Label>
-              <div className="flex gap-3">
-                <Button
-                  type="button"
-                  variant={descoApiType === 'tkdes' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setDescoApiType('tkdes')}
-                >
-                  TKDES
-                </Button>
-                <Button
-                  type="button"
-                  variant={descoApiType === 'unified' ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => setDescoApiType('unified')}
-                >
-                  Unified
-                </Button>
+              <div className="space-y-2">
+                <Label>DESCO Login (phone or email)</Label>
+                <Input
+                  value={descoLoginId}
+                  onChange={(e) => setDescoLoginId(e.target.value)}
+                  placeholder={descoSaved ? 'Leave blank to keep the saved login' : 'Phone number or email'}
+                  autoComplete="username"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>{descoSaved ? 'DESCO Password (optional to keep current)' : 'DESCO Password'}</Label>
+                <Input
+                  type="password"
+                  value={descoPassword}
+                  onChange={(e) => setDescoPassword(e.target.value)}
+                  placeholder={descoSaved ? 'Leave blank to keep the saved password' : 'Enter DESCO password'}
+                  autoComplete="new-password"
+                />
               </div>
               <p className="text-xs text-muted-foreground">
-                Select TKDES for Tongi/Kaliakair area, Unified for others
+                Login details are encrypted on the server and are never saved in this browser.
               </p>
             </div>
             <div className="flex flex-col sm:flex-row gap-2">
               <Button
                 className="gradient-primary"
-                disabled={!descoAccountNo || isSavingDesco}
+                disabled={!descoAccountNo || isSavingDesco || (!descoSaved && (!descoLoginId || !descoPassword))}
                 onClick={async () => {
                   if (!mess || isSavingDesco) return;
                   setIsSavingDesco(true);
                   try {
-                    const settings: DescoSettings = {
+                    const settings: DescoSettings & { loginId: string; password: string } = {
                       accountNo: descoAccountNo,
-                      apiType: descoApiType,
+                      loginId: descoLoginId.trim(),
+                      password: descoPassword,
                     };
-                    await saveDescoSettings(mess.id, settings);
-                    // Verify by fetching balance
+                    const saved = await saveDescoSettings(mess.id, settings);
+                    if (!saved.success) {
+                      toast({
+                        title: 'Could not connect DESCO',
+                        description: saved.error || 'Check the login details and account number, then try again.',
+                        variant: 'destructive',
+                      });
+                      return;
+                    }
+                    setDescoSaved(true);
+                    setDescoLoginId('');
+                    setDescoPassword('');
                     const result = await fetchAllDescoData(mess.id, settings, true);
                     if (result) {
-                      setDescoSaved(true);
                       toast({
                         title: 'DESCO Settings Saved',
-                        description: 'Electricity data will now show on the dashboard.',
+                        description: 'Your DESCO account is connected and will show on the dashboard.',
                         variant: 'success',
                       });
                     } else {
                       toast({
-                        title: 'No Data Found',
-                        description: 'Could not fetch data for this account. Please check the account number and meter number.',
+                        title: 'Connection saved, data unavailable',
+                        description: 'DESCO accepted the login, but account data could not be loaded. Try refreshing later.',
                         variant: 'destructive',
                       });
                     }
                   } catch {
                     toast({
                       title: 'Error',
-                      description: 'Failed to verify DESCO account. Please try again.',
+                      description: 'Could not verify the DESCO account. Check the details and try again.',
                       variant: 'destructive',
                     });
                   } finally {
@@ -511,8 +519,18 @@ export default function ManageMess() {
                   variant="outline"
                   onClick={async () => {
                     if (!mess) return;
-                    await removeDescoSettings(mess.id);
+                    const removed = await removeDescoSettings(mess.id);
+                    if (!removed) {
+                      toast({
+                        title: 'Could not remove DESCO settings',
+                        description: 'Please check your connection and try again.',
+                        variant: 'destructive',
+                      });
+                      return;
+                    }
                     setDescoAccountNo('');
+                    setDescoLoginId('');
+                    setDescoPassword('');
                     setDescoSaved(false);
                     toast({
                       title: 'DESCO Settings Removed',

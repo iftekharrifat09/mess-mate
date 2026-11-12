@@ -103,7 +103,8 @@ function showLocalStorageFallbackAlert() {
 // API request helper with timeout
 export async function apiRequest<T>(
   endpoint: string,
-  options: RequestInit = {}
+  options: RequestInit = {},
+  timeoutMs = CONFIG.api.timeout,
 ): Promise<{ success: boolean; data?: T; error?: string; usingLocalStorage?: boolean }> {
   if (!USE_BACKEND) {
     return { success: false, error: 'Backend not enabled', usingLocalStorage: true };
@@ -118,7 +119,7 @@ export async function apiRequest<T>(
 
   // Create AbortController for timeout
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), CONFIG.api.timeout);
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
     const response = await fetch(`${API_BASE_URL}${endpoint}`, {
@@ -370,6 +371,25 @@ export async function updateMessAPI(data: { name?: string; messCode?: string }) 
     method: 'PUT',
     body: JSON.stringify(data),
   });
+}
+
+export async function getDescoSettingsAPI() {
+  return apiRequest<{ accountNo: string; hasCredentials: boolean }>('/desco/settings', { method: 'GET' });
+}
+
+export async function saveDescoSettingsAPI(data: { accountNo: string; loginId?: string; password?: string }) {
+  return apiRequest<{ accountNo: string; hasCredentials: boolean }>('/desco/settings', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }, 45000);
+}
+
+export async function removeDescoSettingsAPI() {
+  return apiRequest('/desco/settings', { method: 'DELETE' });
+}
+
+export async function getDescoDataAPI() {
+  return apiRequest<{ data: import('./descoService').DescoData }>('/desco/data', { method: 'GET' }, 60000);
 }
 
 export async function deleteMessAPI() {
