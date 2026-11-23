@@ -5,3 +5,4 @@
 - Previous-month deposits use `source: previous_month_adjustment`; the legacy note remains display-only compatibility, because note text must not define record ownership.
 - Offline mutations must be queued and replayed after MongoDB reconnects, because local storage is a temporary persistence layer rather than an independent data source.
 - Third-party account passwords must stay server-side, be encrypted at rest, and never use browser/local fallback, because credential exposure cannot be repaired by synchronization.
+- DESCO encryption uses an explicit production environment key and an ignored persistent key file only for local development, because encrypted credentials must survive restarts without exposing the key.

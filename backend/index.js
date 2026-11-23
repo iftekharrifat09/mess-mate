@@ -30,6 +30,8 @@ const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 const fetch = require("node-fetch");
 const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
 require("dotenv").config();
 
 const app = express();
@@ -3158,14 +3160,52 @@ const descoAlertLastSent = new Map();
 const DESCO_ALERT_INTERVAL = 12 * 60 * 60 * 1000; // 12 hours in milliseconds
 const LOW_BALANCE_THRESHOLD = 100;
 const DESCO_BASE_URL = "https://prepaid.desco.org.bd";
+const DESCO_LOCAL_KEY_PATH = path.join(__dirname, ".desco-encryption-key.local");
 
-function getDescoEncryptionKey() {
-  const configuredKey = process.env.DESCO_ENCRYPTION_KEY || "";
+function decodeDescoEncryptionKey(value) {
+  const configuredKey = String(value || "").trim();
   const key = /^[a-f0-9]{64}$/i.test(configuredKey)
     ? Buffer.from(configuredKey, "hex")
     : Buffer.from(configuredKey, "base64");
-  if (key.length !== 32) throw new Error("DESCO_ENCRYPTION_KEY_NOT_CONFIGURED");
+  if (key.length !== 32) throw new Error("DESCO_ENCRYPTION_KEY_INVALID");
   return key;
+}
+
+function getLocalDescoEncryptionKey() {
+  let keyValue;
+  try {
+    keyValue = fs.readFileSync(DESCO_LOCAL_KEY_PATH, "utf8").trim();
+  } catch (error) {
+    if (error.code !== "ENOENT") throw new Error("DESCO_ENCRYPTION_KEY_STORAGE_FAILED");
+
+    const generatedKey = crypto.randomBytes(32).toString("hex");
+    let descriptor;
+    try {
+      descriptor = fs.openSync(DESCO_LOCAL_KEY_PATH, "wx", 0o600);
+      fs.writeFileSync(descriptor, generatedKey, "utf8");
+      fs.fsyncSync(descriptor);
+      keyValue = generatedKey;
+    } catch (writeError) {
+      if (writeError.code !== "EEXIST") throw new Error("DESCO_ENCRYPTION_KEY_STORAGE_FAILED");
+      try {
+        keyValue = fs.readFileSync(DESCO_LOCAL_KEY_PATH, "utf8").trim();
+      } catch {
+        throw new Error("DESCO_ENCRYPTION_KEY_STORAGE_FAILED");
+      }
+    } finally {
+      if (descriptor !== undefined) fs.closeSync(descriptor);
+    }
+  }
+  return decodeDescoEncryptionKey(keyValue);
+}
+
+function getDescoEncryptionKey() {
+  const configuredKey = process.env.DESCO_ENCRYPTION_KEY || "";
+  if (configuredKey.trim()) return decodeDescoEncryptionKey(configuredKey);
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("DESCO_ENCRYPTION_KEY_NOT_CONFIGURED");
+  }
+  return getLocalDescoEncryptionKey();
 }
 
 function encryptDescoCredentials(credentials) {
@@ -3471,9 +3511,11 @@ app.post("/api/desco/settings", authMiddleware, async (req, res) => {
     );
     res.json({ success: true, accountNo, hasCredentials: true });
   } catch (error) {
-    const status = error.message === "DESCO_ENCRYPTION_KEY_NOT_CONFIGURED" ? 503 : 400;
+    const status = error.message.startsWith("DESCO_ENCRYPTION_KEY_") ? 503 : 400;
     const messages = {
       DESCO_ENCRYPTION_KEY_NOT_CONFIGURED: "DESCO secure storage is not configured on the server",
+      DESCO_ENCRYPTION_KEY_INVALID: "DESCO encryption key is invalid. Use a stable 32-byte key encoded as 64 hex characters.",
+      DESCO_ENCRYPTION_KEY_STORAGE_FAILED: "DESCO secure storage could not be initialized. Configure DESCO_ENCRYPTION_KEY on the backend.",
       DESCO_LOGIN_FAILED: "DESCO login was not accepted. Check the login and password.",
       DESCO_ACCOUNT_NOT_FOUND: "That DESCO account number was not found for this login.",
       DESCO_REQUEST_FAILED: "DESCO could not verify the account. Try again later.",
@@ -3505,11 +3547,16 @@ app.get("/api/desco/data", authMiddleware, async (req, res) => {
     const data = await fetchDescoData(mess);
     res.json({ success: true, data });
   } catch (error) {
-    const status = error.message === "DESCO_ENCRYPTION_KEY_NOT_CONFIGURED" ? 503 : 502;
+    const isKeyError = error.message.startsWith("DESCO_ENCRYPTION_KEY_");
+    const status = isKeyError ? 503 : 502;
     res.status(status).json({
       success: false,
-      error: error.message === "DESCO_ENCRYPTION_KEY_NOT_CONFIGURED"
-        ? "DESCO secure storage is not configured on the server"
+      error: isKeyError
+        ? error.message === "DESCO_ENCRYPTION_KEY_NOT_CONFIGURED"
+          ? "DESCO secure storage is not configured on the server"
+          : error.message === "DESCO_ENCRYPTION_KEY_INVALID"
+            ? "DESCO encryption key is invalid. Use a stable 32-byte key encoded as 64 hex characters."
+            : "DESCO secure storage could not be initialized. Configure DESCO_ENCRYPTION_KEY on the backend."
         : "Could not retrieve DESCO account data. Please refresh and try again.",
     });
   }
