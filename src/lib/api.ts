@@ -106,7 +106,12 @@ export async function apiRequest<T>(
   options: RequestInit = {},
   timeoutMs = CONFIG.api.timeout,
 ): Promise<{ success: boolean; data?: T; error?: string; usingLocalStorage?: boolean }> {
+  const isDescoRequest = endpoint.startsWith('/desco/');
+
   if (!USE_BACKEND) {
+    if (isDescoRequest) {
+      return { success: false, error: 'DESCO requires an available backend and is never saved in local storage.' };
+    }
     return { success: false, error: 'Backend not enabled', usingLocalStorage: true };
   }
 
@@ -136,6 +141,9 @@ export async function apiRequest<T>(
       // Check if it's a MongoDB connection issue
       if (data.mongoDbConnected === false) {
         setMongoDbConnected(false);
+        if (isDescoRequest) {
+          return { success: false, error: data.error || 'DESCO is unavailable until the server database reconnects.' };
+        }
         showLocalStorageFallbackAlert();
         return { success: false, error: data.error, usingLocalStorage: true };
       }
@@ -155,12 +163,18 @@ export async function apiRequest<T>(
     // Handle timeout specifically
     if (error.name === 'AbortError') {
       console.log('API request timed out:', endpoint);
+      if (isDescoRequest) {
+        return { success: false, error: 'DESCO request timed out. Check the saved status before retrying.' };
+      }
       return { success: false, error: 'Request timed out', usingLocalStorage: true };
     }
     
     console.error('API request failed:', endpoint);
     setMongoDbConnected(false);
     setBackendAvailable(false);
+    if (isDescoRequest) {
+      return { success: false, error: 'Could not confirm the DESCO server response. No browser copy is kept; check the saved status before retrying.' };
+    }
     return { success: false, error: 'Network error - using local storage', usingLocalStorage: true };
   }
 }
