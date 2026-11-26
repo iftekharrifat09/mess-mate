@@ -388,11 +388,18 @@ export async function updateMessAPI(data: { name?: string; messCode?: string }) 
 }
 
 export async function getDescoSettingsAPI() {
-  return apiRequest<{ accountNo: string; hasCredentials: boolean }>('/desco/settings', { method: 'GET' });
+  return apiRequest<{ accountNo: string; hasCredentials: boolean; hasSession: boolean; hasAccount: boolean }>('/desco/settings', { method: 'GET' });
 }
 
-export async function saveDescoSettingsAPI(data: { accountNo: string; loginId?: string; password?: string }) {
-  return apiRequest<{ accountNo: string; hasCredentials: boolean }>('/desco/settings', {
+export async function saveDescoSessionAPI(data: { loginId: string; password: string }) {
+  return apiRequest<{ accountNo: string; hasCredentials: boolean; hasSession: boolean; hasAccount: boolean }>('/desco/session', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  }, 45000);
+}
+
+export async function verifyDescoAccountAPI(data: { accountNo: string }) {
+  return apiRequest<{ accountNo: string; hasCredentials: boolean; hasSession: boolean; hasAccount: boolean }>('/desco/account', {
     method: 'POST',
     body: JSON.stringify(data),
   }, 45000);

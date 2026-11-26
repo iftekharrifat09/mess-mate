@@ -3302,7 +3302,7 @@ function descoData(payload) {
     : payload;
 }
 
-async function createDescoSession(credentials, accountNo) {
+async function createDescoSession(credentials) {
   const session = { cookies: new Map(), xsrf: "" };
   const csrfResponse = await descoRequest(session, `${DESCO_BASE_URL}/api/auth/csrf`);
   await csrfResponse.text();
@@ -3316,12 +3316,23 @@ async function createDescoSession(credentials, accountNo) {
   if (login?.success === false || login?.authenticated === false) throw new Error("DESCO_LOGIN_FAILED");
 
   const accountsResponse = await descoJson(session, `${DESCO_BASE_URL}/api/accounts`);
-  const accounts = Array.isArray(accountsResponse?.accounts) ? accountsResponse.accounts : [];
-  const account = accounts.find((item) => String(item.accountNo) === String(accountNo));
+  if (!Array.isArray(accountsResponse?.accounts)) throw new Error("DESCO_INVALID_RESPONSE");
+  return { session, accounts: accountsResponse.accounts };
+}
+
+function resolveDescoAccount(accounts, accountNo) {
+  const account = accounts.find((item) => String(item?.accountNo ?? "").trim() === String(accountNo).trim());
   if (account?.accountId === undefined || account?.accountId === null || account.accountId === "") {
-    throw new Error("DESCO_ACCOUNT_NOT_FOUND");
+    return null;
   }
-  return { session, accountId: account.accountId };
+  return account;
+}
+
+function getDescoSetupStatus(mess) {
+  const hasSession = Boolean(mess?.descoCredentialsEncrypted);
+  const accountNo = hasSession ? String(mess?.descoAccountNo || "") : "";
+  const hasAccount = Boolean(accountNo);
+  return { accountNo, hasSession, hasAccount, hasCredentials: hasSession };
 }
 
 function descoArray(payload, candidateKeys = []) {
@@ -3409,7 +3420,10 @@ function normalizeTransactions(rows) {
 async function fetchDescoBalance(accountNo, encryptedCredentials) {
   try {
     const credentials = decryptDescoCredentials(encryptedCredentials);
-    const { session, accountId } = await createDescoSession(credentials, accountNo);
+    const { session, accounts } = await createDescoSession(credentials);
+    const account = resolveDescoAccount(accounts, accountNo);
+    if (!account) throw new Error("DESCO_ACCOUNT_NOT_FOUND");
+    const accountId = account.accountId;
     const payload = await descoJson(session, `${DESCO_BASE_URL}/api/accounts/${encodeURIComponent(accountId)}/balance`);
     return descoNumber(descoData(payload), ["balance", "currentBalance", "availableBalance", "amount"]);
   } catch (error) {
@@ -3423,7 +3437,10 @@ async function fetchDescoBalance(accountNo, encryptedCredentials) {
 async function fetchDescoData(mess) {
   const credentials = decryptDescoCredentials(mess.descoCredentialsEncrypted);
   const accountNo = String(mess.descoAccountNo || "");
-  const { session, accountId } = await createDescoSession(credentials, accountNo);
+  const { session, accounts } = await createDescoSession(credentials);
+  const account = resolveDescoAccount(accounts, accountNo);
+  if (!account) throw new Error("DESCO_ACCOUNT_NOT_FOUND");
+  const accountId = account.accountId;
   const now = new Date();
   const monthFrom = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - 5, 1));
   const dateFrom = new Date(now);
@@ -3468,48 +3485,32 @@ app.get("/api/desco/settings", authMiddleware, async (req, res) => {
     if (!mess) return res.status(404).json({ success: false, error: "Mess not found" });
     res.json({
       success: true,
-      accountNo: mess.descoAccountNo || "",
-      hasCredentials: Boolean(mess.descoCredentialsEncrypted),
+      ...getDescoSetupStatus(mess),
     });
   } catch {
     res.status(500).json({ success: false, error: "Failed to load DESCO settings" });
   }
 });
 
-app.post("/api/desco/settings", authMiddleware, async (req, res) => {
+app.post("/api/desco/session", authMiddleware, async (req, res) => {
   try {
     if (!requireManager(req, res)) return;
-    const accountNo = String(req.body.accountNo || "").trim();
     const loginId = String(req.body.loginId || "").trim();
     const password = typeof req.body.password === "string" ? req.body.password : "";
-    if (!/^\d{1,20}$/.test(accountNo)) {
-      return res.status(400).json({ success: false, error: "Enter a valid DESCO account number" });
+    if (!loginId || !password) {
+      return res.status(400).json({ success: false, error: "Enter both DESCO login and password" });
     }
-    // Fail before sending credentials to DESCO if secure credential storage is unavailable.
     getDescoEncryptionKey();
-
     const mess = await collections.messes.findOne({ _id: new ObjectId(req.user.messId) });
     if (!mess) return res.status(404).json({ success: false, error: "Mess not found" });
-    let credentials;
-    if (loginId || password) {
-      if (!loginId || !password) {
-        return res.status(400).json({ success: false, error: "Enter both DESCO login and password" });
-      }
-      credentials = { loginId, password };
-    } else if (mess.descoCredentialsEncrypted) {
-      credentials = decryptDescoCredentials(mess.descoCredentialsEncrypted);
-    } else {
-      return res.status(400).json({ success: false, error: "Enter your DESCO login and password" });
-    }
-
-    // Verify the login and account number before storing encrypted credentials.
-    await createDescoSession(credentials, accountNo);
+    const credentials = { loginId, password };
+    await createDescoSession(credentials);
     const descoCredentialsEncrypted = encryptDescoCredentials(credentials);
     await collections.messes.updateOne(
       { _id: new ObjectId(req.user.messId) },
-      { $set: { descoAccountNo: accountNo, descoCredentialsEncrypted }, $unset: { descoApiType: "" } }
+      { $set: { descoCredentialsEncrypted }, $unset: { descoAccountNo: "", descoApiType: "" } }
     );
-    res.json({ success: true, accountNo, hasCredentials: true });
+    res.json({ success: true, accountNo: "", hasCredentials: true, hasSession: true, hasAccount: false });
   } catch (error) {
     const status = error.message.startsWith("DESCO_ENCRYPTION_KEY_") ? 503 : 400;
     const messages = {
@@ -3517,11 +3518,45 @@ app.post("/api/desco/settings", authMiddleware, async (req, res) => {
       DESCO_ENCRYPTION_KEY_INVALID: "DESCO encryption key is invalid. Use a stable 32-byte key encoded as 64 hex characters.",
       DESCO_ENCRYPTION_KEY_STORAGE_FAILED: "DESCO secure storage could not be initialized. Configure DESCO_ENCRYPTION_KEY on the backend.",
       DESCO_LOGIN_FAILED: "DESCO login was not accepted. Check the login and password.",
+      DESCO_REQUEST_FAILED: "DESCO could not verify the account. Try again later.",
+      DESCO_INVALID_RESPONSE: "DESCO returned an unreadable response. Try again later.",
+    };
+    res.status(status).json({ success: false, error: messages[error.message] || "Could not verify DESCO login" });
+  }
+});
+
+app.post("/api/desco/account", authMiddleware, async (req, res) => {
+  try {
+    if (!requireManager(req, res)) return;
+    const accountNo = String(req.body.accountNo || "").trim();
+    if (!/^\d{1,20}$/.test(accountNo)) {
+      return res.status(400).json({ success: false, error: "Enter a valid DESCO account number" });
+    }
+    const mess = await collections.messes.findOne({ _id: new ObjectId(req.user.messId) });
+    if (!mess) return res.status(404).json({ success: false, error: "Mess not found" });
+    if (!mess.descoCredentialsEncrypted) {
+      return res.status(400).json({ success: false, error: "Save and verify your DESCO login first" });
+    }
+    const credentials = decryptDescoCredentials(mess.descoCredentialsEncrypted);
+    const { accounts } = await createDescoSession(credentials);
+    if (!resolveDescoAccount(accounts, accountNo)) throw new Error("DESCO_ACCOUNT_NOT_FOUND");
+    await collections.messes.updateOne(
+      { _id: new ObjectId(req.user.messId) },
+      { $set: { descoAccountNo: accountNo }, $unset: { descoApiType: "" } }
+    );
+    res.json({ success: true, accountNo, hasCredentials: true, hasSession: true, hasAccount: true });
+  } catch (error) {
+    const status = error.message.startsWith("DESCO_ENCRYPTION_KEY_") ? 503 : 400;
+    const messages = {
+      DESCO_ENCRYPTION_KEY_NOT_CONFIGURED: "DESCO secure storage is not configured on the server",
+      DESCO_ENCRYPTION_KEY_INVALID: "DESCO encryption key is invalid. Use a stable 32-byte key encoded as 64 hex characters.",
+      DESCO_ENCRYPTION_KEY_STORAGE_FAILED: "DESCO secure storage could not be initialized. Configure DESCO_ENCRYPTION_KEY on the backend.",
+      DESCO_LOGIN_FAILED: "The saved DESCO login is no longer valid. Update and verify the login again.",
       DESCO_ACCOUNT_NOT_FOUND: "That DESCO account number was not found for this login.",
       DESCO_REQUEST_FAILED: "DESCO could not verify the account. Try again later.",
       DESCO_INVALID_RESPONSE: "DESCO returned an unreadable response. Try again later.",
     };
-    res.status(status).json({ success: false, error: messages[error.message] || "Could not save DESCO settings" });
+    res.status(status).json({ success: false, error: messages[error.message] || "Could not verify the DESCO account" });
   }
 });
 
@@ -3711,12 +3746,12 @@ app.post("/api/desco/check-balance-alerts", authMiddleware, async (req, res) => 
     
     // Force check for this user's mess
     const mess = await collections.messes.findOne({ _id: new ObjectId(req.user.messId) });
-    if (!mess || !mess.descoAccountNo) {
-      return res.status(400).json({ success: false, error: "No DESCO account configured" });
-    }
-
-    if (!mess.descoCredentialsEncrypted) {
+    const setup = getDescoSetupStatus(mess);
+    if (!setup.hasSession) {
       return res.status(400).json({ success: false, error: "DESCO login is not configured" });
+    }
+    if (!setup.hasAccount) {
+      return res.status(400).json({ success: false, error: "Verify a DESCO account number first" });
     }
     const balance = await fetchDescoBalance(mess.descoAccountNo, mess.descoCredentialsEncrypted);
     if (balance === null) {

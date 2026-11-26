@@ -6,3 +6,4 @@
 - Offline mutations must be queued and replayed after MongoDB reconnects, because local storage is a temporary persistence layer rather than an independent data source.
 - Third-party account passwords must stay server-side, be encrypted at rest, and never use browser/local fallback, because credential exposure cannot be repaired by synchronization.
 - DESCO encryption uses an explicit production environment key and an ignored persistent key file only for local development, because encrypted credentials must survive restarts without exposing the key.
+- Keep DESCO setup split into server-verified login saving and account ownership verification, because all live requests must use an account authorized by the saved login.

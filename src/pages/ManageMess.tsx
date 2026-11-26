@@ -31,7 +31,7 @@ import { Mess } from '@/types';
 import { Building, Copy, Check, Edit2, Settings, RefreshCw, Trash2, AlertTriangle, Zap, Loader2, History, Crown, UserMinus, CalendarPlus, CalendarX } from 'lucide-react';
 import { MessActivityLog } from '@/types';
 import { Navigate } from 'react-router-dom';
-import { getDescoSettings, saveDescoSettings, removeDescoSettings, fetchAllDescoData, DescoSettings } from '@/lib/descoService';
+import { getDescoSettings, saveDescoSession, verifyDescoAccount, removeDescoSettings, fetchAllDescoData, DescoSettings } from '@/lib/descoService';
 
 export default function ManageMess() {
   const { user, logout } = useAuth();
@@ -48,10 +48,13 @@ export default function ManageMess() {
   const [deleteConfirmation, setDeleteConfirmation] = useState('');
   const [loading, setLoading] = useState(true);
   const [descoAccountNo, setDescoAccountNo] = useState('');
+  const [savedDescoAccountNo, setSavedDescoAccountNo] = useState('');
   const [descoLoginId, setDescoLoginId] = useState('');
   const [descoPassword, setDescoPassword] = useState('');
   const [isSavingDesco, setIsSavingDesco] = useState(false);
-  const [descoSaved, setDescoSaved] = useState(false);
+  const [descoSessionSaved, setDescoSessionSaved] = useState(false);
+  const [descoAccountVerified, setDescoAccountVerified] = useState(false);
+  const [isEditingDescoLogin, setIsEditingDescoLogin] = useState(false);
   const [activityLogs, setActivityLogs] = useState<MessActivityLog[]>([]);
 
   const isManager = user?.role === 'manager';
@@ -76,10 +79,10 @@ export default function ManageMess() {
         setNewMessCode(messData.messCode || '');
         // Load DESCO settings
         const desco = await getDescoSettings(messData.id);
-        if (desco) {
-          setDescoAccountNo(desco.accountNo);
-          setDescoSaved(true);
-        }
+        setDescoSessionSaved(Boolean(desco?.hasSession));
+        setDescoAccountNo(desco?.accountNo || '');
+        setSavedDescoAccountNo(desco?.accountNo || '');
+        setDescoAccountVerified(Boolean(desco?.hasAccount));
         // Load activity logs (last 1 year)
         const logs = await dataService.getActivityLogsByMessId(messData.id);
         const oneYearAgo = new Date();
@@ -418,130 +421,186 @@ export default function ManageMess() {
               DESCO Electricity
             </CardTitle>
             <CardDescription>
-              Connect your DESCO login to show live balance, usage, and recharge history on the dashboard
+              Verify your DESCO login first, then verify the account number linked to it
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <Label>Account Number</Label>
-                <Input
-                  value={descoAccountNo}
-                  onChange={(e) => setDescoAccountNo(e.target.value.replace(/\D/g, ''))}
-                  placeholder="e.g., 26036446"
-                  maxLength={20}
-                />
+            {descoSessionSaved && !isEditingDescoLogin ? (
+              <div className="space-y-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="font-medium text-success">DESCO login saved and verified</p>
+                    <p className="text-xs text-muted-foreground">Login details are encrypted on the server and are never saved in this browser.</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setDescoLoginId('');
+                      setDescoPassword('');
+                      setIsEditingDescoLogin(true);
+                    }}
+                  >
+                    Change login
+                  </Button>
+                </div>
+                <div className="space-y-2">
+                  <Label>Account Number</Label>
+                  <Input
+                    value={descoAccountNo}
+                    onChange={(e) => setDescoAccountNo(e.target.value.replace(/\D/g, ''))}
+                    placeholder="e.g., 26036446"
+                    maxLength={20}
+                    inputMode="numeric"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {descoAccountVerified && descoAccountNo === savedDescoAccountNo
+                      ? 'This account is verified for the saved DESCO login.'
+                      : 'The account is saved only after DESCO confirms it belongs to this login.'}
+                  </p>
+                </div>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    className="gradient-primary"
+                    disabled={!descoAccountNo || isSavingDesco}
+                    onClick={async () => {
+                      if (!mess || isSavingDesco) return;
+                      setIsSavingDesco(true);
+                      try {
+                        const accountToVerify = descoAccountNo;
+                        const verified = await verifyDescoAccount(mess.id, accountToVerify);
+                        if (!verified.success) {
+                          setDescoAccountNo(savedDescoAccountNo);
+                          setDescoAccountVerified(Boolean(savedDescoAccountNo));
+                          toast({
+                            title: 'Could not verify account',
+                            description: verified.error || 'Check that this account belongs to the saved DESCO login.',
+                            variant: 'destructive',
+                          });
+                          return;
+                        }
+                        setDescoAccountNo(accountToVerify);
+                        setSavedDescoAccountNo(accountToVerify);
+                        setDescoAccountVerified(true);
+                        const settings: DescoSettings = { accountNo: accountToVerify, hasSession: true, hasAccount: true };
+                        const result = await fetchAllDescoData(mess.id, settings, true);
+                        toast(result
+                          ? { title: 'DESCO account connected', description: 'Live balance and usage will appear on the dashboard.', variant: 'success' }
+                          : { title: 'Account verified and saved', description: 'DESCO data is not available right now. You can refresh later.', variant: 'default' });
+                      } catch {
+                        setDescoAccountNo(savedDescoAccountNo);
+                        setDescoAccountVerified(Boolean(savedDescoAccountNo));
+                        toast({ title: 'Could not verify account', description: 'Check the account number and try again.', variant: 'destructive' });
+                      } finally {
+                        setIsSavingDesco(false);
+                      }
+                    }}
+                  >
+                    {isSavingDesco ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Verifying account...</> : 'Verify & Save Account'}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      setDescoLoginId('');
+                      setDescoPassword('');
+                      setIsEditingDescoLogin(true);
+                    }}
+                  >
+                    Change login
+                  </Button>
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>DESCO Login (phone or email)</Label>
-                <Input
-                  value={descoLoginId}
-                  onChange={(e) => setDescoLoginId(e.target.value)}
-                  placeholder={descoSaved ? 'Leave blank to keep the saved login' : 'Phone number or email'}
-                  autoComplete="username"
-                />
+            ) : (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>DESCO Login (phone or email)</Label>
+                  <Input
+                    value={descoLoginId}
+                    onChange={(e) => setDescoLoginId(e.target.value)}
+                    placeholder="Phone number or email"
+                    autoComplete="username"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>DESCO Password</Label>
+                  <Input
+                    type="password"
+                    value={descoPassword}
+                    onChange={(e) => setDescoPassword(e.target.value)}
+                    placeholder="Enter DESCO password"
+                    autoComplete="new-password"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Login details are encrypted on the server and are never saved in this browser.
+                </p>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Button
+                    className="gradient-primary"
+                    disabled={!descoLoginId.trim() || !descoPassword || isSavingDesco}
+                    onClick={async () => {
+                      if (!mess || isSavingDesco) return;
+                      setIsSavingDesco(true);
+                      try {
+                        const saved = await saveDescoSession(mess.id, descoLoginId.trim(), descoPassword);
+                        if (!saved.success) {
+                          toast({ title: 'Could not verify DESCO login', description: saved.error || 'Check the login details and try again.', variant: 'destructive' });
+                          return;
+                        }
+                        setDescoSessionSaved(true);
+                        setDescoAccountNo('');
+                        setSavedDescoAccountNo('');
+                        setDescoAccountVerified(false);
+                        setDescoLoginId('');
+                        setDescoPassword('');
+                        setIsEditingDescoLogin(false);
+                        toast({ title: 'DESCO login saved', description: 'Now enter the account number linked to this login.', variant: 'success' });
+                      } catch {
+                        toast({ title: 'Could not verify DESCO login', description: 'Check the login details and try again.', variant: 'destructive' });
+                      } finally {
+                        setIsSavingDesco(false);
+                      }
+                    }}
+                  >
+                    {isSavingDesco ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Verifying login...</> : 'Save & Verify Login'}
+                  </Button>
+                  {isEditingDescoLogin && (
+                    <Button variant="outline" onClick={() => {
+                      setDescoLoginId('');
+                      setDescoPassword('');
+                      setIsEditingDescoLogin(false);
+                    }}>
+                      Cancel
+                    </Button>
+                  )}
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>{descoSaved ? 'DESCO Password (optional to keep current)' : 'DESCO Password'}</Label>
-                <Input
-                  type="password"
-                  value={descoPassword}
-                  onChange={(e) => setDescoPassword(e.target.value)}
-                  placeholder={descoSaved ? 'Leave blank to keep the saved password' : 'Enter DESCO password'}
-                  autoComplete="new-password"
-                />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Login details are encrypted on the server and are never saved in this browser.
-              </p>
-            </div>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <Button
-                className="gradient-primary"
-                disabled={!descoAccountNo || isSavingDesco || (!descoSaved && (!descoLoginId || !descoPassword))}
-                onClick={async () => {
-                  if (!mess || isSavingDesco) return;
-                  setIsSavingDesco(true);
-                  try {
-                    const settings: DescoSettings & { loginId: string; password: string } = {
-                      accountNo: descoAccountNo,
-                      loginId: descoLoginId.trim(),
-                      password: descoPassword,
-                    };
-                    const saved = await saveDescoSettings(mess.id, settings);
-                    if (!saved.success) {
-                      toast({
-                        title: 'Could not connect DESCO',
-                        description: saved.error || 'Check the login details and account number, then try again.',
-                        variant: 'destructive',
-                      });
-                      return;
-                    }
-                    setDescoSaved(true);
-                    setDescoLoginId('');
-                    setDescoPassword('');
-                    const result = await fetchAllDescoData(mess.id, settings, true);
-                    if (result) {
-                      toast({
-                        title: 'DESCO Settings Saved',
-                        description: 'Your DESCO account is connected and will show on the dashboard.',
-                        variant: 'success',
-                      });
-                    } else {
-                      toast({
-                        title: 'Connection saved, data unavailable',
-                        description: 'DESCO accepted the login, but account data could not be loaded. Try refreshing later.',
-                        variant: 'destructive',
-                      });
-                    }
-                  } catch {
-                    toast({
-                      title: 'Error',
-                      description: 'Could not verify the DESCO account. Check the details and try again.',
-                      variant: 'destructive',
-                    });
-                  } finally {
-                    setIsSavingDesco(false);
-                  }
-                }}
-              >
-                {isSavingDesco ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Verifying...
-                  </>
-                ) : (
-                  'Save & Verify'
-                )}
-              </Button>
-              {descoSaved && (
+            )}
+            {descoSessionSaved && (
+              <div className="border-t border-border pt-4">
                 <Button
                   variant="outline"
+                  disabled={isSavingDesco}
                   onClick={async () => {
                     if (!mess) return;
                     const removed = await removeDescoSettings(mess.id);
                     if (!removed) {
-                      toast({
-                        title: 'Could not remove DESCO settings',
-                        description: 'Please check your connection and try again.',
-                        variant: 'destructive',
-                      });
+                      toast({ title: 'Could not remove DESCO settings', description: 'Please check your connection and try again.', variant: 'destructive' });
                       return;
                     }
                     setDescoAccountNo('');
+                    setSavedDescoAccountNo('');
                     setDescoLoginId('');
                     setDescoPassword('');
-                    setDescoSaved(false);
-                    toast({
-                      title: 'DESCO Settings Removed',
-                      description: 'Electricity data will no longer show on the dashboard.',
-                    });
+                    setDescoSessionSaved(false);
+                    setDescoAccountVerified(false);
+                    setIsEditingDescoLogin(false);
+                    toast({ title: 'DESCO Settings Removed', description: 'Electricity data will no longer show on the dashboard.' });
                   }}
                 >
                   Remove
                 </Button>
-              )}
-            </div>
+              </div>
+            )}
           </CardContent>
         </Card>
 

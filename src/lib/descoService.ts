@@ -6,8 +6,8 @@ const DATA_CACHE_KEY = 'desco_data_cache_';
 
 export interface DescoSettings {
   accountNo: string;
-  hasCredentials?: boolean;
-  loginId?: string;
+  hasSession: boolean;
+  hasAccount: boolean;
 }
 
 export interface DescoBalance {
@@ -51,25 +51,41 @@ export async function getDescoSettings(_messId: string): Promise<DescoSettings |
   }
   const result = await api.getDescoSettingsAPI();
   if (!result.success || !result.data) return null;
-  const data = result.data as { accountNo?: string; hasCredentials?: boolean };
-  if (!data.accountNo || !data.hasCredentials) return null;
-  return { accountNo: data.accountNo, hasCredentials: data.hasCredentials };
+  const data = result.data as { accountNo?: string; hasSession?: boolean; hasAccount?: boolean };
+  if (!data.hasSession) return null;
+  return {
+    accountNo: data.accountNo || '',
+    hasSession: true,
+    hasAccount: Boolean(data.hasAccount && data.accountNo),
+  };
 }
 
-export async function saveDescoSettings(
-  _messId: string,
-  settings: DescoSettings & { loginId?: string; password?: string },
+export async function saveDescoSession(
+  messId: string,
+  loginId: string,
+  password: string,
 ): Promise<{ success: boolean; error?: string }> {
   try {
-    localStorage.removeItem(DATA_CACHE_KEY + _messId);
+    localStorage.removeItem(DATA_CACHE_KEY + messId);
   } catch {
     // Cache invalidation is best-effort.
   }
-  const result = await api.saveDescoSettingsAPI({
-    accountNo: settings.accountNo,
-    ...(settings.loginId ? { loginId: settings.loginId } : {}),
-    ...(settings.password ? { password: settings.password } : {}),
-  });
+  const result = await api.saveDescoSessionAPI({ loginId, password });
+  return { success: result.success, error: result.error };
+}
+
+export async function verifyDescoAccount(
+  messId: string,
+  accountNo: string,
+): Promise<{ success: boolean; error?: string }> {
+  const result = await api.verifyDescoAccountAPI({ accountNo });
+  if (result.success) {
+    try {
+      localStorage.removeItem(DATA_CACHE_KEY + messId);
+    } catch {
+      // Cache invalidation is best-effort.
+    }
+  }
   return { success: result.success, error: result.error };
 }
 

@@ -40,7 +40,7 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
   const loadData = useCallback(async (force = false) => {
     const s = await getDescoSettings(messId);
     setSettings(s);
-    if (!s) { setLoading(false); return; }
+    if (!s || !s.hasAccount || !s.accountNo) { setLoading(false); return; }
     try {
       if (force) setRefreshing(true);
       const result = await fetchAllDescoData(messId, s, force);
@@ -132,7 +132,7 @@ export default function DescoElectricityCard({ messId }: DescoElectricityCardPro
     return '#ef4444'; // red - excessive
   }, [avgTaka]);
 
-  if (!settings) return null;
+  if (!settings || !settings.hasAccount || !settings.accountNo) return null;
 
   if (loading) {
     return (
